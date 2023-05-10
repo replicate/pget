@@ -3,12 +3,14 @@ package main
 import (
 	"archive/tar"
 	"bytes"
+	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -154,9 +156,15 @@ func extractTarFile(buffer *bytes.Buffer, destDir string) error {
 }
 
 func main() {
-	args := os.Args[1:]
-	if len(args) < 3 {
-		fmt.Println("Usage: pcurl <url> <dest> <concurrency>")
+	// define flags
+	concurrency := flag.Int("c", runtime.GOMAXPROCS(0)*4, "concurrency level - default 4 * cores")
+	extract := flag.Bool("x", false, "extract tar file")
+	flag.Parse()
+
+	// check required positional arguments
+	args := flag.Args()
+	if len(args) < 2 {
+		fmt.Println("Usage: pcurl <url> <dest> [-c concurrency] [-x]")
 		os.Exit(1)
 	}
 
@@ -169,21 +177,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	concurrency, err := strconv.Atoi(args[2])
-	if err != nil {
-		fmt.Println("Invalid concurrency value")
-		os.Exit(1)
-	}
-
-	buffer, err := downloadFileToBuffer(url, concurrency)
+	buffer, err := downloadFileToBuffer(url, *concurrency)
 	if err != nil {
 		fmt.Printf("Error downloading file: %v\n", err)
 		os.Exit(1)
 	}
 
-	err = extractTarFile(buffer, dest)
-	if err != nil {
-		fmt.Printf("Error extracting tar file: %v\n", err)
-		os.Exit(1)
+	// extract the tar file if the -x flag was provided
+	if *extract {
+		err = extractTarFile(buffer, dest)
+		if err != nil {
+			fmt.Printf("Error extracting tar file: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		// if -x flag is not set, save the buffer to a file
+		err = ioutil.WriteFile(dest, buffer.Bytes(), 0644)
+		if err != nil {
+			fmt.Printf("Error writing file: %v\n", err)
+			os.Exit(1)
+		}
 	}
+
 }

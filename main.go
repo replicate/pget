@@ -147,8 +147,12 @@ func extractTarFile(buffer *bytes.Buffer, destDir string) error {
 				return err
 			}
 			targetFile.Close()
+		case tar.TypeSymlink:
+			if err := os.Symlink(header.Linkname, target); err != nil {
+				return err
+			}
 		default:
-			return fmt.Errorf("unsupported file type for %s", header.Name)
+			return fmt.Errorf("unsupported file type for %s, typeflag %s", header.Name, string(header.Typeflag))
 		}
 	}
 

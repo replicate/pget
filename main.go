@@ -13,7 +13,11 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/dustin/go-humanize"
 )
+
+var _fileSize int64
 
 func getRemoteFileSize(url string) (int64, error) {
 	resp, err := http.DefaultClient.Head(url)
@@ -26,6 +30,7 @@ func getRemoteFileSize(url string) (int64, error) {
 	if fileSize <= 0 {
 		return int64(-1), fmt.Errorf("unable to determine file size")
 	}
+	_fileSize = fileSize
 	return fileSize, nil
 }
 
@@ -41,6 +46,7 @@ func downloadFileToBuffer(url string, concurrency int) (*bytes.Buffer, error) {
 
 	data := make([]byte, fileSize)
 	errc := make(chan error, concurrency)
+	startTime := time.Now()
 
 	for i := 0; i < concurrency; i++ {
 		start := int64(i) * chunkSize
@@ -109,12 +115,16 @@ func downloadFileToBuffer(url string, concurrency int) (*bytes.Buffer, error) {
 			return nil, err // return the first error we encounter
 		}
 	}
+	elapsed := time.Since(startTime).Seconds()
+	througput := humanize.Bytes(uint64(float64(fileSize) / elapsed))
+	fmt.Printf("Downloaded %s bytes in %.3fs (%s/s)\n", humanize.Bytes(uint64(fileSize)), elapsed, througput)
 
 	buffer := bytes.NewBuffer(data)
 	return buffer, nil
 }
 
 func extractTarFile(buffer *bytes.Buffer, destDir string) error {
+	startTime := time.Now()
 	tarReader := tar.NewReader(buffer)
 
 	for {
@@ -155,6 +165,10 @@ func extractTarFile(buffer *bytes.Buffer, destDir string) error {
 			return fmt.Errorf("unsupported file type for %s, typeflag %s", header.Name, string(header.Typeflag))
 		}
 	}
+	elapsed := time.Since(startTime).Seconds()
+	size := humanize.Bytes(uint64(_fileSize))
+	throughput := humanize.Bytes(uint64(float64(_fileSize) / elapsed))
+	fmt.Printf("Extracted %s in %.3fs (%s/s)\n", size, elapsed, throughput)
 
 	return nil
 }

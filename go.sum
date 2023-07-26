@@ -1,0 +1,6 @@
+github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
+github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
+github.com/tmthrgd/go-shm v0.0.0-20230106080200-1ec4c2ba35cf h1:zllFA+KeQ5EGsnMv8YtqBZQTEERX9UZkY+h2nKYY2JY=
+github.com/tmthrgd/go-shm v0.0.0-20230106080200-1ec4c2ba35cf/go.mod h1:sreX9Ec5xasLXkHjdpdrCXuYWgnB8a2T2ElLH+weMWY=
+golang.org/x/sys v0.4.0 h1:Zr2JFtRQNX3BCZ8YtxRE9hNJYC8J6I1MVbMg6owUp18=
+golang.org/x/sys v0.4.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=

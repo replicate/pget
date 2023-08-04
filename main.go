@@ -20,15 +20,18 @@ import (
 )
 
 const (
-	retryDelayBaseline  = 100  // in milliseconds
-	retrySleepJitter    = 500  // in milliseconds (will add 0-500 additional milliseconds)
+	retryDelayBaseline = 100 // in milliseconds
+	retrySleepJitter   = 500 // in milliseconds (will add 0-500 additional milliseconds)
 
 	retryMaxBackoffTime = 3000 // in milliseconds, we will not backoff further than 3 seconds
 	retryBackoffIncr    = 500  // in milliseconds, backoffFactor^retryNum * backoffIncr
 	retryBackoffFactor  = 2    // Base for POW()
 )
 
-var _fileSize int64
+var (
+	_fileSize   int64
+	verboseMode bool = false
+)
 
 func getRemoteFileSize(url string) (int64, error) {
 	resp, err := http.DefaultClient.Head(url)
@@ -72,10 +75,33 @@ func downloadFileToBuffer(url string, concurrency int, retries int) (*bytes.Buff
 
 			success := false
 			for retryNum := 0; retryNum < retries; retryNum++ {
+
+				if retryNum > 0 {
+					if verboseMode {
+						fmt.Printf("Retrying. Count: %d\n", retryNum)
+					}
+					sleepJitter := time.Duration(rand.Intn(retrySleepJitter))
+					sleepTime := time.Millisecond * (sleepJitter + retryDelayBaseline)
+
+					// Exponential backoff
+					// 2^retryNum * retryBackoffIncr (in milliseconds)
+					backoffFactor := math.Pow(retryBackoffFactor, float64(retryNum))
+					backoffDuration := time.Duration(math.Min(backoffFactor*retryBackoffIncr, retryMaxBackoffTime))
+					sleepTime += (time.Millisecond * backoffDuration)
+					time.Sleep(sleepTime)
+				}
+
 				transport := http.DefaultTransport.(*http.Transport).Clone()
 				transport.DisableKeepAlives = true
+				checkRedirectFunc := func(req *http.Request, via []*http.Request) error {
+					if verboseMode {
+						fmt.Printf("Received redirect '%d' to '%s'\n", req.Response.StatusCode, req.URL.String())
+					}
+					return nil
+				}
 				client := &http.Client{
-					Transport: transport,
+					Transport:     transport,
+					CheckRedirect: checkRedirectFunc,
 				}
 
 				req, err := http.NewRequest("GET", url, nil)
@@ -198,12 +224,13 @@ func main() {
 	concurrency := flag.Int("c", runtime.GOMAXPROCS(0)*4, "concurrency level - default 4 * cores")
 	retries := flag.Int("r", 5, "Number of retries when attempting to retreive file")
 	extract := flag.Bool("x", false, "extract tar file")
+	verbose := flag.Bool("v", false, "verbose mode")
 	flag.Parse()
 
 	// check required positional arguments
 	args := flag.Args()
 	if len(args) < 2 {
-		fmt.Println("Usage: pcurl <url> <dest> [-c concurrency] [-r max-retries] [-x]")
+		fmt.Println("Usage: pcurl <url> <dest> [-c concurrency] [-r max-retries] [-v] [-x]")
 		os.Exit(1)
 	}
 
@@ -214,6 +241,10 @@ func main() {
 	if _, err := os.Stat(dest); !os.IsNotExist(err) {
 		fmt.Printf("Destination %s already exists\n", dest)
 		os.Exit(1)
+	}
+
+	if *verbose {
+		verboseMode = true
 	}
 
 	buffer, err := downloadFileToBuffer(url, *concurrency, *retries)

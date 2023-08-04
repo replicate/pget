@@ -95,7 +95,7 @@ func downloadFileToBuffer(url string, concurrency int, retries int) (*bytes.Buff
 				}
 				req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 				if retryNum > 0 {
-					req.Header.Set("Pget-Retry-Count", fmt.Sprintf("%d", retryNum))
+					req.Header.Set("Retry-Count", fmt.Sprintf("%d", retryNum))
 				}
 
 				resp, err := client.Do(req)

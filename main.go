@@ -117,7 +117,6 @@ func downloadFileToBuffer(url string, concurrency int, retries int) (*bytes.Buff
 				if err != nil {
 					// This needs to be a time.Duration to make everything happy
 					fmt.Printf("Error creating request: %v\n", err)
-					time.Sleep(sleepTime) // wait sleepTime milliseconds before retrying
 					continue
 				}
 				req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
@@ -128,7 +127,6 @@ func downloadFileToBuffer(url string, concurrency int, retries int) (*bytes.Buff
 				resp, err := client.Do(req)
 				if err != nil {
 					fmt.Printf("Error executing request: %v\n", err)
-					time.Sleep(sleepTime) // wait sleepTime milliseconds before retrying
 					continue
 				}
 				defer resp.Body.Close()
@@ -136,12 +134,10 @@ func downloadFileToBuffer(url string, concurrency int, retries int) (*bytes.Buff
 				n, err := io.ReadFull(resp.Body, data[start:end+1])
 				if err != nil && err != io.EOF {
 					fmt.Printf("Error reading response: %v\n", err)
-					time.Sleep(sleepTime) // wait sleepTime milliseconds before retrying
 					continue
 				}
 				if n != int(end-start+1) {
 					fmt.Printf("Downloaded %d bytes instead of %d\n", n, end-start+1)
-					time.Sleep(sleepTime) // wait sleepTime milliseconds before retrying
 					continue
 				}
 				success = true

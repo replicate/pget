@@ -21,7 +21,7 @@ import (
 
 const (
 	retryDelayBaseline  = 100  // in milliseconds
-	retrySleepJitter    = 50   // in milliseconds (will add 0-50 additional milliseconds)
+	retrySleepJitter    = 500  // in milliseconds (will add 0-500 additional milliseconds)
 	retryMaxBackoffTime = 5000 // in milliseconds, we will not backoff further than 5 seconds
 	retryBackoffIncr    = 500  // in milliseconds, backoffFactor^retryNum * backoffIncr
 	retryBackoffFactor  = 2    // Base for POW()

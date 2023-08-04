@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -34,17 +33,28 @@ func getRemoteFileSize(url string) (int64, error) {
 	return fileSize, nil
 }
 
-func downloadFileToBuffer(url string, concurrency int) (*bytes.Buffer, error) {
+func downloadFile(url string, dest string, concurrency int) error {
 	fileSize, err := getRemoteFileSize(url)
 	if err != nil {
-		return nil, err
+		return err
+	}
+
+	destFile, err := os.Create(dest)
+	defer destFile.Close()
+	if err != nil {
+		fmt.Printf("Error creating file: %v\n", err)
+		os.Exit(1)
+	}
+
+	err = destFile.Truncate(fileSize)
+	if err != nil {
+		return err
 	}
 
 	chunkSize := fileSize / int64(concurrency)
 	var wg sync.WaitGroup
 	wg.Add(concurrency)
 
-	data := make([]byte, fileSize)
 	errc := make(chan error, concurrency)
 	startTime := time.Now()
 
@@ -58,6 +68,11 @@ func downloadFileToBuffer(url string, concurrency int) (*bytes.Buffer, error) {
 
 		go func(start, end int64) {
 			defer wg.Done()
+			fh, err := os.OpenFile(dest, os.O_RDWR, 0644)
+			if err != nil {
+				errc <- fmt.Errorf("Failed to reopen file: %v", err)
+			}
+			defer fh.Close()
 
 			retries := 5
 			for retries > 0 {
@@ -85,14 +100,22 @@ func downloadFileToBuffer(url string, concurrency int) (*bytes.Buffer, error) {
 				}
 				defer resp.Body.Close()
 
-				n, err := io.ReadFull(resp.Body, data[start:end+1])
+				_, err = fh.Seek(start, 0)
+				if err != nil {
+					fmt.Printf("Error seeking in file: %v\n", err)
+					retries--
+					time.Sleep(time.Millisecond * 100) // wait 100 milliseconds before retrying
+					continue
+				}
+
+				n, err := io.CopyN(fh, resp.Body, end-start+1)
 				if err != nil && err != io.EOF {
 					fmt.Printf("Error reading response: %v\n", err)
 					retries--
 					time.Sleep(time.Millisecond * 100) // wait 100 milliseconds before retrying
 					continue
 				}
-				if n != int(end-start+1) {
+				if n != end-start+1 {
 					fmt.Printf("Downloaded %d bytes instead of %d\n", n, end-start+1)
 					retries--
 					time.Sleep(time.Millisecond * 100) // wait 100 milliseconds before retrying
@@ -112,15 +135,14 @@ func downloadFileToBuffer(url string, concurrency int) (*bytes.Buffer, error) {
 	close(errc) // close the error channel
 	for err := range errc {
 		if err != nil {
-			return nil, err // return the first error we encounter
+			return err // return the first error we encounter
 		}
 	}
 	elapsed := time.Since(startTime).Seconds()
 	througput := humanize.Bytes(uint64(float64(fileSize) / elapsed))
 	fmt.Printf("Downloaded %s bytes in %.3fs (%s/s)\n", humanize.Bytes(uint64(fileSize)), elapsed, througput)
 
-	buffer := bytes.NewBuffer(data)
-	return buffer, nil
+	return nil
 }
 
 func extractTarFile(buffer *bytes.Buffer, destDir string) error {
@@ -176,7 +198,7 @@ func extractTarFile(buffer *bytes.Buffer, destDir string) error {
 func main() {
 	// define flags
 	concurrency := flag.Int("c", runtime.GOMAXPROCS(0)*4, "concurrency level - default 4 * cores")
-	extract := flag.Bool("x", false, "extract tar file")
+	//extract := flag.Bool("x", false, "extract tar file")
 	flag.Parse()
 
 	// check required positional arguments
@@ -195,26 +217,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	buffer, err := downloadFileToBuffer(url, *concurrency)
+	err := downloadFile(url, dest, *concurrency)
 	if err != nil {
 		fmt.Printf("Error downloading file: %v\n", err)
 		os.Exit(1)
-	}
-
-	// extract the tar file if the -x flag was provided
-	if *extract {
-		err = extractTarFile(buffer, dest)
-		if err != nil {
-			fmt.Printf("Error extracting tar file: %v\n", err)
-			os.Exit(1)
-		}
-	} else {
-		// if -x flag is not set, save the buffer to a file
-		err = ioutil.WriteFile(dest, buffer.Bytes(), 0644)
-		if err != nil {
-			fmt.Printf("Error writing file: %v\n", err)
-			os.Exit(1)
-		}
 	}
 
 }

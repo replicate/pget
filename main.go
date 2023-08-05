@@ -105,15 +105,6 @@ func downloadFileToBuffer(url string, concurrency int, retries int) (*bytes.Buff
 				}
 
 				req, err := http.NewRequest("GET", url, nil)
-				sleepJitter := time.Duration(rand.Intn(retrySleepJitter))
-				sleepTime := time.Millisecond * (sleepJitter + retryDelayBaseline)
-				if retryNum > 0 {
-					// Exponential backoff
-					// 2^retryNum * retryBackoffIncr (in milliseconds)
-					backoffFactor := math.Pow(retryBackoffFactor, float64(retryNum))
-					backoffDuration := time.Duration(math.Min(backoffFactor*retryBackoffIncr, retryMaxBackoffTime))
-					sleepTime += (time.Millisecond * backoffDuration)
-				}
 				if err != nil {
 					// This needs to be a time.Duration to make everything happy
 					fmt.Printf("Error creating request: %v\n", err)

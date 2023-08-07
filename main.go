@@ -2,7 +2,6 @@ package main
 
 import (
 	"archive/tar"
-	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -33,14 +32,12 @@ func getRemoteFileSize(url string) (int64, error) {
 	return fileSize, nil
 }
 
-func downloadFile(url string, dest string, concurrency int) error {
+func downloadFile(url string, destFile *os.File, concurrency int) error {
 	fileSize, err := getRemoteFileSize(url)
 	if err != nil {
 		return err
 	}
 
-	destFile, err := os.Create(dest)
-	defer destFile.Close()
 	if err != nil {
 		fmt.Printf("Error creating file: %v\n", err)
 		os.Exit(1)
@@ -68,7 +65,7 @@ func downloadFile(url string, dest string, concurrency int) error {
 
 		go func(start, end int64) {
 			defer wg.Done()
-			fh, err := os.OpenFile(dest, os.O_RDWR, 0644)
+			fh, err := os.OpenFile(destFile.Name(), os.O_RDWR, 0644)
 			if err != nil {
 				errc <- fmt.Errorf("Failed to reopen file: %v", err)
 			}
@@ -145,9 +142,9 @@ func downloadFile(url string, dest string, concurrency int) error {
 	return nil
 }
 
-func extractTarFile(buffer *bytes.Buffer, destDir string) error {
+func extractTarFile(input io.Reader, destDir string) error {
 	startTime := time.Now()
-	tarReader := tar.NewReader(buffer)
+	tarReader := tar.NewReader(input)
 
 	for {
 		header, err := tarReader.Next()
@@ -198,7 +195,7 @@ func extractTarFile(buffer *bytes.Buffer, destDir string) error {
 func main() {
 	// define flags
 	concurrency := flag.Int("c", runtime.GOMAXPROCS(0)*4, "concurrency level - default 4 * cores")
-	//extract := flag.Bool("x", false, "extract tar file")
+	extract := flag.Bool("x", false, "extract tar file")
 	flag.Parse()
 
 	// check required positional arguments
@@ -217,10 +214,44 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := downloadFile(url, dest, *concurrency)
+	// create tempfile for downloading to
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Printf("Error getting cwd: %v\n", err)
+		os.Exit(1)
+	}
+	destTemp, err := os.CreateTemp(cwd, dest+".partial")
+	if err != nil {
+		fmt.Printf("Failed to create temp file: %v\n", err)
+		os.Exit(1)
+	}
+
+	err = downloadFile(url, destTemp, *concurrency)
 	if err != nil {
 		fmt.Printf("Error downloading file: %v\n", err)
 		os.Exit(1)
 	}
 
+	// extract the tar file if the -x flag was provided
+	if *extract {
+		_, err = destTemp.Seek(0, 0)
+		if err != nil {
+			fmt.Printf("Error extracting tar file: %v\n", err)
+			os.Exit(1)
+		}
+		err = extractTarFile(destTemp, dest)
+		if err != nil {
+			fmt.Printf("Error extracting tar file: %v\n", err)
+			os.Exit(1)
+		}
+		destTemp.Close()
+		os.Remove(destTemp.Name())
+	} else {
+		// move destTemp to dest
+		err = os.Rename(destTemp.Name(), dest)
+		if err != nil {
+			fmt.Printf("Error moving downloaded file to correct location: %v\n", err)
+			os.Exit(1)
+		}
+	}
 }

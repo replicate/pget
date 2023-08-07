@@ -201,7 +201,7 @@ func main() {
 	// check required positional arguments
 	args := flag.Args()
 	if len(args) < 2 {
-		fmt.Println("Usage: pcurl <url> <dest> [-c concurrency] [-x]")
+		fmt.Println("Usage: pcurl [-c concurrency] [-x] <url> <dest>")
 		os.Exit(1)
 	}
 

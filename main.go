@@ -2,9 +2,11 @@ package main
 
 import (
 	"archive/tar"
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -32,26 +34,17 @@ func getRemoteFileSize(url string) (int64, error) {
 	return fileSize, nil
 }
 
-func downloadFile(url string, destFile *os.File, concurrency int) error {
+func downloadFileToBuffer(url string, concurrency int) (*bytes.Buffer, error) {
 	fileSize, err := getRemoteFileSize(url)
 	if err != nil {
-		return err
-	}
-
-	if err != nil {
-		fmt.Printf("Error creating file: %v\n", err)
-		os.Exit(1)
-	}
-
-	err = destFile.Truncate(fileSize)
-	if err != nil {
-		return err
+		return nil, err
 	}
 
 	chunkSize := fileSize / int64(concurrency)
 	var wg sync.WaitGroup
 	wg.Add(concurrency)
 
+	data := make([]byte, fileSize)
 	errc := make(chan error, concurrency)
 	startTime := time.Now()
 
@@ -65,11 +58,6 @@ func downloadFile(url string, destFile *os.File, concurrency int) error {
 
 		go func(start, end int64) {
 			defer wg.Done()
-			fh, err := os.OpenFile(destFile.Name(), os.O_RDWR, 0644)
-			if err != nil {
-				errc <- fmt.Errorf("Failed to reopen file: %v", err)
-			}
-			defer fh.Close()
 
 			retries := 5
 			for retries > 0 {
@@ -97,22 +85,14 @@ func downloadFile(url string, destFile *os.File, concurrency int) error {
 				}
 				defer resp.Body.Close()
 
-				_, err = fh.Seek(start, 0)
-				if err != nil {
-					fmt.Printf("Error seeking in file: %v\n", err)
-					retries--
-					time.Sleep(time.Millisecond * 100) // wait 100 milliseconds before retrying
-					continue
-				}
-
-				n, err := io.CopyN(fh, resp.Body, end-start+1)
+				n, err := io.ReadFull(resp.Body, data[start:end+1])
 				if err != nil && err != io.EOF {
 					fmt.Printf("Error reading response: %v\n", err)
 					retries--
 					time.Sleep(time.Millisecond * 100) // wait 100 milliseconds before retrying
 					continue
 				}
-				if n != end-start+1 {
+				if n != int(end-start+1) {
 					fmt.Printf("Downloaded %d bytes instead of %d\n", n, end-start+1)
 					retries--
 					time.Sleep(time.Millisecond * 100) // wait 100 milliseconds before retrying
@@ -132,19 +112,20 @@ func downloadFile(url string, destFile *os.File, concurrency int) error {
 	close(errc) // close the error channel
 	for err := range errc {
 		if err != nil {
-			return err // return the first error we encounter
+			return nil, err // return the first error we encounter
 		}
 	}
 	elapsed := time.Since(startTime).Seconds()
 	througput := humanize.Bytes(uint64(float64(fileSize) / elapsed))
 	fmt.Printf("Downloaded %s bytes in %.3fs (%s/s)\n", humanize.Bytes(uint64(fileSize)), elapsed, througput)
 
-	return nil
+	buffer := bytes.NewBuffer(data)
+	return buffer, nil
 }
 
-func extractTarFile(input io.Reader, destDir string) error {
+func extractTarFile(buffer *bytes.Buffer, destDir string) error {
 	startTime := time.Now()
-	tarReader := tar.NewReader(input)
+	tarReader := tar.NewReader(buffer)
 
 	for {
 		header, err := tarReader.Next()
@@ -201,7 +182,7 @@ func main() {
 	// check required positional arguments
 	args := flag.Args()
 	if len(args) < 2 {
-		fmt.Println("Usage: pcurl [-c concurrency] [-x] <url> <dest>")
+		fmt.Println("Usage: pcurl <url> <dest> [-c concurrency] [-x]")
 		os.Exit(1)
 	}
 
@@ -214,19 +195,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// create tempfile for downloading to
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Printf("Error getting cwd: %v\n", err)
-		os.Exit(1)
-	}
-	destTemp, err := os.CreateTemp(cwd, dest+".partial")
-	if err != nil {
-		fmt.Printf("Failed to create temp file: %v\n", err)
-		os.Exit(1)
-	}
-
-	err = downloadFile(url, destTemp, *concurrency)
+	buffer, err := downloadFileToBuffer(url, *concurrency)
 	if err != nil {
 		fmt.Printf("Error downloading file: %v\n", err)
 		os.Exit(1)
@@ -234,24 +203,18 @@ func main() {
 
 	// extract the tar file if the -x flag was provided
 	if *extract {
-		_, err = destTemp.Seek(0, 0)
+		err = extractTarFile(buffer, dest)
 		if err != nil {
 			fmt.Printf("Error extracting tar file: %v\n", err)
 			os.Exit(1)
 		}
-		err = extractTarFile(destTemp, dest)
-		if err != nil {
-			fmt.Printf("Error extracting tar file: %v\n", err)
-			os.Exit(1)
-		}
-		destTemp.Close()
-		os.Remove(destTemp.Name())
 	} else {
-		// move destTemp to dest
-		err = os.Rename(destTemp.Name(), dest)
+		// if -x flag is not set, save the buffer to a file
+		err = ioutil.WriteFile(dest, buffer.Bytes(), 0644)
 		if err != nil {
-			fmt.Printf("Error moving downloaded file to correct location: %v\n", err)
+			fmt.Printf("Error writing file: %v\n", err)
 			os.Exit(1)
 		}
 	}
+
 }

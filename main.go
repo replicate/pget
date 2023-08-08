@@ -74,7 +74,7 @@ func downloadFileToBuffer(url string, concurrency int, retries int) (*bytes.Buff
 			defer wg.Done()
 
 			success := false
-			for retryNum := 0; retryNum < retries; retryNum++ {
+			for retryNum := 0; retryNum <= retries; retryNum++ {
 
 				if retryNum > 0 {
 					if verboseMode {

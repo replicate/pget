@@ -8,13 +8,31 @@ If the downloaded file is a tar archive, PGet can automatically extract the cont
 
 The efficiency of PGet's tar extraction lies in its approach to handling data. Instead of writing the downloaded tar file to disk and then reading it back into memory for extraction, PGet conducts the extraction directly from the in-memory download buffer. This method avoids unnecessary memory copies and disk I/O, leading to an increase in performance, especially when dealing with large tar files. This makes PGet not just a parallel downloader, but also an efficient file extractor, providing a streamlined solution for fetching and unpacking files.
 
+## Install
+
+If you're using macOS, you can install PGet with Homebrew:
+
+```console
+brew tap replicate/tap
+brew install pget
+```
+
+Or you can build from source and install it with these commands
+(requires Go 1.19 or later):
+
+```console
+make
+sudo make install
+```
+
+This builds a static binary that can work inside containers.
 
 ## Usage
-
 
     pget <url> <dest> [-c concurrency] [-x]
 
 Parameters
+
 - \<url\>: The URL of the file to download.
 - \<dest\>: The destination where the downloaded file will be stored.
 - -c concurrency: The number of concurrent downloads. Default is 4 times the number of cores.
@@ -32,18 +50,6 @@ PGet includes some error handling:
 
 1. If a download any chunks fails, it will automatically retry up to 5 times before giving up.
 2. If the downloaded file size does not match the expected size, it will also retry the download.
-
-## Dependencies
-
-PGet is built in Go and has no external dependencies beyond the Go standard library.
-
-## Building
-
-To build PGet, you need a working Go environment. You can build the binary with the following 
-
-    make
-
-This builds a static binary that can work inside containers.
 
 ## Future Improvements
 

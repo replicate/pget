@@ -33,23 +33,28 @@ var (
 	verboseMode bool = false
 )
 
-func getRemoteFileSize(url string) (int64, error) {
+func getRemoteFileSize(url string) (string, int64, error) {
+	// TODO: this needs a retry
 	resp, err := http.DefaultClient.Head(url)
 	if err != nil {
-		return int64(-1), err
+		return "", int64(-1), err
 	}
 	defer resp.Body.Close()
+	trueUrl = resp.Request.URL.String()
+	if (trueUrl != url) {
+		fmt.Printf("Redirected to %s\n", trueUrl)
+	}
 
 	fileSize := resp.ContentLength
 	if fileSize <= 0 {
-		return int64(-1), fmt.Errorf("unable to determine file size")
+		return "", int64(-1), fmt.Errorf("unable to determine file size")
 	}
 	_fileSize = fileSize
-	return fileSize, nil
+	return trueUrl, fileSize, nil
 }
 
 func downloadFileToBuffer(url string, concurrency int, retries int) (*bytes.Buffer, error) {
-	fileSize, err := getRemoteFileSize(url)
+	trueUrl, fileSize, err := getRemoteFileSize(url)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +109,7 @@ func downloadFileToBuffer(url string, concurrency int, retries int) (*bytes.Buff
 					CheckRedirect: checkRedirectFunc,
 				}
 
-				req, err := http.NewRequest("GET", url, nil)
+				req, err := http.NewRequest("GET", trueUrl, nil)
 				if err != nil {
 					// This needs to be a time.Duration to make everything happy
 					fmt.Printf("Error creating request: %v\n", err)

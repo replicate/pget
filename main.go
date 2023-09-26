@@ -40,7 +40,7 @@ func getRemoteFileSize(url string) (string, int64, error) {
 		return "", int64(-1), err
 	}
 	defer resp.Body.Close()
-	trueUrl = resp.Request.URL.String()
+	trueUrl := resp.Request.URL.String()
 	if (trueUrl != url) {
 		fmt.Printf("Redirected to %s\n", trueUrl)
 	}

@@ -217,6 +217,7 @@ func main() {
 	retries := flag.Int("r", 5, "Number of retries when attempting to retreive file")
 	extract := flag.Bool("x", false, "extract tar file")
 	verbose := flag.Bool("v", false, "verbose mode")
+	force := flag.Bool("f", false, "force download, overwriting existing file")
 	flag.Parse()
 
 	// check required positional arguments
@@ -230,7 +231,7 @@ func main() {
 	dest := args[1]
 
 	// ensure dest does not exist
-	if _, err := os.Stat(dest); !os.IsNotExist(err) {
+	if !force || _, err := os.Stat(dest); !os.IsNotExist(err) {
 		fmt.Printf("Destination %s already exists\n", dest)
 		os.Exit(1)
 	}

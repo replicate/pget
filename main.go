@@ -231,7 +231,7 @@ func main() {
 	dest := args[1]
 
 	// ensure dest does not exist
-	if !force || _, err := os.Stat(dest); !os.IsNotExist(err) {
+	if _, err := os.Stat(dest); !*force || !os.IsNotExist(err) {
 		fmt.Printf("Destination %s already exists\n", dest)
 		os.Exit(1)
 	}

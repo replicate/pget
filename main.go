@@ -41,7 +41,7 @@ func getRemoteFileSize(url string) (string, int64, error) {
 	}
 	defer resp.Body.Close()
 	trueUrl := resp.Request.URL.String()
-	if (trueUrl != url) {
+	if trueUrl != url {
 		fmt.Printf("Redirected to %s\n", trueUrl)
 	}
 
@@ -229,9 +229,10 @@ func main() {
 
 	url := args[0]
 	dest := args[1]
+	_, fileExists := os.Stat(dest)
 
 	// ensure dest does not exist
-	if _, err := os.Stat(dest); !*force || !os.IsNotExist(err) {
+	if !*force && !os.IsNotExist(fileExists) {
 		fmt.Printf("Destination %s already exists\n", dest)
 		os.Exit(1)
 	}

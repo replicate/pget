@@ -250,6 +250,11 @@ func main() {
 		verboseMode = true
 	}
 
+    // allows us to see how many pget procs are running at a time
+	tmpFile := fmt.Sprintf("/tmp/.pget-%d", os.Getpid())
+	os.WriteFile(tmpFile, []byte(""), 0644)
+	defer os.Remove(tmpFile)
+
 	buffer, err := downloadFileToBuffer(url, *concurrency, *retries)
 	if err != nil {
 		fmt.Printf("Error downloading file: %v\n", err)

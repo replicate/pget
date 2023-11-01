@@ -53,10 +53,18 @@ func getRemoteFileSize(url string) (string, int64, error) {
 	return trueUrl, fileSize, nil
 }
 
-func downloadFileToBuffer(url string, concurrency int, retries int) (*bytes.Buffer, error) {
+func downloadFileToBuffer(url string, maxConcurrency int, retries int) (*bytes.Buffer, error) {
 	trueUrl, fileSize, err := getRemoteFileSize(url)
 	if err != nil {
 		return nil, err
+	}
+	// not more than one connection per MB
+	fileSizeMB := fileSize / (1024 * 1024)
+	concurrency := int(fileSizeMB)
+	if concurrency > maxConcurrency {
+		concurrency = maxConcurrency
+	} else if concurrency < 1 {
+		concurrency = 1
 	}
 
 	chunkSize := fileSize / int64(concurrency)
@@ -218,6 +226,7 @@ func main() {
 	extract := flag.Bool("x", false, "extract tar file")
 	verbose := flag.Bool("v", false, "verbose mode")
 	force := flag.Bool("f", false, "force download, overwriting existing file")
+
 	flag.Parse()
 
 	// check required positional arguments
@@ -262,5 +271,4 @@ func main() {
 			os.Exit(1)
 		}
 	}
-
 }

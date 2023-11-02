@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"net/http"
@@ -29,8 +28,9 @@ const (
 )
 
 var (
-	_fileSize   int64
-	verboseMode bool = false
+	_fileSize    int64
+	verboseMode  bool   = false
+	minChunkSize uint64 = 1024 * 1024
 )
 
 func getRemoteFileSize(url string) (string, int64, error) {
@@ -58,13 +58,16 @@ func downloadFileToBuffer(url string, maxConcurrency int, retries int) (*bytes.B
 	if err != nil {
 		return nil, err
 	}
-	// not more than one connection per MB
-	fileSizeMB := fileSize / (1024 * 1024)
-	concurrency := int(fileSizeMB)
+	// not more than one connection per min chunk size
+	maxChunks := fileSize / int64(minChunkSize)
+	concurrency := int(maxChunks)
 	if concurrency > maxConcurrency {
 		concurrency = maxConcurrency
 	} else if concurrency < 1 {
 		concurrency = 1
+	}
+	if verboseMode {
+		fmt.Printf("Downloading %s bytes with %d connections\n", humanize.Bytes(uint64(fileSize)), concurrency)
 	}
 
 	chunkSize := fileSize / int64(concurrency)
@@ -226,14 +229,22 @@ func main() {
 	extract := flag.Bool("x", false, "extract tar file")
 	verbose := flag.Bool("v", false, "verbose mode")
 	force := flag.Bool("f", false, "force download, overwriting existing file")
+	chunkFlag := flag.String("m", "", "minimum chunk size")
 
 	flag.Parse()
 
 	// check required positional arguments
 	args := flag.Args()
 	if len(args) < 2 {
-		fmt.Println("Usage: pcurl <url> <dest> [-c concurrency] [-r max-retries] [-v] [-x]")
+		fmt.Println("Usage: pget <url> <dest> [-c concurrency] [-r max-retries] [-v] [-x]")
 		os.Exit(1)
+	}
+
+	if size := os.Getenv("PGET_MIN_CHUNK_SIZE"); size != "" {
+		minChunkSize, _ = humanize.ParseBytes(size)
+	}
+	if *chunkFlag != "" {
+		minChunkSize, _ = humanize.ParseBytes(*chunkFlag)
 	}
 
 	url := args[0]
@@ -250,7 +261,7 @@ func main() {
 		verboseMode = true
 	}
 
-    // allows us to see how many pget procs are running at a time
+	// allows us to see how many pget procs are running at a time
 	tmpFile := fmt.Sprintf("/tmp/.pget-%d", os.Getpid())
 	os.WriteFile(tmpFile, []byte(""), 0644)
 	defer os.Remove(tmpFile)
@@ -270,7 +281,7 @@ func main() {
 		}
 	} else {
 		// if -x flag is not set, save the buffer to a file
-		err = ioutil.WriteFile(dest, buffer.Bytes(), 0644)
+		err = os.WriteFile(dest, buffer.Bytes(), 0644)
 		if err != nil {
 			fmt.Printf("Error writing file: %v\n", err)
 			os.Exit(1)

@@ -31,6 +31,9 @@ var (
 	_fileSize    int64
 	verboseMode  bool   = false
 	minChunkSize uint64 = 1024 * 1024
+	// sem is a semaphore we'll create later
+	sem    chan int
+	client = &http.Client{}
 )
 
 func getRemoteFileSize(url string) (string, int64, error) {
@@ -87,6 +90,8 @@ func downloadFileToBuffer(url string, maxConcurrency int, retries int) (*bytes.B
 		}
 
 		go func(start, end int64) {
+			sem <- 1
+			defer func() { <-sem }()
 			defer wg.Done()
 
 			success := false
@@ -230,13 +235,14 @@ func main() {
 	verbose := flag.Bool("v", false, "verbose mode")
 	force := flag.Bool("f", false, "force download, overwriting existing file")
 	chunkFlag := flag.String("m", "", "minimum chunk size")
+	filelist := flag.String("filelist", "", "path to a file with a list of <url> <dest> pairs to download")
 
 	flag.Parse()
 
 	// check required positional arguments
 	args := flag.Args()
-	if len(args) < 2 {
-		fmt.Println("Usage: pget <url> <dest> [-c concurrency] [-r max-retries] [-v] [-x]")
+	if len(args) < 2 && (*filelist) != "" {
+		fmt.Println("Usage: pcurl <url> <dest> [-c concurrency] [-r max-retries] [-v] [-x]")
 		os.Exit(1)
 	}
 
@@ -265,6 +271,8 @@ func main() {
 	tmpFile := fmt.Sprintf("/tmp/.pget-%d", os.Getpid())
 	os.WriteFile(tmpFile, []byte(""), 0644)
 	defer os.Remove(tmpFile)
+
+	sem = make(chan int, *concurrency)
 
 	buffer, err := downloadFileToBuffer(url, *concurrency, *retries)
 	if err != nil {

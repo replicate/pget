@@ -3,19 +3,21 @@ package main
 import (
 	"archive/tar"
 	"bytes"
-	"flag"
 	"fmt"
 	"io"
 	"math"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/replicate/pget/config"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -28,9 +30,7 @@ const (
 )
 
 var (
-	_fileSize    int64
-	verboseMode  bool   = false
-	minChunkSize uint64 = 1024 * 1024
+	_fileSize int64
 )
 
 func getRemoteFileSize(url string) (string, int64, error) {
@@ -54,23 +54,24 @@ func getRemoteFileSize(url string) (string, int64, error) {
 }
 
 func downloadFileToBuffer(url string, maxConcurrency int, retries int) (*bytes.Buffer, error) {
+	verboseMode := viper.GetBool("verbose")
 	trueUrl, fileSize, err := getRemoteFileSize(url)
 	if err != nil {
 		return nil, err
 	}
+
+	chunkSize := viper.GetInt64("target-chunk-size")
 	// not more than one connection per min chunk size
-	maxChunks := fileSize / int64(minChunkSize)
-	concurrency := int(maxChunks)
+	concurrency := int(math.Ceil(float64(fileSize) / float64(chunkSize)))
+
 	if concurrency > maxConcurrency {
 		concurrency = maxConcurrency
-	} else if concurrency < 1 {
-		concurrency = 1
+		chunkSize = fileSize / int64(concurrency)
 	}
 	if verboseMode {
-		fmt.Printf("Downloading %s bytes with %d connections\n", humanize.Bytes(uint64(fileSize)), concurrency)
+		fmt.Printf("Downloading %s bytes with %d connections (chunk-size = %d)\n", humanize.Bytes(uint64(fileSize)), concurrency, humanize.Bytes(uint64(chunkSize)))
 	}
 
-	chunkSize := fileSize / int64(concurrency)
 	var wg sync.WaitGroup
 	wg.Add(concurrency)
 
@@ -103,7 +104,7 @@ func downloadFileToBuffer(url string, maxConcurrency int, retries int) (*bytes.B
 					// 2^retryNum * retryBackoffIncr (in milliseconds)
 					backoffFactor := math.Pow(retryBackoffFactor, float64(retryNum))
 					backoffDuration := time.Duration(math.Min(backoffFactor*retryBackoffIncr, retryMaxBackoffTime))
-					sleepTime += (time.Millisecond * backoffDuration)
+					sleepTime += time.Millisecond * backoffDuration
 					time.Sleep(sleepTime)
 				}
 
@@ -223,42 +224,53 @@ func extractTarFile(buffer *bytes.Buffer, destDir string) error {
 }
 
 func main() {
-	// define flags
-	concurrency := flag.Int("c", runtime.GOMAXPROCS(0)*4, "concurrency level - default 4 * cores")
-	retries := flag.Int("r", 5, "Number of retries when attempting to retreive file")
-	extract := flag.Bool("x", false, "extract tar file")
-	verbose := flag.Bool("v", false, "verbose mode")
-	force := flag.Bool("f", false, "force download, overwriting existing file")
-	chunkFlag := flag.String("m", "", "minimum chunk size")
+	cmd := &cobra.Command{
+		Use:   "pget [flags] <url> <dest>",
+		Short: "pget",
+		Long:  `Parallel file downloader`,
+		Run:   mainFunc,
+	}
+	config.AddFlags(cmd)
+	cmd.Execute()
+}
 
-	flag.Parse()
-
+func mainFunc(cmd *cobra.Command, args []string) {
 	// check required positional arguments
-	args := flag.Args()
-	if len(args) < 2 {
-		fmt.Println("Usage: pget <url> <dest> [-c concurrency] [-r max-retries] [-v] [-x]")
+	verboseMode := viper.GetBool("verbose")
+	useRemoteName := viper.GetBool("remote-name")
+	if useRemoteName && len(args) < 1 || !useRemoteName && len(args) < 2 {
+		cmd.Usage()
+		os.Exit(1)
+	} else if useRemoteName && len(args) > 1 {
+		fmt.Println("`-O` flag cannot be used with positional <dest> (second) argument.")
+		cmd.Usage()
 		os.Exit(1)
 	}
 
-	if size := os.Getenv("PGET_MIN_CHUNK_SIZE"); size != "" {
-		minChunkSize, _ = humanize.ParseBytes(size)
+	if useRemoteName {
+		urlParts, err := url.Parse(args[0])
+		if err != nil {
+			fmt.Printf("Error parsing URL: %v\n", err)
+			os.Exit(1)
+		}
+		fileName := filepath.Base(urlParts.Path)
+		args = append(args, fileName)
 	}
-	if *chunkFlag != "" {
-		minChunkSize, _ = humanize.ParseBytes(*chunkFlag)
-	}
-
 	url := args[0]
 	dest := args[1]
 	_, fileExists := os.Stat(dest)
 
+	if verboseMode {
+		absPath, _ := filepath.Abs(dest)
+		fmt.Println("URL:", url)
+		fmt.Println("Destination:", absPath)
+		fmt.Println("Target Chunk Size:", humanize.Bytes(uint64(viper.GetInt64("target-chunk-size"))))
+		fmt.Println()
+	}
 	// ensure dest does not exist
-	if !*force && !os.IsNotExist(fileExists) {
+	if !viper.GetBool("force") && !os.IsNotExist(fileExists) {
 		fmt.Printf("Destination %s already exists\n", dest)
 		os.Exit(1)
-	}
-
-	if *verbose {
-		verboseMode = true
 	}
 
 	// allows us to see how many pget procs are running at a time
@@ -266,14 +278,14 @@ func main() {
 	os.WriteFile(tmpFile, []byte(""), 0644)
 	defer os.Remove(tmpFile)
 
-	buffer, err := downloadFileToBuffer(url, *concurrency, *retries)
+	buffer, err := downloadFileToBuffer(url, viper.GetInt("concurrency"), viper.GetInt("retries"))
 	if err != nil {
 		fmt.Printf("Error downloading file: %v\n", err)
 		os.Exit(1)
 	}
 
 	// extract the tar file if the -x flag was provided
-	if *extract {
+	if viper.GetBool("extract") {
 		err = extractTarFile(buffer, dest)
 		if err != nil {
 			fmt.Printf("Error extracting tar file: %v\n", err)

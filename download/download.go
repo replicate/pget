@@ -2,11 +2,13 @@ package download
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/replicate/pget/config"
 	"io"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -103,6 +105,10 @@ func FileToBuffer(url string) (*bytes.Buffer, int64, error) {
 				}
 
 				transport := http.DefaultTransport.(*http.Transport).Clone()
+				transport.DialContext = (&net.Dialer{
+					Timeout:   viper.GetDuration("connect-timeout"),
+					KeepAlive: 30 * time.Second,
+				}).DialContext
 				transport.DisableKeepAlives = true
 				checkRedirectFunc := func(req *http.Request, via []*http.Request) error {
 					if verboseMode {
@@ -113,6 +119,16 @@ func FileToBuffer(url string) (*bytes.Buffer, int64, error) {
 				client := &http.Client{
 					Transport:     transport,
 					CheckRedirect: checkRedirectFunc,
+				}
+				defaultDialer := client.Transport.(*http.Transport).DialContext
+				client.Transport.(*http.Transport).DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+					if addrOverride := config.HostToIPResolutionMap[addr]; addrOverride != "" {
+						if verboseMode {
+							fmt.Printf("Overriding %s with %s\n", addr, addrOverride)
+						}
+						addr = addrOverride
+					}
+					return defaultDialer(ctx, network, addr)
 				}
 
 				req, err := http.NewRequest("GET", trueUrl, nil)

@@ -40,7 +40,10 @@ func main() {
 		Short: "Parallel file downloader",
 		Long:  longDesc,
 		RunE:  mainFunc,
-		Args:  cobra.ExactArgs(2),
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			return config.StartupProcessFlags()
+		},
+		Args: cobra.ExactArgs(2),
 	}
 	config.AddFlags(cmd)
 	if err := cmd.Execute(); err != nil {

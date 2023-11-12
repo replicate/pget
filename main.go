@@ -35,7 +35,7 @@ efficient file extractor, providing a streamlined solution for fetching and unpa
 `
 
 func main() {
-	cmd := &cobra.Command{
+	cmdRoot := &cobra.Command{
 		Use:   "pget [flags] <url> <dest>",
 		Short: "Parallel file downloader",
 		Long:  longDesc,
@@ -45,8 +45,8 @@ func main() {
 		},
 		Args: cobra.ExactArgs(2),
 	}
-	config.AddFlags(cmd)
-	if err := cmd.Execute(); err != nil {
+	config.AddFlags(cmdRoot)
+	if err := cmdRoot.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}

@@ -76,11 +76,3 @@ func convertResolveHostsToMap() error {
 	}
 	return nil
 }
-
-func LookupHost(addr string) string {
-	addr = strings.ToLower(addr)
-	if addrStr, ok := HostToIPResolutionMap[addr]; ok {
-		return addrStr
-	}
-	return ""
-}

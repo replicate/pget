@@ -78,7 +78,7 @@ func newClient() *http.Client {
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 	if !viper.GetBool("enable-http-keepalive") {
@@ -88,7 +88,7 @@ func newClient() *http.Client {
 	}
 
 	return &http.Client{
-		Transport:     transport,
+		Transport:     R8GetRoundTripper{Transport: transport},
 		CheckRedirect: checkRedirectFunc,
 	}
 }

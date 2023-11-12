@@ -6,6 +6,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/viper v1.17.0
+	golang.org/x/sync v0.3.0
 )
 
 require (

@@ -2,12 +2,13 @@ package config
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"net"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 const MinChunkSizeOptName = "minimum-chunk-size"

@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/replicate/pget/config"
 	"github.com/spf13/viper"
+
+	"github.com/replicate/pget/config"
+	"github.com/replicate/pget/version"
 )
 
 const (
@@ -27,6 +29,7 @@ type R8GetRoundTripper struct {
 }
 
 func (rt R8GetRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("User-Agent", fmt.Sprintf("r8get/%s", version.GetVersion()))
 	for attempt := 0; attempt <= viper.GetInt("retries"); attempt++ {
 		if attempt > 0 {
 			if viper.GetBool("verbose") {

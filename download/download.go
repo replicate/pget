@@ -3,7 +3,6 @@ package download
 import (
 	"bytes"
 	"fmt"
-	"github.com/replicate/pget/config"
 	"io"
 	"math"
 	"net/http"
@@ -12,6 +11,8 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/viper"
+
+	"github.com/replicate/pget/config"
 )
 
 func getRemoteFileSize(url string) (string, int64, error) {

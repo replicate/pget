@@ -12,6 +12,7 @@ import (
 	"github.com/replicate/pget/config"
 	"github.com/replicate/pget/download"
 	"github.com/replicate/pget/extract"
+	"github.com/replicate/pget/version"
 )
 
 const longDesc = `
@@ -46,6 +47,8 @@ func main() {
 		Args: cobra.ExactArgs(2),
 	}
 	config.AddFlags(cmdRoot)
+
+	cmdRoot.AddCommand(version.CmdVersion)
 	if err := cmdRoot.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

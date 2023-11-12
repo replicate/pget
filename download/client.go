@@ -72,7 +72,7 @@ func newClient() *http.Client {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: resolveOverrideDialerContext(&net.Dialer{
-			Timeout:   30 * time.Second,
+			Timeout:   viper.GetDuration("connect-timeout"),
 			KeepAlive: 30 * time.Second,
 		}),
 		ForceAttemptHTTP2:     true,
@@ -81,7 +81,11 @@ func newClient() *http.Client {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
-	transport.DisableKeepAlives = true
+	if !viper.GetBool("enable-http-keepalive") {
+		transport.DisableKeepAlives = true
+	} else {
+		transport.IdleConnTimeout = viper.GetDuration("keepalive-timeout")
+	}
 
 	return &http.Client{
 		Transport:     transport,

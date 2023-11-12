@@ -13,17 +13,21 @@ import (
 const MinChunkSizeOptName = "minimum-chunk-size"
 
 var (
-	Concurrency      int
-	Extract          bool
-	Force            bool
-	MinimumChunkSize string
-	Retries          int
-	Verbose          bool
-	ResolveHosts     []string
-	ConnTimeout      time.Duration
-
-	HostToIPResolutionMap = make(map[string]string)
+	Concurrency         int
+	ConnTimeout         time.Duration
+	Extract             bool
+	EnableHTTPKeepalive bool
+	Force               bool
+	HTTPTimeout         time.Duration
+	KeepaliveTimeout    time.Duration
+	MinimumChunkSize    string
+	Retries             int
+	Verbose             bool
+	ResolveHosts        []string
 )
+
+// HostToIPResolutionMap Post-Config Map of Hostname to IP Address for overriding DNS resolution
+var HostToIPResolutionMap = make(map[string]string)
 
 func AddFlags(cmd *cobra.Command) {
 
@@ -38,6 +42,9 @@ func AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVarP(&Extract, "extract", "x", false, "Extract tar file after download")
 	cmd.PersistentFlags().StringSliceVar(&ResolveHosts, "resolve", []string{}, "A mapping of Hostname to IP Address, format 'HostName:Port:IP'")
 	cmd.PersistentFlags().DurationVar(&ConnTimeout, "connect-timeout", 5*time.Second, "Connection Timeout for each request, format is <number><unit> e.g. 10s")
+	cmd.PersistentFlags().DurationVar(&HTTPTimeout, "http-timeout", 30*time.Second, "HTTP Timeout for each request, format is <number><unit> e.g. 10s")
+	cmd.PersistentFlags().DurationVar(&KeepaliveTimeout, "keepalive-timeout", 0*time.Second, "Keepalive Timeout for each request, format is <number><unit> e.g. 10s (0s means no limit)")
+	cmd.PersistentFlags().BoolVar(&EnableHTTPKeepalive, "enable-http-keepalive", false, "Enable HTTP Keepalive")
 
 	if err := viper.BindPFlags(cmd.PersistentFlags()); err != nil {
 		panic(err)
@@ -49,6 +56,9 @@ func StartupProcessFlags() error {
 
 	if err := convertResolveHostsToMap(); err != nil {
 		return err
+	}
+	if !viper.GetBool("enable-http-keepalive") && viper.GetDuration("keepalive-timeout") == 0*time.Second {
+		fmt.Println("WARNING: HTTP keepalive is disabled, but keepalive-timeout is set to non-default value.")
 	}
 	return nil
 

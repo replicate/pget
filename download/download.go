@@ -6,11 +6,11 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/viper"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/config"
 )
@@ -57,11 +57,9 @@ func FileToBuffer(url string) (*bytes.Buffer, int64, error) {
 		fmt.Printf("Downloading %s bytes with %d connections (chunk-size = %s)\n", humanize.Bytes(uint64(fileSize)), concurrency, humanize.Bytes(uint64(chunkSize)))
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(concurrency)
+	var errGroup errgroup.Group
 
 	data := make([]byte, fileSize)
-	errc := make(chan error, concurrency)
 	startTime := time.Now()
 
 	for i := 0; i < concurrency; i++ {
@@ -71,15 +69,13 @@ func FileToBuffer(url string) (*bytes.Buffer, int64, error) {
 		if i == concurrency-1 {
 			end = fileSize - 1
 		}
-		go downloadChunk(start, end, errc, data, trueUrl, &wg)
+		errGroup.Go(func() error { return downloadChunk(start, end, data, trueUrl) })
 	}
 
-	wg.Wait()
-	close(errc) // close the error channel
-	for err := range errc {
-		if err != nil {
-			return nil, -1, err // return the first error we encounter
-		}
+	err = errGroup.Wait()
+	if err != nil {
+		fmt.Printf("Error downloading file: %s\n", err)
+		return nil, -1, fmt.Errorf("error downloading file: %w", err)
 	}
 	elapsed := time.Since(startTime).Seconds()
 	througput := humanize.Bytes(uint64(float64(fileSize) / elapsed))
@@ -89,9 +85,7 @@ func FileToBuffer(url string) (*bytes.Buffer, int64, error) {
 	return buffer, fileSize, nil
 }
 
-func downloadChunk(start, end int64, errc chan<- error, data []byte, trueUrl string, wg *sync.WaitGroup) {
-	defer wg.Done()
-
+func downloadChunk(start, end int64, data []byte, trueUrl string) error {
 	success := false
 
 	client := newClient()
@@ -99,32 +93,28 @@ func downloadChunk(start, end int64, errc chan<- error, data []byte, trueUrl str
 	req, err := http.NewRequest("GET", trueUrl, nil)
 	if err != nil {
 		// This needs to be a time.Duration to make everything happy
-		fmt.Printf("Error creating request: %v\n", err)
-		errc <- fmt.Errorf("error creating request for %s: %w", req.URL.String(), err)
+		return fmt.Errorf("error creating request for %s: %w", req.URL.String(), err)
 	}
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("Error executing request: %v\n", err)
-		errc <- fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
-		return
+		return fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
+
 	}
 	defer resp.Body.Close()
 
 	n, err := io.ReadFull(resp.Body, data[start:end+1])
 	if err != nil && err != io.EOF {
-		fmt.Printf("Error reading response: %v\n", err)
-		errc <- fmt.Errorf("error reading response for %s: %w", req.URL.String(), err)
-		return
+		return fmt.Errorf("error reading response for %s: %w", req.URL.String(), err)
+
 	}
 	if n != int(end-start+1) {
-		fmt.Printf("Downloaded %d bytes instead of %d\n", n, end-start+1)
-		errc <- fmt.Errorf("downloaded %d bytes instead of %d for %s", n, end-start+1, req.URL.String())
-		return
+		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, end-start+1, req.URL.String())
 	}
 	success = true
 
 	if !success {
-		errc <- fmt.Errorf("failed to download after %d retries", viper.GetInt("retries"))
+		return fmt.Errorf("failed to download after %d retries", viper.GetInt("retries"))
 	}
+	return nil
 }

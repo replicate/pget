@@ -20,6 +20,7 @@ var (
 	EnableHTTPKeepalive bool
 	Force               bool
 	HTTPTimeout         time.Duration
+	IgnoreReponseData   bool
 	KeepaliveTimeout    time.Duration
 	MinimumChunkSize    string
 	Retries             int
@@ -46,6 +47,8 @@ func AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().DurationVar(&HTTPTimeout, "http-timeout", 30*time.Second, "HTTP Timeout for each request, format is <number><unit> e.g. 10s")
 	cmd.PersistentFlags().DurationVar(&KeepaliveTimeout, "keepalive-timeout", 0*time.Second, "Keepalive Timeout for each request, format is <number><unit> e.g. 10s (0s means no limit)")
 	cmd.PersistentFlags().BoolVar(&EnableHTTPKeepalive, "enable-http-keepalive", false, "Enable HTTP Keepalive")
+	cmd.PersistentFlags().BoolVar(&IgnoreReponseData, "ignore-response-data", false, "Ignore response data and will not flush anything to disk")
+	cmd.PersistentFlags().MarkHidden("ignore-response-data")
 
 	if err := viper.BindPFlags(cmd.PersistentFlags()); err != nil {
 		panic(err)

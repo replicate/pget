@@ -85,6 +85,12 @@ func mainFunc(cmd *cobra.Command, args []string) error {
 	}
 
 	// extract the tar file if the -x flag was provided
+	if viper.GetBool("ignore-response-data") {
+		if viper.GetBool("verbose") {
+			fmt.Println("Ignoring response data; no data will be persisted to disk")
+		}
+		return nil
+	}
 	if viper.GetBool("extract") {
 		err = extract.FromTar(buffer, dest, fileSize)
 		if err != nil {
@@ -92,7 +98,7 @@ func mainFunc(cmd *cobra.Command, args []string) error {
 			os.Exit(1)
 		}
 	} else {
-		// if -x flag is not set, save the buffer to a file
+		// if both -x flag and --ignore-response-data are not set, save the buffer to a file
 		err = os.WriteFile(dest, buffer.Bytes(), 0644)
 		if err != nil {
 			fmt.Printf("Error writing file: %v\n", err)

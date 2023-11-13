@@ -2,15 +2,18 @@ package main
 
 import (
 	"fmt"
-	"github.com/replicate/pget/download"
-	"github.com/replicate/pget/extract"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+
 	"os"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
 	"github.com/replicate/pget/config"
+	"github.com/replicate/pget/download"
+	"github.com/replicate/pget/extract"
 	"github.com/replicate/pget/optname"
+	"github.com/replicate/pget/version"
 )
 
 const longDesc = `
@@ -42,6 +45,7 @@ func main() {
 		Args:  cobra.ExactArgs(2),
 	}
 	config.AddFlags(cmd)
+	cmd.AddCommand(version.CMDVersion)
 	if err := cmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

@@ -75,7 +75,7 @@ func newClient() *http.Client {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: transportDialContext(&net.Dialer{
-			Timeout:   30 * time.Second,
+			Timeout:   viper.GetDuration(optname.ConnTimeout),
 			KeepAlive: 30 * time.Second,
 		}),
 		ForceAttemptHTTP2:     true,

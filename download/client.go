@@ -3,6 +3,7 @@ package download
 import (
 	"context"
 	"fmt"
+	"github.com/replicate/pget/version"
 	"math"
 	"math/rand"
 	"net"
@@ -28,6 +29,7 @@ type R8GetRetryingRoundTripper struct {
 }
 
 func (rt R8GetRetryingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("User-Agent", fmt.Sprintf("pget/%s", version.GetVersion()))
 	retries := viper.GetInt(optname.Retries)
 	for attempt := 0; attempt <= retries; attempt++ {
 		if attempt > 0 {
@@ -62,6 +64,8 @@ func (rt R8GetRetryingRoundTripper) RoundTrip(req *http.Request) (*http.Response
 			}
 			continue
 		}
+		// Success! Exit the loop
+		return resp, nil
 	}
 	return nil, fmt.Errorf("failed to download %s after %d retries", req.URL.String(), retries)
 }

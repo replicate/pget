@@ -73,7 +73,7 @@ func mainFunc(cmd *cobra.Command, args []string) error {
 	os.WriteFile(tmpFile, []byte(""), 0644)
 	defer os.Remove(tmpFile)
 
-	buffer, fileSize, err := download.DownloadFileToBuffer(url)
+	buffer, fileSize, err := download.FileToBuffer(url)
 	if err != nil {
 		return fmt.Errorf("error downloading file: %v", err)
 	}

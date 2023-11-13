@@ -83,7 +83,7 @@ func newClient() *http.Client {
 	transport.DisableKeepAlives = true
 
 	return &http.Client{
-		Transport:     transport,
+		Transport:     &R8GetRetryingRoundTripper{Transport: transport},
 		CheckRedirect: checkRedirectFunc,
 	}
 }

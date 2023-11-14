@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -16,34 +17,34 @@ import (
 	"github.com/replicate/pget/pkg/optname"
 )
 
-var (
-	fileSize int64
-)
+type BufferMode struct {
+	Client *http.Client
+}
 
-func getRemoteFileSize(url string) (string, int64, error) {
-	// TODO: this needs a retry
-	resp, err := http.DefaultClient.Head(url)
+func (m *BufferMode) getRemoteFileSize(url string) (string, int64, error) {
+	resp, err := m.Client.Head(url)
 	if err != nil {
 		return "", int64(-1), err
 	}
 	defer resp.Body.Close()
 	trueUrl := resp.Request.URL.String()
 	if trueUrl != url {
-		fmt.Printf("Redirected to %s\n", trueUrl)
+		if viper.GetBool(optname.Verbose) {
+			fmt.Printf("Redirected to %s\n", trueUrl)
+		}
 	}
 
-	fSize := resp.ContentLength
-	if fSize <= 0 {
+	fileSize := resp.ContentLength
+	if fileSize <= 0 {
 		return "", int64(-1), fmt.Errorf("unable to determine file size")
 	}
-	fileSize = fSize
 	return trueUrl, fileSize, nil
 }
 
-func FileToBuffer(url string) (*bytes.Buffer, int64, error) {
+func (m *BufferMode) fileToBuffer(url string) (*bytes.Buffer, int64, error) {
 	maxConcurrency := viper.GetInt(optname.Concurrency)
 
-	trueURL, fileSize, err := getRemoteFileSize(url)
+	trueURL, fileSize, err := m.getRemoteFileSize(url)
 	if err != nil {
 		return nil, -1, err
 	}
@@ -81,7 +82,7 @@ func FileToBuffer(url string) (*bytes.Buffer, int64, error) {
 		}
 
 		errGroup.Go(func() error {
-			return downloadChunk(ctx, start, end, data[start:end+1], trueURL)
+			return m.downloadChunk(ctx, start, end, data[start:end+1], trueURL)
 		})
 	}
 
@@ -97,14 +98,13 @@ func FileToBuffer(url string) (*bytes.Buffer, int64, error) {
 	return buffer, fileSize, nil
 }
 
-func downloadChunk(ctx context.Context, start, end int64, dataSlice []byte, trueURL string) error {
-	client := newClient()
+func (m *BufferMode) downloadChunk(ctx context.Context, start, end int64, dataSlice []byte, trueURL string) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", trueURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to download %s", req.URL.String())
 	}
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
-	resp, err := client.Do(req)
+	resp, err := m.Client.Do(req)
 	if err != nil {
 		return fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
 	}
@@ -116,6 +116,18 @@ func downloadChunk(ctx context.Context, start, end int64, dataSlice []byte, true
 	}
 	if n != int(end-start+1) {
 		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, end-start+1, req.URL.String())
+	}
+	return nil
+}
+
+func (m *BufferMode) DownloadFile(url string, dest string) error {
+	buffer, _, err := m.fileToBuffer(url)
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(dest, buffer.Bytes(), 0644)
+	if err != nil {
+		return fmt.Errorf("error writing file: %w", err)
 	}
 	return nil
 }

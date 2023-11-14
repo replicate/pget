@@ -11,7 +11,6 @@ import (
 	"github.com/replicate/pget/cmd"
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/download"
-	"github.com/replicate/pget/pkg/extract"
 	"github.com/replicate/pget/pkg/optname"
 )
 
@@ -57,23 +56,6 @@ func execFunc(cmd *cobra.Command, args []string) error {
 	_ = os.WriteFile(tmpFile, []byte(""), 0644)
 	defer os.Remove(tmpFile)
 
-	buffer, fileSize, err := download.FileToBuffer(url)
-	if err != nil {
-		return fmt.Errorf("error downloading file: %w", err)
-	}
-
-	// extract the tar file if the -x flag was provided
-	if viper.GetBool(optname.Extract) {
-		err = extract.ExtractTarFile(buffer, dest, fileSize)
-		if err != nil {
-			return fmt.Errorf("error extracting file: %v", err)
-		}
-	} else {
-		// if -x flag is not set, save the buffer to a file
-		err = os.WriteFile(dest, buffer.Bytes(), 0644)
-		if err != nil {
-			return fmt.Errorf("error writing file: %v", err)
-		}
-	}
-	return nil
+	mode := download.GetMode(config.Mode)
+	return mode.DownloadFile(url, dest)
 }

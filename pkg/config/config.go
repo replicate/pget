@@ -19,6 +19,7 @@ var (
 	Extract          bool
 	Force            bool
 	MinimumChunkSize string
+	Mode             string
 	ResolveHosts     []string
 	Retries          int
 	Verbose          bool
@@ -46,7 +47,10 @@ func AddFlags(cmd *cobra.Command) {
 }
 
 func PersistentStartupProcessFlags() error {
-
+	Mode = "buffer"
+	if viper.GetBool(optname.Extract) {
+		Mode = "tar-extract"
+	}
 	if err := convertResolveHostsToMap(); err != nil {
 		return err
 	}

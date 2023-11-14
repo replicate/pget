@@ -58,7 +58,14 @@ func DownloadFileToBuffer(url string) (*bytes.Buffer, int64, error) {
 		return nil, -1, err
 	}
 
-	chunkSize := viper.GetInt64(optname.MinimumChunkSize)
+	minChunkSize, err := humanize.ParseBytes(viper.GetString(optname.MinimumChunkSize))
+	if err != nil {
+		return nil, -1, fmt.Errorf("unable to parse minimum chunk size: %v", err)
+	}
+	chunkSize := int64(minChunkSize)
+	if chunkSize < 0 {
+		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
+	}
 	// not more than one connection per min chunk size
 	concurrency := int(math.Ceil(float64(fileSize) / float64(chunkSize)))
 
@@ -67,7 +74,7 @@ func DownloadFileToBuffer(url string) (*bytes.Buffer, int64, error) {
 		chunkSize = fileSize / int64(concurrency)
 	}
 	if verboseMode {
-		fmt.Printf("Downloading %s bytes with %d connections (chunk-size = %d)\n", humanize.Bytes(uint64(fileSize)), concurrency, humanize.Bytes(uint64(chunkSize)))
+		fmt.Printf("Downloading %s bytes with %d connections (chunk-size = %s)\n", humanize.Bytes(uint64(fileSize)), concurrency, humanize.Bytes(uint64(chunkSize)))
 	}
 
 	var wg sync.WaitGroup

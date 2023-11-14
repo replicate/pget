@@ -6,6 +6,7 @@ const (
 	Extract          = "extract"
 	Force            = "force"
 	MinimumChunkSize = "minimum-chunk-size"
+	Resolve          = "resolve"
 	Retries          = "retries"
 	Verbose          = "verbose"
 )

@@ -3,6 +3,7 @@ package download
 import (
 	"context"
 	"fmt"
+	"github.com/replicate/pget/config"
 	"github.com/replicate/pget/version"
 	"math"
 	"math/rand"
@@ -24,6 +25,7 @@ const (
 	retryBackoffFactor  = 2    // Base for POW()
 )
 
+// R8GetRetryingRoundTripper is a wrapper around http.Transport that allows for retrying failed requests
 type R8GetRetryingRoundTripper struct {
 	Transport *http.Transport
 }
@@ -70,6 +72,7 @@ func (rt R8GetRetryingRoundTripper) RoundTrip(req *http.Request) (*http.Response
 	return nil, fmt.Errorf("failed to download %s after %d retries", req.URL.String(), retries)
 }
 
+// newClient factory function returns a new http.Client with the appropriate settings
 func newClient() *http.Client {
 
 	transport := &http.Transport{
@@ -92,6 +95,7 @@ func newClient() *http.Client {
 	}
 }
 
+// checkRedirectFunc is a wrapper around http.Client.CheckRedirect that allows for printing out redirects
 func checkRedirectFunc(req *http.Request, via []*http.Request) error {
 	if viper.GetBool(optname.Verbose) {
 		fmt.Printf("Received redirect '%d' to '%s'\n", req.Response.StatusCode, req.URL.String())
@@ -99,6 +103,17 @@ func checkRedirectFunc(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
+// transportDialContext is a wrapper around net.Dialer that allows for overriding DNS lookups via the values passed to
+// `--resolve` argument.
 func transportDialContext(dialer *net.Dialer) func(context.Context, string, string) (net.Conn, error) {
-	return dialer.DialContext
+	// Allow for overriding DNS lookups in the dialer without impacting Host and SSL resolution
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if addrOverride := config.HostToIPResolutionMap[addr]; addrOverride != "" {
+			if viper.GetBool(optname.Verbose) {
+				fmt.Printf("Overriding Resolution of '%s' to '%s'", dialer.LocalAddr.String(), addrOverride)
+				addr = addrOverride
+			}
+		}
+		return dialer.DialContext(ctx, network, addr)
+	}
 }

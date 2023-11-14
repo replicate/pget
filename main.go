@@ -42,7 +42,10 @@ func main() {
 		Short: "pget",
 		Long:  longDesc,
 		RunE:  mainFunc,
-		Args:  cobra.ExactArgs(2),
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return config.PersistentStartupProcessFlags()
+		},
+		Args: cobra.ExactArgs(2),
 	}
 	config.AddFlags(cmd)
 	cmd.AddCommand(version.CMDVersion)

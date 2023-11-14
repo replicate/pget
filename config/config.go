@@ -25,7 +25,7 @@ func AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVarP(&Retries, optname.Retries, "r", 5, "Number of retries when attempting to retrieve a file")
 	cmd.PersistentFlags().BoolVarP(&Verbose, optname.Verbose, "v", false, "Verbose mode")
 
-	viper.SetEnvPrefix("R8GET")
+	viper.SetEnvPrefix("PGET")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.AutomaticEnv()
 	if err := viper.BindPFlags(cmd.PersistentFlags()); err != nil {

@@ -1,264 +1,72 @@
 package main
 
 import (
-	"archive/tar"
-	"bytes"
-	"flag"
 	"fmt"
-	"io"
-	"math"
-	"math/rand"
-	"net/http"
+	"github.com/dustin/go-humanize"
+	"github.com/replicate/pget/download"
+	"github.com/replicate/pget/extract"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"os"
 	"path/filepath"
-	"runtime"
-	"sync"
-	"time"
 
-	"github.com/dustin/go-humanize"
+	"github.com/replicate/pget/config"
+	"github.com/replicate/pget/optname"
 )
 
-const (
-	retryDelayBaseline = 100 // in milliseconds
-	retrySleepJitter   = 500 // in milliseconds (will add 0-500 additional milliseconds)
+const longDesc = `
+pget
 
-	retryMaxBackoffTime = 3000 // in milliseconds, we will not backoff further than 3 seconds
-	retryBackoffIncr    = 500  // in milliseconds, backoffFactor^retryNum * backoffIncr
-	retryBackoffFactor  = 2    // Base for POW()
-)
+PGet is a high performance, concurrent file downloader built in Go. It is designed to speed up and optimize file
+downloads from cloud storage services such as Amazon S3 and Google Cloud Storage.
 
-var (
-	_fileSize    int64
-	verboseMode  bool   = false
-	minChunkSize uint64 = 1024 * 1024
-)
+The primary advantage of PGet is its ability to download files in parallel using multiple threads. By dividing the file
+into chunks and downloading multiple chunks simultaneously, PGet significantly reduces the total download time for large
+files.
 
-func getRemoteFileSize(url string) (string, int64, error) {
-	// TODO: this needs a retry
-	resp, err := http.DefaultClient.Head(url)
-	if err != nil {
-		return "", int64(-1), err
-	}
-	defer resp.Body.Close()
-	trueUrl := resp.Request.URL.String()
-	if trueUrl != url {
-		fmt.Printf("Redirected to %s\n", trueUrl)
-	}
+If the downloaded file is a tar archive, PGet can automatically extract the contents of the archive in memory, thus
+removing the need for an additional extraction step.
 
-	fileSize := resp.ContentLength
-	if fileSize <= 0 {
-		return "", int64(-1), fmt.Errorf("unable to determine file size")
-	}
-	_fileSize = fileSize
-	return trueUrl, fileSize, nil
-}
-
-func downloadFileToBuffer(url string, maxConcurrency int, retries int) (*bytes.Buffer, error) {
-	trueUrl, fileSize, err := getRemoteFileSize(url)
-	if err != nil {
-		return nil, err
-	}
-	// not more than one connection per min chunk size
-	maxChunks := fileSize / int64(minChunkSize)
-	concurrency := int(maxChunks)
-	if concurrency > maxConcurrency {
-		concurrency = maxConcurrency
-	} else if concurrency < 1 {
-		concurrency = 1
-	}
-	if verboseMode {
-		fmt.Printf("Downloading %s bytes with %d connections\n", humanize.Bytes(uint64(fileSize)), concurrency)
-	}
-
-	chunkSize := fileSize / int64(concurrency)
-	var wg sync.WaitGroup
-	wg.Add(concurrency)
-
-	data := make([]byte, fileSize)
-	errc := make(chan error, concurrency)
-	startTime := time.Now()
-
-	for i := 0; i < concurrency; i++ {
-		start := int64(i) * chunkSize
-		end := start + chunkSize - 1
-
-		if i == concurrency-1 {
-			end = fileSize - 1
-		}
-
-		go func(start, end int64) {
-			defer wg.Done()
-
-			success := false
-			for retryNum := 0; retryNum <= retries; retryNum++ {
-
-				if retryNum > 0 {
-					if verboseMode {
-						fmt.Printf("Retrying. Count: %d\n", retryNum)
-					}
-					sleepJitter := time.Duration(rand.Intn(retrySleepJitter))
-					sleepTime := time.Millisecond * (sleepJitter + retryDelayBaseline)
-
-					// Exponential backoff
-					// 2^retryNum * retryBackoffIncr (in milliseconds)
-					backoffFactor := math.Pow(retryBackoffFactor, float64(retryNum))
-					backoffDuration := time.Duration(math.Min(backoffFactor*retryBackoffIncr, retryMaxBackoffTime))
-					sleepTime += (time.Millisecond * backoffDuration)
-					time.Sleep(sleepTime)
-				}
-
-				transport := http.DefaultTransport.(*http.Transport).Clone()
-				transport.DisableKeepAlives = true
-				checkRedirectFunc := func(req *http.Request, via []*http.Request) error {
-					if verboseMode {
-						fmt.Printf("Received redirect '%d' to '%s'\n", req.Response.StatusCode, req.URL.String())
-					}
-					return nil
-				}
-				client := &http.Client{
-					Transport:     transport,
-					CheckRedirect: checkRedirectFunc,
-				}
-
-				req, err := http.NewRequest("GET", trueUrl, nil)
-				if err != nil {
-					// This needs to be a time.Duration to make everything happy
-					fmt.Printf("Error creating request: %v\n", err)
-					continue
-				}
-				req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
-				if retryNum > 0 {
-					req.Header.Set("Retry-Count", fmt.Sprintf("%d", retryNum))
-				}
-
-				resp, err := client.Do(req)
-				if err != nil {
-					fmt.Printf("Error executing request: %v\n", err)
-					continue
-				}
-				defer resp.Body.Close()
-
-				n, err := io.ReadFull(resp.Body, data[start:end+1])
-				if err != nil && err != io.EOF {
-					fmt.Printf("Error reading response: %v\n", err)
-					continue
-				}
-				if n != int(end-start+1) {
-					fmt.Printf("Downloaded %d bytes instead of %d\n", n, end-start+1)
-					continue
-				}
-				success = true
-				break // if the download was successful, break out of the retry loop
-			}
-
-			if !success {
-				errc <- fmt.Errorf("failed to download after %d retries", retries)
-			}
-		}(start, end)
-	}
-
-	wg.Wait()
-	close(errc) // close the error channel
-	for err := range errc {
-		if err != nil {
-			return nil, err // return the first error we encounter
-		}
-	}
-	elapsed := time.Since(startTime).Seconds()
-	througput := humanize.Bytes(uint64(float64(fileSize) / elapsed))
-	fmt.Printf("Downloaded %s bytes in %.3fs (%s/s)\n", humanize.Bytes(uint64(fileSize)), elapsed, througput)
-
-	buffer := bytes.NewBuffer(data)
-	return buffer, nil
-}
-
-func extractTarFile(buffer *bytes.Buffer, destDir string) error {
-	startTime := time.Now()
-	tarReader := tar.NewReader(buffer)
-
-	for {
-		header, err := tarReader.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		target := filepath.Join(destDir, header.Name)
-		targetDir := filepath.Dir(target)
-		if err := os.MkdirAll(targetDir, 0755); err != nil {
-			return err
-		}
-
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)); err != nil {
-				return err
-			}
-		case tar.TypeReg:
-			targetFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, os.FileMode(header.Mode))
-			if err != nil {
-				return err
-			}
-			if _, err := io.Copy(targetFile, tarReader); err != nil {
-				targetFile.Close()
-				return err
-			}
-			targetFile.Close()
-		case tar.TypeSymlink:
-			if err := os.Symlink(header.Linkname, target); err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("unsupported file type for %s, typeflag %s", header.Name, string(header.Typeflag))
-		}
-	}
-	elapsed := time.Since(startTime).Seconds()
-	size := humanize.Bytes(uint64(_fileSize))
-	throughput := humanize.Bytes(uint64(float64(_fileSize) / elapsed))
-	fmt.Printf("Extracted %s in %.3fs (%s/s)\n", size, elapsed, throughput)
-
-	return nil
-}
+The efficiency of PGet's tar extraction lies in its approach to handling data. Instead of writing the downloaded tar
+file to disk and then reading it back into memory for extraction, PGet conducts the extraction directly from the
+in-memory download buffer. This method avoids unnecessary memory copies and disk I/O, leading to an increase in
+performance, especially when dealing with large tar files. This makes PGet not just a parallel downloader, but also an
+efficient file extractor, providing a streamlined solution for fetching and unpacking files.
+`
 
 func main() {
-	// define flags
-	concurrency := flag.Int("c", runtime.GOMAXPROCS(0)*4, "concurrency level - default 4 * cores")
-	retries := flag.Int("r", 5, "Number of retries when attempting to retreive file")
-	extract := flag.Bool("x", false, "extract tar file")
-	verbose := flag.Bool("v", false, "verbose mode")
-	force := flag.Bool("f", false, "force download, overwriting existing file")
-	chunkFlag := flag.String("m", "", "minimum chunk size")
-
-	flag.Parse()
-
-	// check required positional arguments
-	args := flag.Args()
-	if len(args) < 2 {
-		fmt.Println("Usage: pget <url> <dest> [-c concurrency] [-r max-retries] [-v] [-x]")
+	cmd := &cobra.Command{
+		Use:   "pget [flags] <url> <dest>",
+		Short: "pget",
+		Long:  longDesc,
+		RunE:  mainFunc,
+		Args:  cobra.ExactArgs(2),
+	}
+	config.AddFlags(cmd)
+	if err := cmd.Execute(); err != nil {
+		fmt.Println(err)
 		os.Exit(1)
 	}
+}
 
-	if size := os.Getenv("PGET_MIN_CHUNK_SIZE"); size != "" {
-		minChunkSize, _ = humanize.ParseBytes(size)
-	}
-	if *chunkFlag != "" {
-		minChunkSize, _ = humanize.ParseBytes(*chunkFlag)
-	}
+func mainFunc(cmd *cobra.Command, args []string) error {
+	verboseMode := viper.GetBool(optname.Verbose)
 
 	url := args[0]
 	dest := args[1]
 	_, fileExists := os.Stat(dest)
 
-	// ensure dest does not exist
-	if !*force && !os.IsNotExist(fileExists) {
-		fmt.Printf("Destination %s already exists\n", dest)
-		os.Exit(1)
+	if verboseMode {
+		absPath, _ := filepath.Abs(dest)
+		fmt.Println("URL:", url)
+		fmt.Println("Destination:", absPath)
+		fmt.Println("Minimum Chunk Size:", humanize.Bytes(uint64(viper.GetInt64(optname.MinimumChunkSize))))
+		fmt.Println()
 	}
+	// ensure dest does not exist
+	if !viper.GetBool(optname.Force) && !os.IsNotExist(fileExists) {
+		return fmt.Errorf("destination %s already exists", dest)
 
-	if *verbose {
-		verboseMode = true
 	}
 
 	// allows us to see how many pget procs are running at a time
@@ -266,25 +74,23 @@ func main() {
 	os.WriteFile(tmpFile, []byte(""), 0644)
 	defer os.Remove(tmpFile)
 
-	buffer, err := downloadFileToBuffer(url, *concurrency, *retries)
+	buffer, fileSize, err := download.DownloadFileToBuffer(url)
 	if err != nil {
-		fmt.Printf("Error downloading file: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error downloading file: %v", err)
 	}
 
 	// extract the tar file if the -x flag was provided
-	if *extract {
-		err = extractTarFile(buffer, dest)
+	if viper.GetBool(optname.Extract) {
+		err = extract.ExtractTarFile(buffer, dest, fileSize)
 		if err != nil {
-			fmt.Printf("Error extracting tar file: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("error extracting file: %v", err)
 		}
 	} else {
 		// if -x flag is not set, save the buffer to a file
 		err = os.WriteFile(dest, buffer.Bytes(), 0644)
 		if err != nil {
-			fmt.Printf("Error writing file: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("error writing file: %v", err)
 		}
 	}
+	return nil
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/dustin/go-humanize"
 	"github.com/replicate/pget/download"
 	"github.com/replicate/pget/extract"
 	"github.com/spf13/cobra"
@@ -60,7 +59,7 @@ func mainFunc(cmd *cobra.Command, args []string) error {
 		absPath, _ := filepath.Abs(dest)
 		fmt.Println("URL:", url)
 		fmt.Println("Destination:", absPath)
-		fmt.Println("Minimum Chunk Size:", humanize.Bytes(uint64(viper.GetInt64(optname.MinimumChunkSize))))
+		fmt.Println("Minimum Chunk Size:", viper.GetString(optname.MinimumChunkSize))
 		fmt.Println()
 	}
 	// ensure dest does not exist

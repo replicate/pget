@@ -1,0 +1,20 @@
+#!/bin/sh
+
+set -eu
+
+: "${CHECKONLY:=}"
+: "${WORKDIR:=$PWD}"
+
+LOCAL=$(go list -m)
+
+if [ -n "$CHECKONLY" ]; then
+  OUTPUT=$(go run -C "$WORKDIR" golang.org/x/tools/cmd/goimports -d -local "$LOCAL" .)
+  printf "%s" "$OUTPUT"
+
+  if [ -n "$OUTPUT" ]; then
+    exit 1
+  fi
+  exit
+fi
+
+exec go run golang.org/x/tools/cmd/goimports -d -w -local "$LOCAL" .

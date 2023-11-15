@@ -17,7 +17,12 @@ import (
 
 func main() {
 	config.AddFlags(cmd.RootCMD)
-	cmd.RootCMD.RunE = mainFunc
+	cmd.RootCMD.Run = func(cmd *cobra.Command, args []string) {
+		if err := execFunc(cmd, args); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+	}
 	cmd.RootCMD.AddCommand(cmd.VersionCMD)
 	if err := cmd.RootCMD.Execute(); err != nil {
 		fmt.Println(err)
@@ -25,7 +30,9 @@ func main() {
 	}
 }
 
-func mainFunc(cmd *cobra.Command, args []string) error {
+// execFunc is the main function of the program and encapsulates the general logic
+// returns any/all errors to the caller.
+func execFunc(cmd *cobra.Command, args []string) error {
 	verboseMode := viper.GetBool(optname.Verbose)
 
 	url := args[0]
@@ -52,7 +59,7 @@ func mainFunc(cmd *cobra.Command, args []string) error {
 
 	buffer, fileSize, err := download.FileToBuffer(url)
 	if err != nil {
-		return fmt.Errorf("error downloading file: %v", err)
+		return fmt.Errorf("error downloading file: %w", err)
 	}
 
 	// extract the tar file if the -x flag was provided

@@ -25,7 +25,7 @@ else
     VERSION := "development-$(GIT_COMMIT)"
 endif
 
-LD_FLAGS := -ldflags "-extldflags '-static' -X github.com/replicate/pget/version.Version=$(VERSION) -X github.com/replicate/pget/version.CommitHash=$(GIT_COMMIT) -X github.com/replicate/pget/version.BuildTime=$(BUILD_TIME) -w"
+LD_FLAGS := -ldflags "-extldflags '-static' -X github.com/replicate/pget/pkg/version.Version=$(VERSION) -X github.com/replicate/pget/pkg/version.CommitHash=$(GIT_COMMIT) -X github.com/replicate/pget/pkg/version.BuildTime=$(BUILD_TIME) -w"
 
 default: all
 

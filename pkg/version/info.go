@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	// Build Time Injected information
+	// Version Build Time Injected information
 	Version    string
 	CommitHash string
 	BuildTime  string

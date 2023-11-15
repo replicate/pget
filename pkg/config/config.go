@@ -2,13 +2,15 @@ package config
 
 import (
 	"fmt"
-	"github.com/replicate/pget/optname"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"net"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
+	"github.com/replicate/pget/pkg/optname"
 )
 
 var (

@@ -106,7 +106,6 @@ func downloadChunk(ctx context.Context, start, end int64, dataSlice []byte, true
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Printf("Error executing request: %v\n", err)
 		return fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
 	}
 	defer resp.Body.Close()

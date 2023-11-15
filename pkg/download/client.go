@@ -3,8 +3,6 @@ package download
 import (
 	"context"
 	"fmt"
-	"github.com/replicate/pget/config"
-	"github.com/replicate/pget/version"
 	"math"
 	"math/rand"
 	"net"
@@ -13,7 +11,9 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/replicate/pget/optname"
+	"github.com/replicate/pget/pkg/config"
+	"github.com/replicate/pget/pkg/optname"
+	"github.com/replicate/pget/pkg/version"
 )
 
 const (

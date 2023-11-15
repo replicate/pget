@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/replicate/pget/optname"
+	"github.com/replicate/pget/pkg/optname"
 )
 
 var (

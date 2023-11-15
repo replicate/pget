@@ -1,4 +1,4 @@
-package download
+package client
 
 import (
 	"context"
@@ -75,8 +75,8 @@ func (rt R8GetRetryingRoundTripper) RoundTrip(req *http.Request) (*http.Response
 	return nil, fmt.Errorf("failed to download %s after %d retries", req.URL.String(), retries)
 }
 
-// newClient factory function returns a new http.Client with the appropriate settings
-func newClient() *http.Client {
+// NewClient factory function returns a new http.Client with the appropriate settings
+func NewClient() *http.Client {
 
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,

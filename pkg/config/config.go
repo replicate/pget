@@ -14,15 +14,16 @@ import (
 )
 
 var (
-	Concurrency      int
-	ConnTimeout      time.Duration
-	Extract          bool
-	Force            bool
-	MinimumChunkSize string
-	Mode             string
-	ResolveHosts     []string
-	Retries          int
-	Verbose          bool
+	Concurrency          int
+	ConnTimeout          time.Duration
+	EnableHTTPKeepalives bool
+	Extract              bool
+	Force                bool
+	MinimumChunkSize     string
+	Mode                 string
+	ResolveHosts         []string
+	Retries              int
+	Verbose              bool
 )
 
 // HostToIPResolutionMap is a map of hostnames to IP addresses
@@ -37,6 +38,8 @@ func AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringSliceVar(&ResolveHosts, optname.Resolve, []string{}, "Resolve hostnames to specific IPs")
 	cmd.PersistentFlags().IntVarP(&Retries, optname.Retries, "r", 5, "Number of retries when attempting to retrieve a file")
 	cmd.PersistentFlags().BoolVarP(&Verbose, optname.Verbose, "v", false, "Verbose mode")
+	cmd.PersistentFlags().BoolVar(&EnableHTTPKeepalives, optname.EnableHTTPKeepalives, false, "Enable HTTP keep-alives")
+	_ = cmd.PersistentFlags().MarkHidden(optname.EnableHTTPKeepalives)
 
 	viper.SetEnvPrefix("PGET")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))

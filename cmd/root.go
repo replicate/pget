@@ -6,7 +6,7 @@ import (
 	"github.com/replicate/pget/pkg/config"
 )
 
-const longDesc = `
+const rootLongDesc = `
 pget
 
 PGet is a high performance, concurrent file downloader built in Go. It is designed to speed up and optimize file
@@ -29,7 +29,7 @@ efficient file extractor, providing a streamlined solution for fetching and unpa
 var RootCMD = &cobra.Command{
 	Use:   "pget [flags] <url> <dest>",
 	Short: "pget",
-	Long:  longDesc,
+	Long:  rootLongDesc,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return config.PersistentStartupProcessFlags()
 	},

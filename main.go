@@ -22,7 +22,6 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	cmd.RootCMD.AddCommand(cmd.VersionCMD)
 	if err := cmd.RootCMD.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

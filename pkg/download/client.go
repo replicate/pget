@@ -87,10 +87,14 @@ func newClient() *http.Client {
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
-	transport.DisableKeepAlives = true
+	transport.DisableKeepAlives = viper.GetBool(optname.EnableHTTPKeepalives)
+	maxConnPerHost := viper.GetInt(optname.MaxConnPerHost)
+	if maxConnPerHost > 0 {
+		transport.MaxConnsPerHost = maxConnPerHost
+	}
 
 	return &http.Client{
 		Transport:     &R8GetRetryingRoundTripper{Transport: transport},

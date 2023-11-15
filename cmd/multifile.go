@@ -37,6 +37,12 @@ var MultiFileCMD = &cobra.Command{
 	Short: "download files from a manifest file in parallel",
 	Long:  multiFileLongDesc,
 	Args:  cobra.ExactArgs(1),
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		if viper.GetBool(optname.Extract) {
+			return fmt.Errorf("cannot use --extract with multifile mode")
+		}
+		return nil
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := execMultifile(cmd, args); err != nil {
 			fmt.Println(err)

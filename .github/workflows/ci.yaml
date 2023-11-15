@@ -18,6 +18,21 @@ concurrency:
   cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) }}
 
 jobs:
+  lint:
+    name: "Lint"
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest-8-cores
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+      - run: go mod download
+      - name: Lint
+        run: script/lint
+      - name: Formatting
+        run: CHECKONLY=1 script/format
+
   build:
     name: Build
     runs-on: ubuntu-latest-8-cores

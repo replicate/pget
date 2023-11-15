@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -eu
+
+: "${GITHUB_ACTIONS:=}"
+: "${WORKDIR:=$PWD}"
+
+cd "$(dirname "$0")"
+cd ..
+
+if [ "$GITHUB_ACTIONS" = "true" ]; then
+  set -- "$@" --out-format=github-actions
+fi
+
+exec go run -C "$WORKDIR" github.com/golangci/golangci-lint/cmd/golangci-lint run ./... "$@"

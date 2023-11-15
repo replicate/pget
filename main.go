@@ -47,7 +47,7 @@ func mainFunc(cmd *cobra.Command, args []string) error {
 
 	// allows us to see how many pget procs are running at a time
 	tmpFile := fmt.Sprintf("/tmp/.pget-%d", os.Getpid())
-	os.WriteFile(tmpFile, []byte(""), 0644)
+	_ = os.WriteFile(tmpFile, []byte(""), 0644)
 	defer os.Remove(tmpFile)
 
 	buffer, fileSize, err := download.FileToBuffer(url)

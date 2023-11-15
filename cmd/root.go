@@ -1,8 +1,9 @@
 package cmd
 
 import (
-	"github.com/replicate/pget/pkg/config"
 	"github.com/spf13/cobra"
+
+	"github.com/replicate/pget/pkg/config"
 )
 
 const longDesc = `

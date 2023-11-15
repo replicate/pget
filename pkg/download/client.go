@@ -60,7 +60,9 @@ func (rt R8GetRetryingRoundTripper) RoundTrip(req *http.Request) (*http.Response
 			}
 			continue
 		}
-
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, fmt.Errorf("file not found: %s", req.URL.String())
+		}
 		if resp.StatusCode >= 400 {
 			if viper.GetBool(optname.Verbose) {
 				fmt.Printf("Received Status '%s', retrying\n", resp.Status)

@@ -58,16 +58,18 @@ func convertResolveHostsToMap() error {
 		if len(split) != 3 {
 			return fmt.Errorf("invalid resolve host format, expected <hostname>:port:<ip>, got: %s", resolveHost)
 		}
-		host, port, addr := strings.ToLower(split[0]), split[1], split[2]
-		hostPort := fmt.Sprintf("%s:%s", host, port)
-		if _, ok := HostToIPResolutionMap[hostPort]; ok {
-			return fmt.Errorf("duplicate host specified: %s", host)
+		host, port, addr := split[0], split[1], split[2]
+		if net.ParseIP(host) != nil {
+			return fmt.Errorf("invalid hostname specified, looks like an IP address: %s", host)
 		}
-		IP := net.ParseIP(addr)
-		if IP == nil {
+		hostPort := net.JoinHostPort(host, port)
+		if _, ok := HostToIPResolutionMap[hostPort]; ok {
+			return fmt.Errorf("duplicate host:port specified: %s", host)
+		}
+		if net.ParseIP(addr) == nil {
 			return fmt.Errorf("invalid IP address: %s", addr)
 		}
-		HostToIPResolutionMap[hostPort] = fmt.Sprintf("%s:%s", IP.String(), port)
+		HostToIPResolutionMap[hostPort] = net.JoinHostPort(addr, port)
 	}
 	if viper.GetBool(optname.Verbose) {
 		for key, elem := range HostToIPResolutionMap {

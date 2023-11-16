@@ -10,12 +10,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/replicate/pget/pkg/client"
-
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/optname"
 )
 
@@ -25,10 +24,18 @@ type BufferMode struct {
 
 func (m *BufferMode) getRemoteFileSize(url string) (string, int64, error) {
 	// Acquire a client for the head request
-	httpClient := client.NewClient(url)
+	// Acquire a client for a download
+	req, err := http.NewRequest("HEAD", url, nil)
+	if err != nil {
+		return "", int64(-1), fmt.Errorf("failed create request for %s", req.URL.String())
+	}
+	httpClient, err := client.AcquireClient(req.URL.Host)
+	if err != nil {
+		return "", int64(-1), fmt.Errorf("error acquiring client for %s: %w", req.URL.String(), err)
+	}
 	defer httpClient.Done()
 
-	resp, err := httpClient.Head(url)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", int64(-1), err
 	}
@@ -111,7 +118,10 @@ func (m *BufferMode) downloadChunk(ctx context.Context, start, end int64, dataSl
 	}
 
 	// Acquire a client for a download
-	httpClient := client.NewClient(req.URL.Host)
+	httpClient, err := client.AcquireClient(req.URL.Host)
+	if err != nil {
+		return fmt.Errorf("error acquiring client for %s: %w", req.URL.String(), err)
+	}
 	defer httpClient.Done()
 
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))

@@ -106,7 +106,7 @@ func NewClient(host string) *HTTPClient {
 		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
-	transport.DisableKeepAlives = viper.GetBool(optname.EnableHTTPKeepalives)
+	transport.DisableKeepAlives = false
 	maxConnPerHost := viper.GetInt(optname.MaxConnPerHost)
 	if maxConnPerHost > 0 {
 		transport.MaxConnsPerHost = maxConnPerHost

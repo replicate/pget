@@ -20,8 +20,6 @@ import (
 	"github.com/replicate/pget/pkg/optname"
 )
 
-const ctxKeyTarget = "download-target"
-
 type BufferMode struct {
 	Client *http.Client
 }

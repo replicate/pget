@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -15,17 +16,30 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/client"
+	"github.com/replicate/pget/pkg/logging"
 	"github.com/replicate/pget/pkg/optname"
 )
+
+const ctxKeyTarget = "download-target"
 
 type BufferMode struct {
 	Client *http.Client
 }
 
-func (m *BufferMode) getRemoteFileSize(url string) (string, int64, error) {
+type Target struct {
+	URL     string
+	TrueURL string
+	Dest    string
+}
+
+func (t *Target) Basename() string {
+	return filepath.Base(t.Dest)
+}
+
+func (m *BufferMode) getRemoteFileSize(ctx context.Context, url string) (string, int64, error) {
 	// Acquire a client for the head request
 	// Acquire a client for a download
-	req, err := http.NewRequest("HEAD", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
 	if err != nil {
 		return "", int64(-1), fmt.Errorf("failed create request for %s", req.URL.String())
 	}
@@ -42,9 +56,7 @@ func (m *BufferMode) getRemoteFileSize(url string) (string, int64, error) {
 	defer resp.Body.Close()
 	trueUrl := resp.Request.URL.String()
 	if trueUrl != url {
-		if viper.GetBool(optname.Verbose) {
-			fmt.Printf("Redirected to %s\n", trueUrl)
-		}
+		logging.Logger.Info().Str("url", url).Str("redirect_url", trueUrl).Msg("Redirect")
 	}
 
 	fileSize := resp.ContentLength
@@ -54,12 +66,15 @@ func (m *BufferMode) getRemoteFileSize(url string) (string, int64, error) {
 	return trueUrl, fileSize, nil
 }
 
-func (m *BufferMode) fileToBuffer(url string) (*bytes.Buffer, int64, error) {
+func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Buffer, int64, error) {
 	maxConcurrency := viper.GetInt(optname.Concurrency)
 
-	trueURL, fileSize, err := m.getRemoteFileSize(url)
+	trueURL, fileSize, err := m.getRemoteFileSize(ctx, target.URL)
 	if err != nil {
 		return nil, -1, err
+	}
+	if trueURL != target.URL {
+		target.TrueURL = trueURL
 	}
 
 	minChunkSize, err := humanize.ParseBytes(viper.GetString(optname.MinimumChunkSize))
@@ -77,11 +92,14 @@ func (m *BufferMode) fileToBuffer(url string) (*bytes.Buffer, int64, error) {
 		concurrency = maxConcurrency
 		chunkSize = fileSize / int64(concurrency)
 	}
-	if viper.GetBool(optname.Verbose) {
-		fmt.Printf("Downloading %s bytes with %d connections (chunk-size = %s)\n", humanize.Bytes(uint64(fileSize)), concurrency, humanize.Bytes(uint64(chunkSize)))
-	}
+	logging.Logger.Debug().Str("dest", target.Dest).
+		Str("url", target.URL).
+		Int64("size", fileSize).
+		Int("connections", concurrency).
+		Int64("chunkSize", chunkSize).
+		Msg("Downloading")
 
-	errGroup, ctx := errgroup.WithContext(context.Background())
+	errGroup, ctx := errgroup.WithContext(ctx)
 
 	data := make([]byte, fileSize)
 	startTime := time.Now()
@@ -103,9 +121,14 @@ func (m *BufferMode) fileToBuffer(url string) (*bytes.Buffer, int64, error) {
 		return nil, -1, err // return the first error we encounter
 	}
 
-	elapsed := time.Since(startTime).Seconds()
-	througput := humanize.Bytes(uint64(float64(fileSize) / elapsed))
-	fmt.Printf("Downloaded %s bytes in %.3fs (%s/s)\n", humanize.Bytes(uint64(fileSize)), elapsed, througput)
+	elapsed := time.Since(startTime)
+	througput := fmt.Sprintf("%s/s", humanize.Bytes(uint64(float64(fileSize)/elapsed.Seconds())))
+	logging.Logger.Info().Str("url", target.URL).
+		Str("dest", target.Dest).
+		Str("size", humanize.Bytes(uint64(fileSize))).
+		Str("elapsed", fmt.Sprintf("%.3fs", elapsed.Seconds())).
+		Str("throughput", througput).
+		Msg("Complete")
 
 	buffer := bytes.NewBuffer(data)
 	return buffer, fileSize, nil
@@ -143,7 +166,9 @@ func (m *BufferMode) downloadChunk(ctx context.Context, start, end int64, dataSl
 }
 
 func (m *BufferMode) DownloadFile(url string, dest string) error {
-	buffer, _, err := m.fileToBuffer(url)
+	ctx := context.Background()
+	target := Target{URL: url, TrueURL: url, Dest: dest}
+	buffer, _, err := m.fileToBuffer(ctx, target)
 	if err != nil {
 		return err
 	}

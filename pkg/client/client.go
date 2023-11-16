@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/replicate/pget/pkg/config"
+	"github.com/replicate/pget/pkg/logging"
 	"github.com/replicate/pget/pkg/optname"
 	"github.com/replicate/pget/pkg/version"
 )
@@ -24,6 +25,8 @@ const (
 	retryBackoffIncr    = 500  // in milliseconds, backoffFactor^retryNum * backoffIncr
 	retryBackoffFactor  = 2    // Base for POW()
 )
+
+var logger = logging.Logger
 
 // HTTPClient is a wrapper around http.Client that allows for limiting the number of concurrent connections per host
 // utilizing a client pool. If the MaxConnPerHost option is not set, the client pool will not be used.
@@ -119,9 +122,11 @@ func newClient(host string) *HTTPClient {
 
 // checkRedirectFunc is a wrapper around http.Client.CheckRedirect that allows for printing out redirects
 func checkRedirectFunc(req *http.Request, via []*http.Request) error {
-	if viper.GetBool(optname.Verbose) {
-		fmt.Printf("Received redirect '%d' to '%s'\n", req.Response.StatusCode, req.URL.String())
-	}
+	logger.Trace().
+		Str("redirect_url", req.URL.String()).
+		Str("url", via[0].URL.String()).
+		Int("status", req.Response.StatusCode).
+		Msg("Redirect")
 	return nil
 }
 
@@ -131,10 +136,8 @@ func transportDialContext(dialer *net.Dialer) func(context.Context, string, stri
 	// Allow for overriding DNS lookups in the dialer without impacting Host and SSL resolution
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		if addrOverride := config.HostToIPResolutionMap[addr]; addrOverride != "" {
-			if viper.GetBool(optname.Verbose) {
-				fmt.Printf("Overriding Resolution of '%s' to '%s'", dialer.LocalAddr.String(), addrOverride)
-				addr = addrOverride
-			}
+			logger.Debug().Str("addr", addr).Str("override", addrOverride).Msg("DNS Override")
+			addr = addrOverride
 		}
 		return dialer.DialContext(ctx, network, addr)
 	}

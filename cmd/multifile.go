@@ -13,6 +13,7 @@ import (
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/download"
+	"github.com/replicate/pget/pkg/logging"
 	"github.com/replicate/pget/pkg/optname"
 )
 
@@ -107,11 +108,13 @@ func execMultifile(cmd *cobra.Command, args []string) error {
 	}
 	// download each host's files in parallel
 	var eg errgroup.Group
+
+	if perHostLimit := viper.GetInt(optname.MaxConnPerHost); perHostLimit > 0 {
+		logging.Logger.Info().Int("max_connections_per_host", perHostLimit).Msg("Limit")
+	}
 	// If `--max-concurrent-files` is set, limit the number of concurrent files
 	if concurrentFileLimit := viper.GetInt(optname.MaxConcurrentFiles); concurrentFileLimit > 0 {
-		if viper.GetBool(optname.Verbose) {
-			fmt.Printf("Downloading files with a maximum of %d concurrent files\n", concurrentFileLimit)
-		}
+		logging.Logger.Info().Int("concurrent_file_limit", concurrentFileLimit).Msg("Limit")
 		eg.SetLimit(concurrentFileLimit)
 	}
 	for host, entries := range manifest {
@@ -163,6 +166,7 @@ func processManifest(buffer []string) (map[string][]manifestEntry, error) {
 			client.CreateHostConnectionPool(host)
 		}
 		// add the url/dest pair to the manifestMap
+		logging.Logger.Debug().Str("url", urlString).Str("dest", dest).Msg("Queueing Download")
 		if entries, ok := manifestMap[host]; !ok {
 			manifestMap[host] = []manifestEntry{{urlString, dest}}
 		} else {

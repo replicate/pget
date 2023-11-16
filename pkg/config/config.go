@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -14,16 +15,16 @@ import (
 )
 
 var (
-	Concurrency          int
-	ConnTimeout          time.Duration
-	EnableHTTPKeepalives bool
-	Extract              bool
-	Force                bool
-	MinimumChunkSize     string
-	Mode                 string
-	ResolveHosts         []string
-	Retries              int
-	Verbose              bool
+	Concurrency      int
+	ConnTimeout      time.Duration
+	Extract          bool
+	Force            bool
+	LoggingLevel     string
+	MinimumChunkSize string
+	Mode             string
+	ResolveHosts     []string
+	Retries          int
+	Verbose          bool
 )
 
 // HostToIPResolutionMap is a map of hostnames to IP addresses
@@ -37,7 +38,8 @@ func AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVarP(&Force, optname.Force, "f", false, "Force download, overwriting existing file")
 	cmd.PersistentFlags().StringSliceVar(&ResolveHosts, optname.Resolve, []string{}, "Resolve hostnames to specific IPs")
 	cmd.PersistentFlags().IntVarP(&Retries, optname.Retries, "r", 5, "Number of retries when attempting to retrieve a file")
-	cmd.PersistentFlags().BoolVarP(&Verbose, optname.Verbose, "v", false, "Verbose mode")
+	cmd.PersistentFlags().BoolVarP(&Verbose, optname.Verbose, "v", false, "Verbose mode (equivalent to --log-level debug")
+	cmd.PersistentFlags().StringVar(&LoggingLevel, optname.LoggingLevel, "info", "Log level (debug, info, warn, error)")
 
 	viper.SetEnvPrefix("PGET")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
@@ -49,6 +51,22 @@ func AddFlags(cmd *cobra.Command) {
 
 func PersistentStartupProcessFlags() error {
 	Mode = "buffer"
+	if viper.GetBool(optname.Verbose) {
+		viper.Set(optname.LoggingLevel, "debug")
+	}
+	// Set log-level
+	switch strings.ToLower(viper.GetString(optname.LoggingLevel)) {
+	case "debug":
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	case "info":
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	case "warn":
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	case "error":
+		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	default:
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
 	if viper.GetBool(optname.Extract) {
 		Mode = "tar-extract"
 	}

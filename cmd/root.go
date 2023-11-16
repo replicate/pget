@@ -2,11 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"os"
 
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/optname"
@@ -43,7 +42,7 @@ var RootCMD = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := rootExecFunc(cmd, args); err != nil {
-			fmt.Println(err)
+			log.Error().Err(err).Msg("Error")
 			os.Exit(1)
 		}
 	},
@@ -57,19 +56,14 @@ func init() {
 // rootExecFunc is the main function of the program and encapsulates the general logic
 // returns any/all errors to the caller.
 func rootExecFunc(cmd *cobra.Command, args []string) error {
-	verboseMode := viper.GetBool(optname.Verbose)
-
 	url := args[0]
 	dest := args[1]
 	_, fileExists := os.Stat(dest)
 
-	if verboseMode {
-		absPath, _ := filepath.Abs(dest)
-		fmt.Println("URL:", url)
-		fmt.Println("Destination:", absPath)
-		fmt.Println("Minimum Chunk Size:", viper.GetString(optname.MinimumChunkSize))
-		fmt.Println()
-	}
+	log.Info().Str("url", url).
+		Str("dest", dest).
+		Str("minimum_chunk_size", viper.GetString(optname.MinimumChunkSize)).
+		Msg("Initiating")
 	// ensure dest does not exist
 	if !viper.GetBool(optname.Force) && !os.IsNotExist(fileExists) {
 		return fmt.Errorf("destination %s already exists", dest)

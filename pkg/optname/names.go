@@ -5,6 +5,7 @@ const (
 	ConnTimeout        = "connect-timeout"
 	Extract            = "extract"
 	Force              = "force"
+	LoggingLevel       = "log-level"
 	MaxConnPerHost     = "max-conn-per-host"
 	MaxConcurrentFiles = "max-concurrent-files"
 	MinimumChunkSize   = "minimum-chunk-size"

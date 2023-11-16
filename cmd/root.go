@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"os"
 
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/optname"

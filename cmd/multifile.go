@@ -6,13 +6,13 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/replicate/pget/pkg/config"
-	"github.com/replicate/pget/pkg/download"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/replicate/pget/pkg/client"
+	"github.com/replicate/pget/pkg/config"
+	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/optname"
 )
 
@@ -58,7 +58,7 @@ var MultiFileCMD = &cobra.Command{
 
 func init() {
 	RootCMD.AddCommand(MultiFileCMD)
-	MultiFileCMD.PersistentFlags().IntVar(&MultifileMaxConnPerHost, optname.MaxConnPerHost, 0, "Maximum number of connections per host")
+	MultiFileCMD.PersistentFlags().IntVar(&MultifileMaxConnPerHost, optname.MaxConnPerHost, 0, "Maximum number of (global) concurrent connections per host (default 40)")
 	MultiFileCMD.PersistentFlags().IntVar(&MultifileMaxConcurrentFiles, optname.MaxConcurrentFiles, 5, "Maximum number of files to download concurrently")
 	err := viper.BindPFlags(MultiFileCMD.PersistentFlags())
 	if err != nil {
@@ -129,7 +129,7 @@ func execMultifile(cmd *cobra.Command, args []string) error {
 
 func processManifest(buffer []string) (map[string][]manifestEntry, error) {
 	// track the urls and dests for each host, do not allow for duplicate urls with different dests
-	seenURLs := make(map[string]string)
+	seenDests := make(map[string]string)
 	manifestMap := make(map[string][]manifestEntry)
 	// read the manifest file line by line
 	for _, line := range buffer {
@@ -140,14 +140,14 @@ func processManifest(buffer []string) (map[string][]manifestEntry, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error parsing manifest invalid line format %s: %w", line, err)
 		}
-		// check URL is not in seenURLs
-		if seenDest, ok := seenURLs[urlString]; ok {
+		// check URL is not in seenDests
+		if seenDest, ok := seenDests[urlString]; ok {
 			if seenDest != dest {
 				return nil, fmt.Errorf("duplicate url %s with different dests: %s and %s", urlString, seenDest, dest)
 			}
 		}
-		// add the url to seenURLs
-		seenURLs[urlString] = dest
+		// add the url to seenDests
+		seenDests[dest] = urlString
 		_, fileExists := os.Stat(dest)
 		if !viper.GetBool(optname.Force) && !os.IsNotExist(fileExists) {
 			return nil, fmt.Errorf("destination %s already exists", dest)
@@ -159,6 +159,9 @@ func processManifest(buffer []string) (map[string][]manifestEntry, error) {
 			return nil, fmt.Errorf("error parsing url %s: %w", urlString, err)
 		}
 		host := parsedURL.Host
+		if viper.GetInt(optname.MaxConnPerHost) > 0 {
+			client.CreateHostConnectionPool(host)
+		}
 		// add the url/dest pair to the manifestMap
 		if entries, ok := manifestMap[host]; !ok {
 			manifestMap[host] = []manifestEntry{{urlString, dest}}

@@ -29,8 +29,8 @@ over-all limited to the '--max-concurrency' limit for overall concurrency.
 
 // multifile mode config vars
 var (
-	MultifileMaxConnPerHost            int
-	MultifileSerializePerHostDownloads bool
+	MultifileMaxConnPerHost     int
+	MultifileMaxConcurrentFiles int
 )
 
 var MultiFileCMD = &cobra.Command{
@@ -42,6 +42,7 @@ var MultiFileCMD = &cobra.Command{
 		if viper.GetInt(optname.MaxConnPerHost) == 0 {
 			viper.Set(optname.MaxConnPerHost, 40)
 		}
+		// Create the correct number of slots in the semaphore
 		if viper.GetBool(optname.Extract) {
 			return fmt.Errorf("cannot use --extract with multifile mode")
 		}
@@ -58,7 +59,7 @@ var MultiFileCMD = &cobra.Command{
 func init() {
 	RootCMD.AddCommand(MultiFileCMD)
 	MultiFileCMD.PersistentFlags().IntVar(&MultifileMaxConnPerHost, optname.MaxConnPerHost, 0, "Maximum number of connections per host")
-	MultiFileCMD.PersistentFlags().BoolVar(&MultifileSerializePerHostDownloads, optname.SerializePerHostDownloads, true, "Whether to serialize downloads from the same host")
+	MultiFileCMD.PersistentFlags().IntVar(&MultifileMaxConcurrentFiles, optname.MaxConcurrentFiles, 5, "Maximum number of files to download concurrently")
 	err := viper.BindPFlags(MultiFileCMD.PersistentFlags())
 	if err != nil {
 		fmt.Println(err)
@@ -106,6 +107,13 @@ func execMultifile(cmd *cobra.Command, args []string) error {
 	}
 	// download each host's files in parallel
 	var eg errgroup.Group
+	// If `--max-concurrent-files` is set, limit the number of concurrent files
+	if concurrentFileLimit := viper.GetInt(optname.MaxConcurrentFiles); concurrentFileLimit > 0 {
+		if viper.GetBool(optname.Verbose) {
+			fmt.Printf("Downloading files with a maximum of %d concurrent files\n", concurrentFileLimit)
+		}
+		eg.SetLimit(concurrentFileLimit)
+	}
 	for host, entries := range manifest {
 		err := downloadFilesFromHost(&eg, entries)
 		if err != nil {
@@ -140,6 +148,11 @@ func processManifest(buffer []string) (map[string][]manifestEntry, error) {
 		}
 		// add the url to seenURLs
 		seenURLs[urlString] = dest
+		_, fileExists := os.Stat(dest)
+		if !viper.GetBool(optname.Force) && !os.IsNotExist(fileExists) {
+			return nil, fmt.Errorf("destination %s already exists", dest)
+
+		}
 		// get the host from the url
 		parsedURL, err := url.Parse(urlString)
 		if err != nil {
@@ -159,24 +172,13 @@ func processManifest(buffer []string) (map[string][]manifestEntry, error) {
 func downloadFilesFromHost(eg *errgroup.Group, entries []manifestEntry) error {
 	// Get the correct mode
 	mode := download.GetMode(config.Mode)
-	if viper.GetBool(optname.SerializePerHostDownloads) {
+	for _, entry := range entries {
+		// Avoid 'capture by reference' issues by creating a new variable
+		file := entry
+		// acquire a slot in the semaphore
 		eg.Go(func() error {
-			for _, entry := range entries {
-				file := entry
-				err := mode.DownloadFile(file.url, file.dest)
-				if err != nil {
-					return err
-				}
-			}
-			return nil
+			return mode.DownloadFile(file.url, file.dest)
 		})
-	} else {
-		for _, entry := range entries {
-			file := entry
-			eg.Go(func() error {
-				return mode.DownloadFile(file.url, file.dest)
-			})
-		}
 	}
 	return nil
 }

@@ -25,6 +25,20 @@ const (
 	retryBackoffFactor  = 2    // Base for POW()
 )
 
+// HTTPClient is a wrapper around http.Client that allows for limiting the number of concurrent connections per host
+// utilizing a semaphore. If the MaxConnPerHost option is not set, the semaphore will not be used.
+type HTTPClient struct {
+	*http.Client
+	hostSem *chan struct{}
+}
+
+// Done releases the semaphore. This is a simple utility function that should be called in a defer statement.
+func (c *HTTPClient) Done() {
+	if viper.GetInt(optname.MaxConnPerHost) > 0 {
+		<-*c.hostSem
+	}
+}
+
 // R8GetRetryingRoundTripper is a wrapper around http.Transport that allows for retrying failed requests
 type R8GetRetryingRoundTripper struct {
 	Transport *http.Transport
@@ -75,9 +89,11 @@ func (rt R8GetRetryingRoundTripper) RoundTrip(req *http.Request) (*http.Response
 	return nil, fmt.Errorf("failed to download %s after %d retries", req.URL.String(), retries)
 }
 
-// NewClient factory function returns a new http.Client with the appropriate settings
-func NewClient() *http.Client {
+// NewClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
+// per host if the MaxConnPerHost option is set.
+func NewClient(host string) *HTTPClient {
 
+	acquireHostSem(host)
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: transportDialContext(&net.Dialer{
@@ -96,10 +112,11 @@ func NewClient() *http.Client {
 		transport.MaxConnsPerHost = maxConnPerHost
 	}
 
-	return &http.Client{
+	client := &http.Client{
 		Transport:     &R8GetRetryingRoundTripper{Transport: transport},
 		CheckRedirect: checkRedirectFunc,
 	}
+	return &HTTPClient{Client: client}
 }
 
 // checkRedirectFunc is a wrapper around http.Client.CheckRedirect that allows for printing out redirects

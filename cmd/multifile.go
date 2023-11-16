@@ -29,7 +29,8 @@ over-all limited to the '--max-concurrency' limit for overall concurrency.
 
 // multifile mode config vars
 var (
-	MultifileMaxConnPerHost int
+	MultifileMaxConnPerHost            int
+	MultifileSerializePerHostDownloads bool
 )
 
 var MultiFileCMD = &cobra.Command{
@@ -38,6 +39,9 @@ var MultiFileCMD = &cobra.Command{
 	Long:  multiFileLongDesc,
 	Args:  cobra.ExactArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
+		if viper.GetInt(optname.MaxConnPerHost) == 0 {
+			viper.Set(optname.MaxConnPerHost, 40)
+		}
 		if viper.GetBool(optname.Extract) {
 			return fmt.Errorf("cannot use --extract with multifile mode")
 		}
@@ -53,7 +57,8 @@ var MultiFileCMD = &cobra.Command{
 
 func init() {
 	RootCMD.AddCommand(MultiFileCMD)
-	MultiFileCMD.PersistentFlags().IntVar(&MultifileMaxConnPerHost, optname.MaxConnPerHost, 40, "Maximum number of connections per host")
+	MultiFileCMD.PersistentFlags().IntVar(&MultifileMaxConnPerHost, optname.MaxConnPerHost, 0, "Maximum number of connections per host")
+	MultiFileCMD.PersistentFlags().BoolVar(&MultifileSerializePerHostDownloads, optname.SerializePerHostDownloads, true, "Whether to serialize downloads from the same host")
 	err := viper.BindPFlags(MultiFileCMD.PersistentFlags())
 	if err != nil {
 		fmt.Println(err)
@@ -100,14 +105,14 @@ func execMultifile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error processing manifest file %s: %w", manifestPath, err)
 	}
 	// download each host's files in parallel
-	var errGroup errgroup.Group
+	var eg errgroup.Group
 	for host, entries := range manifest {
-		err := downloadFilesFromHost(&errGroup, host, entries)
+		err := downloadFilesFromHost(&eg, entries)
 		if err != nil {
 			return fmt.Errorf("error initiating download of files from host %s: %w", host, err)
 		}
 	}
-	err = errGroup.Wait()
+	err = eg.Wait()
 	if err != nil {
 		return fmt.Errorf("error downloading files: %w", err)
 	}
@@ -151,14 +156,27 @@ func processManifest(buffer []string) (map[string][]manifestEntry, error) {
 	return manifestMap, nil
 }
 
-func downloadFilesFromHost(errGroup *errgroup.Group, host string, entries []manifestEntry) error {
+func downloadFilesFromHost(eg *errgroup.Group, entries []manifestEntry) error {
 	// Get the correct mode
 	mode := download.GetMode(config.Mode)
-	for _, entry := range entries {
-		file := entry
-		errGroup.Go(func() error {
-			return mode.DownloadFile(file.url, file.dest)
+	if viper.GetBool(optname.SerializePerHostDownloads) {
+		eg.Go(func() error {
+			for _, entry := range entries {
+				file := entry
+				err := mode.DownloadFile(file.url, file.dest)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
 		})
+	} else {
+		for _, entry := range entries {
+			file := entry
+			eg.Go(func() error {
+				return mode.DownloadFile(file.url, file.dest)
+			})
+		}
 	}
 	return nil
 }

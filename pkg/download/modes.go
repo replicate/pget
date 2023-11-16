@@ -1,11 +1,9 @@
 package download
 
-import "github.com/replicate/pget/pkg/client"
-
 type modeFactoryFunc func() Mode
 
 var modes = map[string]modeFactoryFunc{
-	"buffer":      func() Mode { return &BufferMode{Client: client.NewClient()} },
+	"buffer":      func() Mode { return &BufferMode{} },
 	"tar-extract": func() Mode { return &ExtractTarMode{} },
 }
 

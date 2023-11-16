@@ -141,9 +141,9 @@ func processManifest(buffer []string) (map[string][]manifestEntry, error) {
 			return nil, fmt.Errorf("error parsing manifest invalid line format %s: %w", line, err)
 		}
 		// check URL is not in seenDests
-		if seenDest, ok := seenDests[urlString]; ok {
-			if seenDest != dest {
-				return nil, fmt.Errorf("duplicate url %s with different dests: %s and %s", urlString, seenDest, dest)
+		if seenURL, ok := seenDests[dest]; ok {
+			if seenURL != urlString {
+				return nil, fmt.Errorf("duplicate destination %s with different urls: %s and %s", dest, seenURL, urlString)
 			}
 		}
 		// add the url to seenDests

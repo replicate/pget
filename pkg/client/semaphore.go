@@ -1,8 +1,9 @@
 package client
 
 import (
-	"github.com/replicate/pget/pkg/optname"
 	"github.com/spf13/viper"
+
+	"github.com/replicate/pget/pkg/optname"
 )
 
 // perHostClientLimiters is a map of hostnames to semaphores

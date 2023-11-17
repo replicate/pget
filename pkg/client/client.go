@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/spf13/viper"
@@ -138,4 +139,12 @@ func transportDialContext(dialer *net.Dialer) func(context.Context, string, stri
 		}
 		return dialer.DialContext(ctx, network, addr)
 	}
+}
+
+func GetSchemeHostKey(urlString string) (string, error) {
+	parsedURL, err := url.Parse(urlString)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s%s", parsedURL.Scheme, parsedURL.Host), err
 }

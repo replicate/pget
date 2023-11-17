@@ -25,23 +25,24 @@ type BufferMode struct {
 }
 
 type Target struct {
-	URL     string
-	TrueURL string
-	Dest    string
+	URL           string
+	TrueURL       string
+	Dest          string
+	SchemeHostKey string
 }
 
 func (t *Target) Basename() string {
 	return filepath.Base(t.Dest)
 }
 
-func (m *BufferMode) getRemoteFileSize(ctx context.Context, url string) (string, int64, error) {
+func (m *BufferMode) getRemoteFileSize(ctx context.Context, target Target) (string, int64, error) {
 	// Acquire a client for the head request
 	// Acquire a client for a download
-	req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "HEAD", target.URL, nil)
 	if err != nil {
 		return "", int64(-1), fmt.Errorf("failed create request for %s", req.URL.String())
 	}
-	httpClient, err := client.AcquireClient(req.URL.Host)
+	httpClient, err := client.AcquireClient(target.SchemeHostKey)
 	if err != nil {
 		return "", int64(-1), fmt.Errorf("error acquiring client for %s: %w", req.URL.String(), err)
 	}
@@ -53,8 +54,8 @@ func (m *BufferMode) getRemoteFileSize(ctx context.Context, url string) (string,
 	}
 	defer resp.Body.Close()
 	trueUrl := resp.Request.URL.String()
-	if trueUrl != url {
-		logging.Logger.Info().Str("url", url).Str("redirect_url", trueUrl).Msg("Redirect")
+	if trueUrl != target.URL {
+		logging.Logger.Info().Str("url", target.URL).Str("redirect_url", trueUrl).Msg("Redirect")
 	}
 
 	fileSize := resp.ContentLength
@@ -67,7 +68,7 @@ func (m *BufferMode) getRemoteFileSize(ctx context.Context, url string) (string,
 func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Buffer, int64, error) {
 	maxConcurrency := viper.GetInt(optname.Concurrency)
 
-	trueURL, fileSize, err := m.getRemoteFileSize(ctx, target.URL)
+	trueURL, fileSize, err := m.getRemoteFileSize(ctx, target)
 	if err != nil {
 		return nil, -1, err
 	}
@@ -111,7 +112,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 		}
 
 		errGroup.Go(func() error {
-			return m.downloadChunk(ctx, start, end, data[start:end+1], trueURL)
+			return m.downloadChunk(ctx, start, end, data[start:end+1], target)
 		})
 	}
 
@@ -132,14 +133,14 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 	return buffer, fileSize, nil
 }
 
-func (m *BufferMode) downloadChunk(ctx context.Context, start, end int64, dataSlice []byte, trueURL string) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", trueURL, nil)
+func (m *BufferMode) downloadChunk(ctx context.Context, start, end int64, dataSlice []byte, target Target) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", target.TrueURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to download %s", req.URL.String())
 	}
 
 	// Acquire a client for a download
-	httpClient, err := client.AcquireClient(req.URL.Host)
+	httpClient, err := client.AcquireClient(target.SchemeHostKey)
 	if err != nil {
 		return fmt.Errorf("error acquiring client for %s: %w", req.URL.String(), err)
 	}
@@ -165,7 +166,11 @@ func (m *BufferMode) downloadChunk(ctx context.Context, start, end int64, dataSl
 
 func (m *BufferMode) DownloadFile(url string, dest string) error {
 	ctx := context.Background()
-	target := Target{URL: url, TrueURL: url, Dest: dest}
+	schemeHost, err := client.GetSchemeHostKey(url)
+	if err != nil {
+		return fmt.Errorf("error getting scheme host key: %w", err)
+	}
+	target := Target{URL: url, TrueURL: url, Dest: dest, SchemeHostKey: schemeHost}
 	buffer, _, err := m.fileToBuffer(ctx, target)
 	if err != nil {
 		return err

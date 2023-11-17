@@ -44,11 +44,7 @@ This builds a static binary that can work inside containers.
   - Extract archive after download
   - Type: `bool`
   - Default: `false`
-- `-c`, `--concurrency`
-    - Maximum number of concurrent downloads
-    - Type: `Integer`
-    - Default: `4 * runtime.NumCPU()`
-    - 
+
 #### Example
 
     pget https://storage.googleapis.com/replicant-misc/sd15.tar ./sd15 -x
@@ -59,7 +55,7 @@ This command will download Stable Diffusion 1.5 weights to the path ./sd15 with 
     pget multifile <manifest-file>
 
 #### Parameters
-- <\manifest-file\>: A path to a manifest file containing (new line delimited) pairs of URLs and local destination file paths. The use of `-` allows for reading from STDIN
+- \<manifest-file\>: A path to a manifest file containing (new line delimited) pairs of URLs and local destination file paths. The use of `-` allows for reading from STDIN
 
 #### Examples
 
@@ -86,7 +82,14 @@ Pipe to multifile form from another command:
   - Type `Integer`
 
 ### Global Command-Line Options
-
+- `--concurrency`
+    - Maximum number of chunks for downloading a given file (alias for --max-chunks)
+    - Type: `Integer`
+    - Default: `4 * runtime.NumCPU()`
+- `--max-chunks`
+    - Maximum number of chunks for downloading a given file (alias for --max-chunks)
+    - Type: `Integer`
+    - Default: `4 * runtime.NumCPU()`
 - `--connect-timeout`
   - Timeout for establishing a connection, format is <number><unit>, e.g. 10s
   - Type: `Duration`

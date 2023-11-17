@@ -3,8 +3,8 @@ package cmd
 import (
 	"bufio"
 	"fmt"
-	"net/url"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -74,11 +74,11 @@ type manifestEntry struct {
 }
 
 func execMultifile(cmd *cobra.Command, args []string) error {
-	var reader *bufio.Reader
+	var scanner *bufio.Scanner
 	// if manifest file is '-', read from stdin
 	manifestPath := args[0]
 	if manifestPath == "-" {
-		reader = bufio.NewReader(os.Stdin)
+		scanner = bufio.NewScanner(os.Stdin)
 	} else {
 		// check that the manifest file exists
 		_, err := os.Stat(manifestPath)
@@ -90,17 +90,17 @@ func execMultifile(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("error opening manifest file %s: %w", manifestPath, err)
 		}
 		defer manifestFile.Close()
-		reader = bufio.NewReader(manifestFile)
+		scanner = bufio.NewScanner(manifestFile)
 	}
 	// process the manifest file into a map of hosts to url/file pairs with processManifest
 	buffer := make([]string, 0)
-	for {
-		readString, err := reader.ReadString('\n')
+	for scanner.Scan() {
+		line := scanner.Text()
 		// break on EOF or empty line
-		if err != nil || readString == "\n" {
-			break
+		if strings.TrimSpace(line) == "" {
+			continue
 		}
-		buffer = append(buffer, readString)
+		buffer = append(buffer, line)
 	}
 	manifest, err := processManifest(buffer)
 	if err != nil {
@@ -156,21 +156,19 @@ func processManifest(buffer []string) (map[string][]manifestEntry, error) {
 			return nil, fmt.Errorf("destination %s already exists", dest)
 
 		}
-		// get the host from the url
-		parsedURL, err := url.Parse(urlString)
+		schemeHost, err := client.GetSchemeHostKey(urlString)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing url %s: %w", urlString, err)
 		}
-		host := parsedURL.Host
 		if viper.GetInt(optname.MaxConnPerHost) > 0 {
-			client.CreateHostConnectionPool(host)
+			client.CreateHostConnectionPool(schemeHost)
 		}
 		// add the url/dest pair to the manifestMap
 		logging.Logger.Debug().Str("url", urlString).Str("dest", dest).Msg("Queueing Download")
-		if entries, ok := manifestMap[host]; !ok {
-			manifestMap[host] = []manifestEntry{{urlString, dest}}
+		if entries, ok := manifestMap[schemeHost]; !ok {
+			manifestMap[schemeHost] = []manifestEntry{{urlString, dest}}
 		} else {
-			manifestMap[host] = append(entries, manifestEntry{urlString, dest})
+			manifestMap[schemeHost] = append(entries, manifestEntry{urlString, dest})
 		}
 	}
 	return manifestMap, nil

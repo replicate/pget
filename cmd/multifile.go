@@ -51,7 +51,7 @@ var MultiFileCMD = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := execMultifile(cmd, args); err != nil {
-			fmt.Println(err)
+			logging.Logger.Error().Err(err).Msg("Error")
 			os.Exit(1)
 		}
 	},

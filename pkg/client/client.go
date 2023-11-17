@@ -39,7 +39,9 @@ type HTTPClient struct {
 // Done releases the semaphore. This is a simple utility function that should be called in a defer statement.
 func (c *HTTPClient) Done() {
 	if viper.GetInt(optname.MaxConnPerHost) > 0 {
-		releaseClient(c)
+		if err := releaseClient(c); err != nil {
+			logger.Error().Err(err).Msg("Error releasing client")
+		}
 	}
 }
 
@@ -53,9 +55,11 @@ func (rt R8GetRetryingRoundTripper) RoundTrip(req *http.Request) (*http.Response
 	retries := viper.GetInt(optname.Retries)
 	for attempt := 0; attempt <= retries; attempt++ {
 		if attempt > 0 {
-			if viper.GetBool(optname.Verbose) {
-				fmt.Printf("Retrying. Count: %d\n", attempt)
-			}
+			logger.Debug().
+				Str("url", req.URL.String()).
+				Int("attempt", attempt).
+				Msg("Retrying")
+
 			sleepJitter := time.Duration(rand.Intn(retrySleepJitter))
 			sleepTime := time.Millisecond * (sleepJitter + retryDelayBaseline)
 
@@ -79,9 +83,10 @@ func (rt R8GetRetryingRoundTripper) RoundTrip(req *http.Request) (*http.Response
 			return nil, fmt.Errorf("file not found: %s", req.URL.String())
 		}
 		if resp.StatusCode >= http.StatusBadRequest {
-			if viper.GetBool(optname.Verbose) {
-				fmt.Printf("Received Status '%s', retrying\n", resp.Status)
-			}
+			logger.Debug().
+				Str("url", req.URL.String()).
+				Str("status", resp.Status).
+				Msg("Retrying")
 			continue
 		}
 		// Success! Exit the loop

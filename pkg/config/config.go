@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/replicate/pget/pkg/logging"
 	"github.com/replicate/pget/pkg/optname"
 )
 
@@ -102,9 +103,9 @@ func convertResolveHostsToMap() error {
 		}
 		HostToIPResolutionMap[hostPort] = net.JoinHostPort(addr, port)
 	}
-	if viper.GetBool(optname.Verbose) {
+	if logging.Logger.GetLevel() == zerolog.DebugLevel {
 		for key, elem := range HostToIPResolutionMap {
-			fmt.Printf("CONFIG: Resolving %s to %s\n", key, elem)
+			logging.Logger.Debug().Str("host_port", key).Str("resolve_target", elem).Msg("Config")
 		}
 	}
 	return nil

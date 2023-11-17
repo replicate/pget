@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+
+	"github.com/replicate/pget/pkg/logging"
 )
 
 func ExtractTarFile(buffer *bytes.Buffer, destDir string, fileSize int64) error {
@@ -57,7 +59,10 @@ func ExtractTarFile(buffer *bytes.Buffer, destDir string, fileSize int64) error 
 	elapsed := time.Since(startTime).Seconds()
 	size := humanize.Bytes(uint64(fileSize))
 	throughput := humanize.Bytes(uint64(float64(fileSize) / elapsed))
-	fmt.Printf("Extracted %s in %.3fs (%s/s)\n", size, elapsed, throughput)
-
+	logging.Logger.Info().
+		Str("size", size).
+		Str("elapsed", fmt.Sprintf("%.3fs", elapsed)).
+		Str("throughput", throughput).
+		Msg("Extracted")
 	return nil
 }

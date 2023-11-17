@@ -7,6 +7,7 @@ const (
 	Force              = "force"
 	LoggingLevel       = "log-level"
 	MaxConnPerHost     = "max-conn-per-host"
+	MaxChunks          = "max-chunks"
 	MaxConcurrentFiles = "max-concurrent-files"
 	MinimumChunkSize   = "minimum-chunk-size"
 	Resolve            = "resolve"

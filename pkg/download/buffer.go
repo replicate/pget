@@ -66,7 +66,7 @@ func (m *BufferMode) getRemoteFileSize(ctx context.Context, target Target) (stri
 }
 
 func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Buffer, int64, error) {
-	maxConcurrency := viper.GetInt(optname.Concurrency)
+	maxChunks := viper.GetInt(optname.MaxChunks)
 
 	trueURL, fileSize, err := m.getRemoteFileSize(ctx, target)
 	if err != nil {
@@ -81,7 +81,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 	if err != nil {
 		return nil, -1, fmt.Errorf("unable to parse minimum chunk size: %v", err)
 	}
-	chunkSize := fileSize / int64(maxConcurrency)
+	chunkSize := fileSize / int64(maxChunks)
 	if chunkSize < int64(minChunkSize) {
 		chunkSize = int64(minChunkSize)
 	}
@@ -89,16 +89,16 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
 	}
 	// not more than one connection per min chunk size
-	concurrency := int(math.Ceil(float64(fileSize) / float64(chunkSize)))
+	chunks := int(math.Ceil(float64(fileSize) / float64(chunkSize)))
 
-	if concurrency > maxConcurrency {
-		concurrency = maxConcurrency
-		chunkSize = fileSize / int64(concurrency)
+	if chunks > maxChunks {
+		chunks = maxChunks
+		chunkSize = fileSize / int64(chunks)
 	}
 	logging.Logger.Debug().Str("dest", target.Dest).
 		Str("url", target.URL).
 		Int64("size", fileSize).
-		Int("connections", concurrency).
+		Int("connections", chunks).
 		Int64("chunkSize", chunkSize).
 		Msg("Downloading")
 
@@ -107,11 +107,11 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 	data := make([]byte, fileSize)
 	startTime := time.Now()
 
-	for i := 0; i < concurrency; i++ {
+	for i := 0; i < chunks; i++ {
 		start := int64(i) * chunkSize
 		end := start + chunkSize - 1
 
-		if i == concurrency-1 {
+		if i == chunks-1 {
 			end = fileSize - 1
 		}
 

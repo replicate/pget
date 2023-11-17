@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
@@ -32,7 +35,15 @@ over-all limited to the '--max-concurrency' limit for overall concurrency.
 var (
 	MultifileMaxConnPerHost     int
 	MultifileMaxConcurrentFiles int
+
+	metricsMu       = &sync.Mutex{}
+	downloadMetrics []multifileDownloadMetric
 )
+
+type multifileDownloadMetric struct {
+	elapsedTime time.Duration
+	fileSize    int64
+}
 
 var MultiFileCMD = &cobra.Command{
 	Use:   "multifile [flags] <manifest-file>",
@@ -110,13 +121,16 @@ func execMultifile(cmd *cobra.Command, args []string) error {
 	var eg errgroup.Group
 
 	if perHostLimit := viper.GetInt(optname.MaxConnPerHost); perHostLimit > 0 {
-		logging.Logger.Info().Int("max_connections_per_host", perHostLimit).Msg("Limit")
+		logging.Logger.Debug().Int("max_connections_per_host", perHostLimit).Msg("Config")
 	}
 	// If `--max-concurrent-files` is set, limit the number of concurrent files
 	if concurrentFileLimit := viper.GetInt(optname.MaxConcurrentFiles); concurrentFileLimit > 0 {
-		logging.Logger.Info().Int("concurrent_file_limit", concurrentFileLimit).Msg("Limit")
+		logging.Logger.Debug().Int("concurrent_file_limit", concurrentFileLimit).Msg("Config")
 		eg.SetLimit(concurrentFileLimit)
 	}
+
+	multifileDownloadStart := time.Now()
+
 	for host, entries := range manifest {
 		err := downloadFilesFromHost(&eg, entries)
 		if err != nil {
@@ -127,6 +141,25 @@ func execMultifile(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("error downloading files: %w", err)
 	}
+
+	// print metrics
+	var totalFileSize int64
+
+	metricsMu.Lock()
+	defer metricsMu.Unlock()
+	elapsedTime := time.Since(multifileDownloadStart)
+
+	for _, metric := range downloadMetrics {
+		totalFileSize += metric.fileSize
+
+	}
+	throughput := float64(totalFileSize) / elapsedTime.Seconds()
+	logging.Logger.Info().
+		Int("file_count", len(downloadMetrics)).
+		Str("total_bytes_downloaded", humanize.Bytes(uint64(totalFileSize))).
+		Str("throughput", fmt.Sprintf("%s/s", humanize.Bytes(uint64(throughput)))).
+		Str("elapsed_time", fmt.Sprintf("%.3fs", elapsedTime.Seconds())).
+		Msg("Metrics")
 	return nil
 }
 
@@ -182,8 +215,23 @@ func downloadFilesFromHost(eg *errgroup.Group, entries []manifestEntry) error {
 		file := entry
 		// acquire a slot in the semaphore
 		eg.Go(func() error {
-			return mode.DownloadFile(file.url, file.dest)
+			fileSize, elapsedTime, err := mode.DownloadFile(file.url, file.dest)
+			if err != nil {
+				return err
+			}
+			addDownloadMetrics(elapsedTime, fileSize)
+			return nil
 		})
 	}
 	return nil
+}
+
+func addDownloadMetrics(elapsedTime time.Duration, fileSize int64) {
+	result := multifileDownloadMetric{
+		elapsedTime: elapsedTime,
+		fileSize:    fileSize,
+	}
+	metricsMu.Lock()
+	defer metricsMu.Unlock()
+	downloadMetrics = append(downloadMetrics, result)
 }

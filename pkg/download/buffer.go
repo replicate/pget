@@ -164,20 +164,28 @@ func (m *BufferMode) downloadChunk(ctx context.Context, start, end int64, dataSl
 	return nil
 }
 
-func (m *BufferMode) DownloadFile(url string, dest string) error {
+func (m *BufferMode) DownloadFile(url string, dest string) (int64, time.Duration, error) {
 	ctx := context.Background()
 	schemeHost, err := client.GetSchemeHostKey(url)
 	if err != nil {
-		return fmt.Errorf("error getting scheme host key: %w", err)
+		return int64(-1), 0, fmt.Errorf("error getting scheme host key: %w", err)
 	}
+	downloadStartTime := time.Now()
 	target := Target{URL: url, TrueURL: url, Dest: dest, SchemeHostKey: schemeHost}
-	buffer, _, err := m.fileToBuffer(ctx, target)
+	buffer, fileSize, err := m.fileToBuffer(ctx, target)
 	if err != nil {
-		return err
+		return fileSize, 0, err
 	}
+	downloadCompleteDuration := time.Since(downloadStartTime)
+	writeStartTime := time.Now()
 	err = os.WriteFile(dest, buffer.Bytes(), 0644)
 	if err != nil {
-		return fmt.Errorf("error writing file: %w", err)
+		return fileSize, downloadCompleteDuration, fmt.Errorf("error writing file: %w", err)
 	}
-	return nil
+	writeElapsed := time.Since(writeStartTime)
+	logging.Logger.Debug().
+		Str("dest", dest).
+		Str("elapsed", fmt.Sprintf("%.3fs", writeElapsed.Seconds())).
+		Msg("Write Complete")
+	return fileSize, downloadCompleteDuration, nil
 }

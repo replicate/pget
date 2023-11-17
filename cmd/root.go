@@ -77,5 +77,6 @@ func rootExecFunc(cmd *cobra.Command, args []string) error {
 	defer os.Remove(tmpFile)
 
 	mode := download.GetMode(config.Mode)
-	return mode.DownloadFile(url, dest)
+	_, _, err := mode.DownloadFile(url, dest)
+	return err
 }

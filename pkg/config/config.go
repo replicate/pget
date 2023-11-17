@@ -31,9 +31,11 @@ var (
 var HostToIPResolutionMap = make(map[string]string)
 
 func AddFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().IntVarP(&Concurrency, optname.Concurrency, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads")
+	// Non-Persistent Flags (only applies to rootCMD)
+	cmd.Flags().IntVarP(&Concurrency, optname.Concurrency, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads")
+	cmd.Flags().BoolVarP(&Extract, optname.Extract, "x", false, "Extract archive after download")
+	// Persistent Flags (applies to all commands/subcommands)
 	cmd.PersistentFlags().DurationVar(&ConnTimeout, optname.ConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
-	cmd.PersistentFlags().BoolVarP(&Extract, optname.Extract, "x", false, "Extract archive after download")
 	cmd.PersistentFlags().StringVarP(&MinimumChunkSize, optname.MinimumChunkSize, "m", "16M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
 	cmd.PersistentFlags().BoolVarP(&Force, optname.Force, "f", false, "Force download, overwriting existing file")
 	cmd.PersistentFlags().StringSliceVar(&ResolveHosts, optname.Resolve, []string{}, "Resolve hostnames to specific IPs")
@@ -44,6 +46,10 @@ func AddFlags(cmd *cobra.Command) {
 	viper.SetEnvPrefix("PGET")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.AutomaticEnv()
+
+	if err := viper.BindPFlags(cmd.Flags()); err != nil {
+		panic(err)
+	}
 	if err := viper.BindPFlags(cmd.PersistentFlags()); err != nil {
 		panic(err)
 	}

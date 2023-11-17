@@ -33,9 +33,9 @@ var HostToIPResolutionMap = make(map[string]string)
 
 func AddFlags(cmd *cobra.Command) {
 	// Non-Persistent Flags (only applies to rootCMD)
-	cmd.Flags().IntVarP(&Concurrency, optname.Concurrency, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads")
 	cmd.Flags().BoolVarP(&Extract, optname.Extract, "x", false, "Extract archive after download")
 	// Persistent Flags (applies to all commands/subcommands)
+	cmd.PersistentFlags().IntVarP(&Concurrency, optname.Concurrency, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
 	cmd.PersistentFlags().DurationVar(&ConnTimeout, optname.ConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
 	cmd.PersistentFlags().StringVarP(&MinimumChunkSize, optname.MinimumChunkSize, "m", "16M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
 	cmd.PersistentFlags().BoolVarP(&Force, optname.Force, "f", false, "Force download, overwriting existing file")

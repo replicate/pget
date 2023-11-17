@@ -76,11 +76,15 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 		target.TrueURL = trueURL
 	}
 
+	// TODO split this into separate functions
 	minChunkSize, err := humanize.ParseBytes(viper.GetString(optname.MinimumChunkSize))
 	if err != nil {
 		return nil, -1, fmt.Errorf("unable to parse minimum chunk size: %v", err)
 	}
-	chunkSize := int64(minChunkSize)
+	chunkSize := fileSize / int64(maxConcurrency)
+	if chunkSize < int64(minChunkSize) {
+		chunkSize = int64(minChunkSize)
+	}
 	if chunkSize < 0 {
 		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
 	}

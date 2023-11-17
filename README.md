@@ -78,7 +78,7 @@ Pipe to multifile form from another command:
 #### Multi-file specific options
 - `--max-concurrent-files`
   - Maximum number of files to download concurrently
-  - Default: `5`
+  - Default: `40`
   - Type `Integer`
 - `--max-conn-per-host`
   - Maximum number of (global) concurrent connections per host

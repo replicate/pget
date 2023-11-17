@@ -71,7 +71,7 @@ var MultiFileCMD = &cobra.Command{
 func init() {
 	RootCMD.AddCommand(MultiFileCMD)
 	MultiFileCMD.PersistentFlags().IntVar(&MultifileMaxConnPerHost, optname.MaxConnPerHost, 0, "Maximum number of (global) concurrent connections per host (default 40)")
-	MultiFileCMD.PersistentFlags().IntVar(&MultifileMaxConcurrentFiles, optname.MaxConcurrentFiles, 5, "Maximum number of files to download concurrently")
+	MultiFileCMD.PersistentFlags().IntVar(&MultifileMaxConcurrentFiles, optname.MaxConcurrentFiles, 40, "Maximum number of files to download concurrently")
 	err := viper.BindPFlags(MultiFileCMD.PersistentFlags())
 	if err != nil {
 		fmt.Println(err)

@@ -3,13 +3,13 @@ package client
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
 	"time"
 
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/spf13/viper"
 
 	"github.com/replicate/pget/pkg/config"
@@ -19,12 +19,10 @@ import (
 )
 
 const (
-	retryDelayBaseline = 100 // in milliseconds
-	retrySleepJitter   = 500 // in milliseconds (will add 0-500 additional milliseconds)
+	retryMinWait     = 100 * time.Millisecond  // in milliseconds
+	retryMaxWait     = 3000 * time.Millisecond // in milliseconds, do not backoff further than 3 seconds
+	retrySleepJitter = 500                     // (will add 0-500 additional milliseconds), multiplied by time.Millisecond in backoffFunc
 
-	retryMaxBackoffTime = 3000 // in milliseconds, do not backoff further than 3 seconds
-	retryBackoffIncr    = 500  // in milliseconds, backoffFactor^retryNum * backoffIncr
-	retryBackoffFactor  = 2    // Base for POW()
 )
 
 var logger = logging.Logger
@@ -36,7 +34,7 @@ type HTTPClient struct {
 	host string
 }
 
-// Done releases the semaphore. This is a simple utility function that should be called in a defer statement.
+// Done releases the client. This is a simple utility function that should be called in a defer statement.
 func (c *HTTPClient) Done() {
 	if viper.GetInt(optname.MaxConnPerHost) > 0 {
 		if err := releaseClient(c); err != nil {
@@ -45,60 +43,19 @@ func (c *HTTPClient) Done() {
 	}
 }
 
-// R8GetRetryingRoundTripper is a wrapper around http.Transport that allows for retrying failed requests
-type R8GetRetryingRoundTripper struct {
-	Transport *http.Transport
+type UserAgentTransport struct {
+	Transport http.RoundTripper
 }
 
-func (rt R8GetRetryingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+func (t *UserAgentTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("User-Agent", fmt.Sprintf("pget/%s", version.GetVersion()))
-	retries := viper.GetInt(optname.Retries)
-	for attempt := 0; attempt <= retries; attempt++ {
-		if attempt > 0 {
-			logger.Debug().
-				Str("url", req.URL.String()).
-				Int("attempt", attempt).
-				Msg("Retrying")
-
-			sleepJitter := time.Duration(rand.Intn(retrySleepJitter))
-			sleepTime := time.Millisecond * (sleepJitter + retryDelayBaseline)
-
-			// Exponential backoff
-			// 2^retryNum * retryBackoffIncr (in milliseconds)
-			backoffFactor := math.Pow(retryBackoffFactor, float64(attempt))
-			backoffDuration := time.Duration(math.Min(backoffFactor*retryBackoffIncr, retryMaxBackoffTime))
-			sleepTime += time.Millisecond * backoffDuration
-			time.Sleep(sleepTime)
-		}
-
-		if attempt > 0 {
-			req.Header.Set("Retry-Count", fmt.Sprintf("%d", attempt))
-		}
-
-		resp, err := rt.Transport.RoundTrip(req)
-		if err != nil {
-			return nil, fmt.Errorf("error making request: %w", err)
-		}
-		if resp.StatusCode == http.StatusNotFound {
-			return nil, fmt.Errorf("file not found: %s", req.URL.String())
-		}
-		if resp.StatusCode >= http.StatusBadRequest {
-			logger.Debug().
-				Str("url", req.URL.String()).
-				Str("status", resp.Status).
-				Msg("Retrying")
-			continue
-		}
-		// Success! Exit the loop
-		return resp, nil
-	}
-	return nil, fmt.Errorf("failed to download %s after %d retries", req.URL.String(), retries)
+	return t.Transport.RoundTrip(req)
 }
 
 // newClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
 // per host if the MaxConnPerHost option is set.
 func newClient(host string) *HTTPClient {
-	transport := &http.Transport{
+	baseTransport := http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: transportDialContext(&net.Dialer{
 			Timeout:   viper.GetDuration(optname.ConnTimeout),
@@ -109,18 +66,39 @@ func newClient(host string) *HTTPClient {
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
+		DisableKeepAlives:     false,
 	}
-	transport.DisableKeepAlives = false
 	maxConnPerHost := viper.GetInt(optname.MaxConnPerHost)
 	if maxConnPerHost > 0 {
-		transport.MaxConnsPerHost = maxConnPerHost
+		baseTransport.MaxConnsPerHost = maxConnPerHost
 	}
 
-	client := &http.Client{
-		Transport:     &R8GetRetryingRoundTripper{Transport: transport},
-		CheckRedirect: checkRedirectFunc,
+	transport := &UserAgentTransport{Transport: &baseTransport}
+
+	retryClient := &retryablehttp.Client{
+		HTTPClient: &http.Client{
+			Transport:     transport,
+			CheckRedirect: checkRedirectFunc,
+		},
+		Logger:       nil,
+		RetryWaitMin: retryMinWait,
+		RetryWaitMax: retryMaxWait,
+		RetryMax:     viper.GetInt(optname.Retries),
+		CheckRetry:   retryablehttp.DefaultRetryPolicy,
+		Backoff:      backoffFunc,
 	}
+
+	client := retryClient.StandardClient()
 	return &HTTPClient{Client: client, host: host}
+}
+
+// backoffFunc is a wrapper around retryablehttp.DefaultBackoff that allows for adding a random jitter to the backoff
+// we utilize the jitter to avoid thundering herd issues since we are running with significant numbers of concurrent
+// downloads.
+func backoffFunc(min, max time.Duration, attemptNum int, resp *http.Response) time.Duration {
+	sleep := time.Duration(rand.Intn(retrySleepJitter)) * time.Millisecond
+	sleep += retryablehttp.DefaultBackoff(min, max, attemptNum, resp)
+	return sleep
 }
 
 // checkRedirectFunc is a wrapper around http.Client.CheckRedirect that allows for printing out redirects

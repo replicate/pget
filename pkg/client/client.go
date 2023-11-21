@@ -3,10 +3,10 @@ package client
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -19,10 +19,10 @@ import (
 )
 
 const (
-	retryMinWait     = 100 * time.Millisecond  // in milliseconds
-	retryMaxWait     = 3000 * time.Millisecond // in milliseconds, do not backoff further than 3 seconds
-	retrySleepJitter = 500                     // (will add 0-500 additional milliseconds), multiplied by time.Millisecond in backoffFunc
-
+	// These are boundings for the retryablehttp client and not aboslute values
+	// see retryablehttp.LinearJitterBackoff for more details
+	retryMinWait = 850 * time.Millisecond
+	retryMaxWait = 1250 * time.Millisecond
 )
 
 var logger = logging.Logger
@@ -85,20 +85,45 @@ func newClient(host string) *HTTPClient {
 		RetryWaitMax: retryMaxWait,
 		RetryMax:     viper.GetInt(optname.Retries),
 		CheckRetry:   retryablehttp.DefaultRetryPolicy,
-		Backoff:      backoffFunc,
+		Backoff:      linearJitterRetryAfterBackoff,
 	}
 
 	client := retryClient.StandardClient()
 	return &HTTPClient{Client: client, host: host}
 }
 
-// backoffFunc is a wrapper around retryablehttp.DefaultBackoff that allows for adding a random jitter to the backoff
-// we utilize the jitter to avoid thundering herd issues since we are running with significant numbers of concurrent
-// downloads.
-func backoffFunc(min, max time.Duration, attemptNum int, resp *http.Response) time.Duration {
-	sleep := time.Duration(rand.Intn(retrySleepJitter)) * time.Millisecond
-	sleep += retryablehttp.DefaultBackoff(min, max, attemptNum, resp)
-	return sleep
+// linearJitterRetryAfterBackoff wraps retryablehttp.LinearJitterBackoff but also will adhere to Retry-After responses
+func linearJitterRetryAfterBackoff(min, max time.Duration, attemptNum int, resp *http.Response) time.Duration {
+	var retryAfter time.Duration
+
+	if shouldApplyRetryAfter(resp) {
+		retryAfter = evaluateRetryAfter(resp)
+	}
+
+	if retryAfter > 0 {
+		// If the Retry-After header is set, treat this as attempt 0 to get just the jitter
+		attemptNum = 0
+	}
+
+	return retryAfter + retryablehttp.LinearJitterBackoff(min, max, attemptNum, resp)
+}
+
+func evaluateRetryAfter(resp *http.Response) time.Duration {
+	retryAfter := resp.Header.Get("Retry-After")
+	if retryAfter != "" {
+		return 0
+	}
+
+	duration, err := strconv.ParseInt(retryAfter, 10, 64)
+	if err != nil {
+		return 0
+	}
+
+	return time.Second * time.Duration(duration)
+}
+
+func shouldApplyRetryAfter(resp *http.Response) bool {
+	return !viper.GetBool(optname.IgnoreRetryAfter) && resp != nil && resp.StatusCode == http.StatusTooManyRequests
 }
 
 // checkRedirectFunc is a wrapper around http.Client.CheckRedirect that allows for printing out redirects

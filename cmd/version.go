@@ -16,7 +16,3 @@ var VersionCMD = &cobra.Command{
 		fmt.Printf("pget Version %s - Build Time %s\n", version.GetVersion(), version.BuildTime)
 	},
 }
-
-func init() {
-	RootCMD.AddCommand(VersionCMD)
-}

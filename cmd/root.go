@@ -34,6 +34,32 @@ performance, especially when dealing with large tar files. This makes PGet not j
 efficient file extractor, providing a streamlined solution for fetching and unpacking files.
 `
 
+const usageTemplate = `
+Usage:{{if .Runnable}}
+{{if .HasAvailableFlags}}{{appendIfNotPresent .UseLine "[flags]"}}{{else}}{{.UseLine}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
+{{.CommandPath}} [command]{{end}}{{if gt .Aliases 0}}
+
+Aliases:
+{{.NameAndAliases}}{{end}}{{if .HasExample}}
+
+Examples:
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}
+
+Available Commands:{{range .Commands}}{{if .IsAvailableCommand}}
+{{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+Global Flags:
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
+
+Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
+{{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+`
+
 var RootCMD = &cobra.Command{
 	Use:   "pget [flags] <url> <dest>",
 	Short: "pget",
@@ -41,42 +67,61 @@ var RootCMD = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return config.PersistentStartupProcessFlags()
 	},
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := rootExecFunc(cmd, args); err != nil {
-			log.Error().Err(err).Msg("Error")
-			os.Exit(1)
-		}
-	},
-	Args: cobra.ExactArgs(2),
+	RunE:    runRootCMD,
+	Args:    cobra.ExactArgs(2),
+	Example: `  pget https://example.com/file.tar.gz file.tar.gz`,
 }
 
 func init() {
 	config.AddFlags(RootCMD)
+
+	RootCMD.SetUsageTemplate(usageTemplate)
+	RootCMD.AddCommand(MultiFileCMD)
+	RootCMD.AddCommand(VersionCMD)
 }
 
-// rootExecFunc is the main function of the program and encapsulates the general logic
-// returns any/all errors to the caller.
-func rootExecFunc(cmd *cobra.Command, args []string) error {
-	url := args[0]
-	dest := args[1]
-	_, fileExists := os.Stat(dest)
+func runRootCMD(cmd *cobra.Command, args []string) error {
+	// After we run through the PreRun functions we want to silence usage from being printed
+	// on all errors
+	cmd.SilenceUsage = true
 
-	log.Info().Str("url", url).
+	urlString := args[0]
+	dest := args[1]
+
+	log.Info().Str("urlString", urlString).
 		Str("dest", dest).
 		Str("minimum_chunk_size", viper.GetString(optname.MinimumChunkSize)).
 		Msg("Initiating")
-	// ensure dest does not exist
-	if !viper.GetBool(optname.Force) && !os.IsNotExist(fileExists) {
-		return fmt.Errorf("destination %s already exists", dest)
 
+	// ensure dest does not exist
+	if err := fileExistsErr(dest); err != nil {
+		return err
 	}
 
+	if err := rootExecute(urlString, dest); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// rootExecute is the main function of the program and encapsulates the general logic
+// returns any/all errors to the caller.
+func rootExecute(urlString, dest string) error {
 	// allows us to see how many pget procs are running at a time
 	tmpFile := fmt.Sprintf("/tmp/.pget-%d", os.Getpid())
 	_ = os.WriteFile(tmpFile, []byte(""), 0644)
 	defer os.Remove(tmpFile)
 
 	mode := download.GetMode(config.Mode)
-	_, _, err := mode.DownloadFile(url, dest)
+	_, _, err := mode.DownloadFile(urlString, dest)
 	return err
+}
+
+func fileExistsErr(dest string) error {
+	_, err := os.Stat(dest)
+	if !viper.GetBool(optname.Force) && !os.IsNotExist(err) {
+		return fmt.Errorf("destination %s already exists", dest)
+	}
+	return nil
 }

@@ -2,13 +2,14 @@ package multifile
 
 import (
 	"bufio"
-	"github.com/replicate/pget/pkg/client"
 	"io"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/replicate/pget/pkg/client"
 )
 
 // validManifest is a valid manifest file with an additional empty line at the beginning
@@ -20,8 +21,8 @@ https://example.com/file3.txt /tmp/file3.txt`
 const invalidManifest = `https://example.com/file1.txt`
 
 func tempManifest(content string) (*os.File, error) {
-	tempFile, err := os.CreateTemp("", "manifest")
-	_, err = tempFile.WriteString(content)
+	tempFile, _ := os.CreateTemp("", "manifest")
+	_, err := tempFile.WriteString(content)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +53,7 @@ func TestParseLine(t *testing.T) {
 	assert.Equal(t, "/tmp/file1.txt", dest)
 	assert.NoError(t, err)
 
-	urlString, dest, err = parseLine(invalidLine)
+	_, _, err = parseLine(invalidLine)
 	assert.Error(t, err)
 }
 
@@ -104,8 +105,6 @@ func TestParseManifest(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, manifestMap, 1)
 	assert.Len(t, manifestMap[hostSchemeKey], 3)
-
-	manifest = strings.Split(invalidManifest[1:], "\n")
 
 	manifestMap, err = parseManifest([]string{invalidManifest})
 	assert.Error(t, err)

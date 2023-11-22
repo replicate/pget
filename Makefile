@@ -53,4 +53,4 @@ clean:
 
 .PHONY: test
 test:
-	$(GO) test ./...
+	script/test $(ARGS)

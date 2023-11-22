@@ -1,4 +1,4 @@
-package cmd
+package root
 
 import (
 	"fmt"
@@ -8,10 +8,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/replicate/pget/pkg/cli"
+	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/optname"
-
-	"github.com/replicate/pget/pkg/config"
 )
 
 const rootLongDesc = `
@@ -34,50 +34,21 @@ performance, especially when dealing with large tar files. This makes PGet not j
 efficient file extractor, providing a streamlined solution for fetching and unpacking files.
 `
 
-const usageTemplate = `
-Usage:{{if .Runnable}}
-{{if .HasAvailableFlags}}{{appendIfNotPresent .UseLine "[flags]"}}{{else}}{{.UseLine}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
-{{.CommandPath}} [command]{{end}}{{if gt .Aliases 0}}
+func GetCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pget [flags] <url> <dest>",
+		Short: "pget",
+		Long:  rootLongDesc,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return config.PersistentStartupProcessFlags()
+		},
+		RunE:    runRootCMD,
+		Args:    cobra.ExactArgs(2),
+		Example: `  pget https://example.com/file.tar.gz file.tar.gz`,
+	}
 
-Aliases:
-{{.NameAndAliases}}{{end}}{{if .HasExample}}
-
-Examples:
-{{.Example}}{{end}}{{if .HasAvailableSubCommands}}
-
-Available Commands:{{range .Commands}}{{if .IsAvailableCommand}}
-{{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
-
-Flags:
-{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
-
-Global Flags:
-{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
-
-Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
-{{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
-
-Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
-`
-
-var RootCMD = &cobra.Command{
-	Use:   "pget [flags] <url> <dest>",
-	Short: "pget",
-	Long:  rootLongDesc,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		return config.PersistentStartupProcessFlags()
-	},
-	RunE:    runRootCMD,
-	Args:    cobra.ExactArgs(2),
-	Example: `  pget https://example.com/file.tar.gz file.tar.gz`,
-}
-
-func init() {
-	config.AddFlags(RootCMD)
-
-	RootCMD.SetUsageTemplate(usageTemplate)
-	RootCMD.AddCommand(MultiFileCMD)
-	RootCMD.AddCommand(VersionCMD)
+	config.AddFlags(cmd)
+	return cmd
 }
 
 func runRootCMD(cmd *cobra.Command, args []string) error {
@@ -94,7 +65,7 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 		Msg("Initiating")
 
 	// ensure dest does not exist
-	if err := fileExistsErr(dest); err != nil {
+	if err := cli.FileExistsErr(dest); err != nil {
 		return err
 	}
 
@@ -116,12 +87,4 @@ func rootExecute(urlString, dest string) error {
 	mode := download.GetMode(config.Mode)
 	_, _, err := mode.DownloadFile(urlString, dest)
 	return err
-}
-
-func fileExistsErr(dest string) error {
-	_, err := os.Stat(dest)
-	if !viper.GetBool(optname.Force) && !os.IsNotExist(err) {
-		return fmt.Errorf("destination %s already exists", dest)
-	}
-	return nil
 }

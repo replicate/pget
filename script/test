@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -eu
+
+: "${GITHUB_ACTIONS:=}"
+: "${WORKDIR:=$PWD}"
+
+cd "$(dirname "$0")"
+cd ..
+
+exec go run -C "$WORKDIR" gotest.tools/gotestsum "$@" -- -timeout 1200s -parallel 5 ./...

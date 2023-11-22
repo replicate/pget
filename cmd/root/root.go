@@ -46,7 +46,7 @@ func GetCommand() *cobra.Command {
 		Args:    cobra.ExactArgs(2),
 		Example: `  pget https://example.com/file.tar.gz file.tar.gz`,
 	}
-
+	cmd.SetUsageTemplate(cli.UsageTemplate)
 	config.AddFlags(cmd)
 	return cmd
 }

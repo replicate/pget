@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	// These are boundings for the retryablehttp client and not aboslute values
+	// These are boundings for the retryablehttp client and not absolute values
 	// see retryablehttp.LinearJitterBackoff for more details
 	retryMinWait = 850 * time.Millisecond
 	retryMaxWait = 1250 * time.Millisecond
@@ -102,7 +102,8 @@ func linearJitterRetryAfterBackoff(min, max time.Duration, attemptNum int, resp 
 
 	if retryAfter > 0 {
 		// If the Retry-After header is set, treat this as attempt 0 to get just the jitter
-		attemptNum = 0
+		jitter := max - min
+		return retryablehttp.LinearJitterBackoff(retryAfter, retryAfter+jitter, 0, resp)
 	}
 
 	return retryAfter + retryablehttp.LinearJitterBackoff(min, max, attemptNum, resp)

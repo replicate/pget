@@ -19,6 +19,7 @@ var (
 	ConnTimeout      time.Duration
 	Extract          bool
 	Force            bool
+	IgnoreRetryAfter bool
 	LoggingLevel     string
 	MaxChunkNumber   int
 	MinimumChunkSize string
@@ -44,6 +45,7 @@ func AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVarP(&Retries, optname.Retries, "r", 5, "Number of retries when attempting to retrieve a file")
 	cmd.PersistentFlags().BoolVarP(&Verbose, optname.Verbose, "v", false, "Verbose mode (equivalent to --log-level debug")
 	cmd.PersistentFlags().StringVar(&LoggingLevel, optname.LoggingLevel, "info", "Log level (debug, info, warn, error)")
+	cmd.PersistentFlags().BoolVar(&IgnoreRetryAfter, optname.IgnoreRetryAfter, false, "Ignore Retry-After header")
 
 	viper.SetEnvPrefix("PGET")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))

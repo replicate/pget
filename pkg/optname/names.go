@@ -5,6 +5,7 @@ const (
 	ConnTimeout        = "connect-timeout"
 	Extract            = "extract"
 	Force              = "force"
+	IgnoreRetryAfter   = "ignore-retry-after"
 	LoggingLevel       = "log-level"
 	MaxConnPerHost     = "max-conn-per-host"
 	MaxChunks          = "max-chunks"

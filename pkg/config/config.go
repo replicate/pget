@@ -43,7 +43,7 @@ func AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVarP(&Force, optname.Force, "f", false, "Force download, overwriting existing file")
 	cmd.PersistentFlags().StringSliceVar(&ResolveHosts, optname.Resolve, []string{}, "Resolve hostnames to specific IPs")
 	cmd.PersistentFlags().IntVarP(&Retries, optname.Retries, "r", 5, "Number of retries when attempting to retrieve a file")
-	cmd.PersistentFlags().BoolVarP(&Verbose, optname.Verbose, "v", false, "Verbose mode (equivalent to --log-level debug")
+	cmd.PersistentFlags().BoolVarP(&Verbose, optname.Verbose, "v", false, "Verbose mode (equivalent to --log-level debug)")
 	cmd.PersistentFlags().StringVar(&LoggingLevel, optname.LoggingLevel, "info", "Log level (debug, info, warn, error)")
 	cmd.PersistentFlags().BoolVar(&IgnoreRetryAfter, optname.IgnoreRetryAfter, false, "Ignore Retry-After header")
 

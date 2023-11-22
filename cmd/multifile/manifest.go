@@ -82,7 +82,7 @@ func addEntry(manifestMap map[string][]manifestEntry, schemeHost string, urlStri
 	return manifestMap
 }
 
-func processManifest(buffer []string) (map[string][]manifestEntry, error) {
+func parseManifest(buffer []string) (map[string][]manifestEntry, error) {
 	seenDests := make(map[string]string)
 	manifestMap := make(map[string][]manifestEntry)
 

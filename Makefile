@@ -50,3 +50,7 @@ uninstall:
 clean:
 	$(GO) clean
 	rm -f replicate
+
+.PHONY: test
+test:
+	$(GO) test ./...

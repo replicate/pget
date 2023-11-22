@@ -95,7 +95,7 @@ func runMultifileCMD(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	manifest, err := processManifest(buffer)
+	manifest, err := parseManifest(buffer)
 	if err != nil {
 		return fmt.Errorf("error processing manifest file %s: %w", manifestPath, err)
 	}

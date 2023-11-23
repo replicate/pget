@@ -21,7 +21,7 @@ import (
 )
 
 type BufferMode struct {
-	Client *http.Client
+	Client client.ClientPool
 }
 
 type Target struct {
@@ -42,13 +42,8 @@ func (m *BufferMode) getRemoteFileSize(ctx context.Context, target Target) (stri
 	if err != nil {
 		return "", int64(-1), fmt.Errorf("failed create request for %s", req.URL.String())
 	}
-	httpClient, err := client.AcquireClient(target.SchemeHostKey)
-	if err != nil {
-		return "", int64(-1), fmt.Errorf("error acquiring client for %s: %w", req.URL.String(), err)
-	}
-	defer httpClient.Done()
 
-	resp, err := httpClient.Do(req)
+	resp, err := m.Client.Do(req)
 	if err != nil {
 		return "", int64(-1), err
 	}
@@ -143,16 +138,9 @@ func (m *BufferMode) downloadChunk(ctx context.Context, start, end int64, dataSl
 		return fmt.Errorf("failed to download %s", req.URL.String())
 	}
 
-	// Acquire a client for a download
-	httpClient, err := client.AcquireClient(target.SchemeHostKey)
-	if err != nil {
-		return fmt.Errorf("error acquiring client for %s: %w", req.URL.String(), err)
-	}
-	defer httpClient.Done()
-
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 
-	resp, err := httpClient.Do(req)
+	resp, err := m.Client.Do(req)
 	if err != nil {
 		return fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
 	}

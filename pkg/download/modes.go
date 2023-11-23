@@ -3,12 +3,17 @@ package download
 import (
 	"fmt"
 	"time"
+
+	"github.com/spf13/viper"
+
+	"github.com/replicate/pget/pkg/client"
+	"github.com/replicate/pget/pkg/optname"
 )
 
 type modeFactoryFunc func() Mode
 
 var modes = map[string]modeFactoryFunc{
-	"buffer":      func() Mode { return &BufferMode{} },
+	"buffer":      func() Mode { return &BufferMode{Client: client.NewClientPool(viper.GetInt(optname.MaxConnPerHost))} },
 	"tar-extract": func() Mode { return &ExtractTarMode{} },
 }
 

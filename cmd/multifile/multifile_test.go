@@ -25,6 +25,9 @@ type dummyMode struct {
 	returnErr   bool
 }
 
+// ensure *dummyMode implements download.Mode
+var _ download.Mode = &dummyMode{}
+
 func (d *dummyMode) DownloadFile(url string, dest string) (int64, time.Duration, error) {
 	d.timesCalled++
 	d.args = append(d.args, dummyModeCallerArgs{url, dest})
@@ -45,7 +48,7 @@ func randomName() string {
 
 // setupDummyMode registers a dummy mode with the download package and returns the dummymode name
 // and a cleanup function to be called after the test is done
-func setupDummyMode(returnErr bool) (string, download.Mode, func()) {
+func setupDummyMode(returnErr bool) (string, *dummyMode, func()) {
 	modeName := randomName()
 	dummy := &dummyMode{returnErr: returnErr}
 	cleanupFunc, err := download.AddMode(modeName, func() download.Mode { return dummy })
@@ -74,9 +77,9 @@ func TestDownloadFilesFromHost(t *testing.T) {
 	_ = downloadFilesFromHost(eg, entries)
 	err := eg.Wait()
 	assert.NoError(t, err)
-	assert.Equal(t, 2, mode.(*dummyMode).timesCalled)
-	assert.Contains(t, mode.(*dummyMode).args, dummyModeCallerArgs{entries[0].url, entries[0].dest})
-	assert.Contains(t, mode.(*dummyMode).args, dummyModeCallerArgs{entries[1].url, entries[1].dest})
+	assert.Equal(t, 2, mode.timesCalled)
+	assert.Contains(t, mode.args, dummyModeCallerArgs{entries[0].url, entries[0].dest})
+	assert.Contains(t, mode.args, dummyModeCallerArgs{entries[1].url, entries[1].dest})
 
 	failsModeName, _, failsCleanupFunc := setupDummyMode(true)
 	defer failsCleanupFunc()
@@ -98,9 +101,9 @@ func TestDownloadAndMeasure(t *testing.T) {
 	dest := "/tmp/file1.txt"
 	err := downloadAndMeasure(mode, url, dest)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, mode.(*dummyMode).timesCalled)
-	assert.Equal(t, url, mode.(*dummyMode).args[0].url)
-	assert.Equal(t, dest, mode.(*dummyMode).args[0].dest)
+	assert.Equal(t, 1, mode.timesCalled)
+	assert.Equal(t, url, mode.args[0].url)
+	assert.Equal(t, dest, mode.args[0].dest)
 }
 
 func TestAddDownloadMetrics(t *testing.T) {

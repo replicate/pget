@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 
 	"github.com/spf13/viper"
@@ -35,9 +37,9 @@ Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
 Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
 `
 
-func FileExistsErr(dest string) error {
+func EnsureDestinationNotExist(dest string) error {
 	_, err := os.Stat(dest)
-	if !viper.GetBool(optname.Force) && !os.IsNotExist(err) {
+	if !viper.GetBool(optname.Force) && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("destination %s already exists", dest)
 	}
 	return nil

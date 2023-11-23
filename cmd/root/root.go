@@ -64,8 +64,7 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 		Str("minimum_chunk_size", viper.GetString(optname.MinimumChunkSize)).
 		Msg("Initiating")
 
-	// ensure dest does not exist
-	if err := cli.FileExistsErr(dest); err != nil {
+	if err := cli.EnsureDestinationNotExist(dest); err != nil {
 		return err
 	}
 

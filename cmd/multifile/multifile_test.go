@@ -57,7 +57,7 @@ func setupDummyMode(returnErr bool) (string, download.Mode, func()) {
 
 func resetPostTest() {
 	downloadMetrics = []multifileDownloadMetric{}
-	config.Mode = "bufffer"
+	config.Mode = "buffer"
 }
 
 func TestDownloadFilesFromHost(t *testing.T) {

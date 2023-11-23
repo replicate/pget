@@ -68,7 +68,7 @@ func GetCommand() *cobra.Command {
 		Example: multifileExamples,
 	}
 
-	cmd.PersistentFlags().IntVar(&maxConnPerHost, optname.MaxConnPerHost, 0, "Maximum number of (global) concurrent connections per host (default 40)")
+	cmd.PersistentFlags().IntVar(&maxConnPerHost, optname.MaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host (default 40)")
 	cmd.PersistentFlags().IntVar(&maxConcurrentFiles, optname.MaxConcurrentFiles, 40, "Maximum number of files to download concurrently")
 	err := viper.BindPFlags(cmd.PersistentFlags())
 	if err != nil {
@@ -80,9 +80,6 @@ func GetCommand() *cobra.Command {
 }
 
 func multifilePreRunE(cmd *cobra.Command, args []string) error {
-	if viper.GetInt(optname.MaxConnPerHost) == 0 {
-		viper.Set(optname.MaxConnPerHost, 40)
-	}
 	if viper.GetBool(optname.Extract) {
 		return fmt.Errorf("cannot use --extract with multifile mode")
 	}

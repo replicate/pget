@@ -121,25 +121,9 @@ func TestMultifilePreRunE(t *testing.T) {
 	cmd := GetCommand()
 	config.AddFlags(cmd)
 
-	// Test default values and that default 40 is set if no value is provided
-	assert.Equal(t, viper.GetInt(optname.MaxConnPerHost), 0)
-	err := multifilePreRunE(cmd, []string{})
-	assert.NoError(t, err)
-	assert.Equal(t, viper.GetInt(optname.MaxConnPerHost), 40)
-
-	viper.Reset()
-
-	// Test that the value is not overridden by the value of 40 if provided
-	viper.Set(optname.MaxConnPerHost, 10)
-	err = multifilePreRunE(cmd, []string{})
-	assert.NoError(t, err)
-	assert.Equal(t, viper.GetInt(optname.MaxConnPerHost), 10)
-
-	viper.Reset()
-
 	// Test that extract cannot be set at the same time as multifile is used
 	viper.Set(optname.Extract, true)
-	err = multifilePreRunE(cmd, []string{})
+	err := multifilePreRunE(cmd, []string{})
 	assert.Error(t, err)
 
 	viper.Reset()

@@ -103,7 +103,7 @@ func parseManifest(buffer []string) (map[string][]manifestEntry, error) {
 
 		seenDests[dest] = urlString
 
-		err = cli.FileExistsErr(dest)
+		err = cli.EnsureDestinationNotExist(dest)
 		if err != nil {
 			return nil, err
 		}

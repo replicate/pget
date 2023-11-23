@@ -155,5 +155,5 @@ func GetSchemeHostKey(urlString string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s%s", parsedURL.Scheme, parsedURL.Host), err
+	return fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host), err
 }

@@ -94,13 +94,13 @@ func TestDownloadAndMeasure(t *testing.T) {
 	defer cleanupFunc()
 	defer resetPostTest()
 
-	entry := manifestEntry{"https://example.com/file1.txt", "/tmp/file1.txt"}
-	err := downloadAndMeasure(mode, entry)
+	url := "https://example.com/file1.txt"
+	dest := "/tmp/file1.txt"
+	err := downloadAndMeasure(mode, url, dest)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, mode.(*dummyMode).timesCalled)
-	assert.Equal(t, entry.url, mode.(*dummyMode).args[0].url)
-	assert.Equal(t, entry.dest, mode.(*dummyMode).args[0].dest)
-
+	assert.Equal(t, url, mode.(*dummyMode).args[0].url)
+	assert.Equal(t, dest, mode.(*dummyMode).args[0].dest)
 }
 
 func TestAddDownloadMetrics(t *testing.T) {

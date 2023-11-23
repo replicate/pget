@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/cli"
+	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/logging"
@@ -91,11 +92,12 @@ func multifilePreRunE(cmd *cobra.Command, args []string) error {
 func runMultifileCMD(cmd *cobra.Command, args []string) error {
 	cmd.SilenceUsage = true
 	manifestPath := args[0]
-	buffer, err := manifestFileToBuffer(manifestPath)
+	file, err := manifestFile(manifestPath)
 	if err != nil {
 		return err
 	}
-	manifest, err := parseManifest(buffer)
+	defer file.Close()
+	manifest, err := parseManifest(file)
 	if err != nil {
 		return fmt.Errorf("error processing manifest file %s: %w", manifestPath, err)
 	}
@@ -114,7 +116,18 @@ func initializeErrGroup() *errgroup.Group {
 	return &eg
 }
 
-func multifileExecute(manifest map[string][]manifestEntry) error {
+func multifileExecute(manifest manifest) error {
+	if perHostLimit := viper.GetInt(optname.MaxConnPerHost); perHostLimit > 0 {
+		logging.Logger.Debug().Int("max_connections_per_host", perHostLimit).Msg("Config")
+	}
+
+	for schemeHost := range manifest {
+		err := handleConnectionPoolCreate(schemeHost)
+		if err != nil {
+			return err
+		}
+	}
+
 	// download each host's files in parallel
 	eg := initializeErrGroup()
 
@@ -132,6 +145,13 @@ func multifileExecute(manifest map[string][]manifestEntry) error {
 	}
 
 	aggregateAndPrintMetrics(time.Since(multifileDownloadStart))
+	return nil
+}
+
+func handleConnectionPoolCreate(schemeHost string) error {
+	if viper.GetInt(optname.MaxConnPerHost) > 0 {
+		client.CreateHostConnectionPool(schemeHost)
+	}
 	return nil
 }
 
@@ -159,17 +179,20 @@ func downloadFilesFromHost(eg *errgroup.Group, entries []manifestEntry) error {
 	mode := download.GetMode(config.Mode)
 
 	for _, entry := range entries {
-		// Avoid 'capture by reference' issues by creating a new variable
-		file := entry
+		// Avoid the `entry` loop variable being captured by the
+		// goroutine by creating new variables
+		url, dest := entry.url, entry.dest
+		logging.Logger.Debug().Str("url", url).Str("dest", dest).Msg("Queueing Download")
+
 		eg.Go(func() error {
-			return downloadAndMeasure(mode, file)
+			return downloadAndMeasure(mode, url, dest)
 		})
 	}
 	return nil
 }
 
-func downloadAndMeasure(mode download.Mode, entry manifestEntry) error {
-	fileSize, elapsedTime, err := mode.DownloadFile(entry.url, entry.dest)
+func downloadAndMeasure(mode download.Mode, url, dest string) error {
+	fileSize, elapsedTime, err := mode.DownloadFile(url, dest)
 	if err != nil {
 		return err
 	}

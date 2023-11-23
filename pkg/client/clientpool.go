@@ -1,69 +1,87 @@
 package client
 
 import (
-	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 
-	"github.com/spf13/viper"
-
-	"github.com/replicate/pget/pkg/optname"
+	"github.com/replicate/pget/pkg/version"
 )
-
-// perHostClientPool is a map of hostnames to a clientPool channel
-var perHostClientPool = make(map[string]*perHostClientLimiter)
-var createMutex = &sync.Mutex{}
 
 // perHostClientLimiter is a semaphore that limits the number of concurrent connections per host
 type perHostClientLimiter struct {
 	pool chan *HTTPClient
 }
 
-func CreateHostConnectionPool(host string) {
-	maxConns := viper.GetInt(optname.MaxConnPerHost)
-	if maxConns > 0 {
-		createMutex.Lock()
-		defer createMutex.Unlock()
+type ClientPool interface {
+	// Do has the same contract as http.Client#Do.  If all clients are busy,
+	// Do may block until a client becomes free.
+	Do(req *http.Request) (*http.Response, error)
+}
 
-		if _, ok := perHostClientPool[host]; !ok {
-			perHostClientPool[host] = &perHostClientLimiter{pool: make(chan *HTTPClient, maxConns)}
-			for c := 0; c < maxConns; c++ {
-				perHostClientPool[host].pool <- newClient(host)
-			}
-		}
+type clientPool struct {
+	perHostClientPool map[string]*perHostClientLimiter
+	clientPoolMutex   *sync.RWMutex
+	maxConnsPerHost   int
+}
+
+var _ ClientPool = &clientPool{}
+
+func NewClientPool(maxConnsPerHost int) ClientPool {
+	perHostClientPool := make(map[string]*perHostClientLimiter)
+	return &clientPool{
+		perHostClientPool: perHostClientPool,
+		clientPoolMutex:   &sync.RWMutex{},
+		maxConnsPerHost:   maxConnsPerHost,
 	}
 }
 
-func AcquireClient(host string) (*HTTPClient, error) {
-	maxConnections := viper.GetInt(optname.MaxConnPerHost)
-	// If maxConnections is not more than 0, we return a new client.
-	if maxConnections <= 0 {
-		return newClient(host), nil
-	}
+func (p *clientPool) Do(req *http.Request) (*http.Response, error) {
+	req.Header.Set("User-Agent", fmt.Sprintf("pget/%s", version.GetVersion()))
 
-	// If host limiter is not found in the pool
-	hostLimiter, ok := perHostClientPool[host]
+	if p.maxConnsPerHost == 0 {
+		client := newClient()
+		return client.Do(req)
+	}
+	schemeHost := getSchemeHostKey(req.URL)
+	client, err := p.acquireClient(schemeHost)
+	if err != nil {
+		return nil, err
+	}
+	defer p.releaseClient(schemeHost, client)
+	return client.Do(req)
+}
+
+func (p *clientPool) acquireClient(schemeHost string) (*HTTPClient, error) {
+	p.clientPoolMutex.RLock()
+	hostLimiter, ok := p.perHostClientPool[schemeHost]
+	p.clientPoolMutex.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("no connection pool found for host: %s", host)
+		hostLimiter = &perHostClientLimiter{pool: make(chan *HTTPClient, p.maxConnsPerHost)}
+		for c := 0; c < p.maxConnsPerHost; c++ {
+			hostLimiter.pool <- newClient()
+		}
+
+		p.clientPoolMutex.Lock()
+		// we need to check again to see if a concurrent goroutine has
+		// won the race to create a client pool
+		newHostLimiter, ok := p.perHostClientPool[schemeHost]
+		if ok {
+			// if we lost the race, use their hostLimiter and
+			// discard ours
+			hostLimiter = newHostLimiter
+		} else {
+			// otherwise, save ours to the client pool
+			p.perHostClientPool[schemeHost] = hostLimiter
+		}
+		p.clientPoolMutex.Unlock()
 	}
 
-	// In case hostLimiter is found, we return a client from the pool.
 	return <-hostLimiter.pool, nil
 }
 
-func releaseClient(client *HTTPClient) error {
-	if client == nil || client.host == "" {
-		return errors.New("invalid client")
-	}
-
-	if viper.GetInt(optname.MaxConnPerHost) > 0 {
-		hostLimiter, ok := perHostClientPool[client.host]
-		if !ok {
-			return fmt.Errorf("connection pool not found for host %s", client.host)
-		}
-
-		hostLimiter.pool <- client
-	}
-
-	return nil
+func (p *clientPool) releaseClient(schemeHost string, client *HTTPClient) {
+	p.clientPoolMutex.RLock()
+	defer p.clientPoolMutex.RUnlock()
+	p.perHostClientPool[schemeHost].pool <- client
 }

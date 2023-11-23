@@ -15,7 +15,6 @@ import (
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/logging"
 	"github.com/replicate/pget/pkg/optname"
-	"github.com/replicate/pget/pkg/version"
 )
 
 const (
@@ -31,31 +30,12 @@ var logger = logging.Logger
 // utilizing a client pool. If the MaxConnPerHost option is not set, the client pool will not be used.
 type HTTPClient struct {
 	*http.Client
-	host string
-}
-
-// Done releases the client. This is a simple utility function that should be called in a defer statement.
-func (c *HTTPClient) Done() {
-	if viper.GetInt(optname.MaxConnPerHost) > 0 {
-		if err := releaseClient(c); err != nil {
-			logger.Error().Err(err).Msg("Error releasing client")
-		}
-	}
-}
-
-type UserAgentTransport struct {
-	Transport http.RoundTripper
-}
-
-func (t *UserAgentTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Set("User-Agent", fmt.Sprintf("pget/%s", version.GetVersion()))
-	return t.Transport.RoundTrip(req)
 }
 
 // newClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
 // per host if the MaxConnPerHost option is set.
-func newClient(host string) *HTTPClient {
-	baseTransport := http.Transport{
+func newClient() *HTTPClient {
+	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: transportDialContext(&net.Dialer{
 			Timeout:   viper.GetDuration(optname.ConnTimeout),
@@ -70,10 +50,8 @@ func newClient(host string) *HTTPClient {
 	}
 	maxConnPerHost := viper.GetInt(optname.MaxConnPerHost)
 	if maxConnPerHost > 0 {
-		baseTransport.MaxConnsPerHost = maxConnPerHost
+		transport.MaxConnsPerHost = maxConnPerHost
 	}
-
-	transport := &UserAgentTransport{Transport: &baseTransport}
 
 	retryClient := &retryablehttp.Client{
 		HTTPClient: &http.Client{
@@ -89,7 +67,7 @@ func newClient(host string) *HTTPClient {
 	}
 
 	client := retryClient.StandardClient()
-	return &HTTPClient{Client: client, host: host}
+	return &HTTPClient{Client: client}
 }
 
 // linearJitterRetryAfterBackoff wraps retryablehttp.LinearJitterBackoff but also will adhere to Retry-After responses
@@ -155,5 +133,9 @@ func GetSchemeHostKey(urlString string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host), err
+	return getSchemeHostKey(parsedURL), err
+}
+
+func getSchemeHostKey(url *url.URL) string {
+	return fmt.Sprintf("%s://%s", url.Scheme, url.Host)
 }

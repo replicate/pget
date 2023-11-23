@@ -12,7 +12,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/cli"
-	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/logging"
@@ -118,13 +117,6 @@ func multifileExecute(manifest manifest) error {
 		logging.Logger.Debug().Int("max_connections_per_host", perHostLimit).Msg("Config")
 	}
 
-	for schemeHost := range manifest {
-		err := handleConnectionPoolCreate(schemeHost)
-		if err != nil {
-			return err
-		}
-	}
-
 	// download each host's files in parallel
 	eg := initializeErrGroup()
 
@@ -142,13 +134,6 @@ func multifileExecute(manifest manifest) error {
 	}
 
 	aggregateAndPrintMetrics(time.Since(multifileDownloadStart))
-	return nil
-}
-
-func handleConnectionPoolCreate(schemeHost string) error {
-	if viper.GetInt(optname.MaxConnPerHost) > 0 {
-		client.CreateHostConnectionPool(schemeHost)
-	}
 	return nil
 }
 

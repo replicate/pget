@@ -83,5 +83,12 @@ func (p *clientPool) acquireClient(schemeHost string) (*HTTPClient, error) {
 func (p *clientPool) releaseClient(schemeHost string, client *HTTPClient) {
 	p.clientPoolMutex.RLock()
 	defer p.clientPoolMutex.RUnlock()
-	p.perHostClientPool[schemeHost].pool <- client
+	// we do a nonblocking write to the pool. There should always be room in
+	// the channel.
+	select {
+	case p.perHostClientPool[schemeHost].pool <- client:
+		return
+	default:
+		panic("couldn't return client to pool")
+	}
 }

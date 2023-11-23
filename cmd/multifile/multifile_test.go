@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/download"
@@ -20,21 +21,39 @@ type dummyModeCallerArgs struct {
 }
 
 type dummyMode struct {
-	timesCalled int
-	args        []dummyModeCallerArgs
-	returnErr   bool
+	args      []dummyModeCallerArgs
+	returnErr bool
+	calls     chan dummyModeCallerArgs
 }
 
 // ensure *dummyMode implements download.Mode
 var _ download.Mode = &dummyMode{}
 
 func (d *dummyMode) DownloadFile(url string, dest string) (int64, time.Duration, error) {
-	d.timesCalled++
-	d.args = append(d.args, dummyModeCallerArgs{url, dest})
+	d.calls <- dummyModeCallerArgs{url, dest}
 	if d.returnErr {
 		return -1, time.Duration(0), errors.New("test error")
 	}
 	return 100, time.Duration(1) * time.Second, nil
+}
+
+// Args returns the args that DownloadFile was called with.
+func (d *dummyMode) Args() []dummyModeCallerArgs {
+DONE:
+	// non-blocking read the whole channel into d.args
+	for {
+		select {
+		case args := <-d.calls:
+			d.args = append(d.args, args)
+		default:
+			break DONE
+		}
+	}
+	return d.args
+}
+
+func (d *dummyMode) Arg(i int) dummyModeCallerArgs {
+	return d.Args()[i]
 }
 
 func randomName() string {
@@ -50,7 +69,10 @@ func randomName() string {
 // and a cleanup function to be called after the test is done
 func setupDummyMode(returnErr bool) (string, *dummyMode, func()) {
 	modeName := randomName()
-	dummy := &dummyMode{returnErr: returnErr}
+	dummy := &dummyMode{
+		returnErr: returnErr,
+		calls:     make(chan dummyModeCallerArgs, 100),
+	}
 	cleanupFunc, err := download.AddMode(modeName, func() download.Mode { return dummy })
 	if err != nil {
 		panic(err)
@@ -72,21 +94,21 @@ func TestDownloadFilesFromHost(t *testing.T) {
 		{"https://example.com/file1.txt", "/tmp/file1.txt"},
 		{"https://example.com/file2.txt", "/tmp/file2.txt"},
 	}
-	eg := initializeErrGroup()
+	var eg errgroup.Group
 	config.Mode = modeName
-	_ = downloadFilesFromHost(eg, entries)
+	_ = downloadFilesFromHost(&eg, entries)
 	err := eg.Wait()
 	assert.NoError(t, err)
-	assert.Equal(t, 2, mode.timesCalled)
-	assert.Contains(t, mode.args, dummyModeCallerArgs{entries[0].url, entries[0].dest})
-	assert.Contains(t, mode.args, dummyModeCallerArgs{entries[1].url, entries[1].dest})
+	assert.Equal(t, 2, len(mode.Args()))
+	assert.Contains(t, mode.Args(), dummyModeCallerArgs{entries[0].url, entries[0].dest})
+	assert.Contains(t, mode.Args(), dummyModeCallerArgs{entries[1].url, entries[1].dest})
 
 	failsModeName, _, failsCleanupFunc := setupDummyMode(true)
 	defer failsCleanupFunc()
 
-	eg = initializeErrGroup()
+	eg = errgroup.Group{}
 	config.Mode = failsModeName
-	_ = downloadFilesFromHost(eg, entries)
+	_ = downloadFilesFromHost(&eg, entries)
 	err = eg.Wait()
 	assert.Error(t, err)
 
@@ -101,9 +123,9 @@ func TestDownloadAndMeasure(t *testing.T) {
 	dest := "/tmp/file1.txt"
 	err := downloadAndMeasure(mode, url, dest)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, mode.timesCalled)
-	assert.Equal(t, url, mode.args[0].url)
-	assert.Equal(t, dest, mode.args[0].dest)
+	assert.Equal(t, 1, len(mode.Args()))
+	assert.Equal(t, url, mode.Arg(0).url)
+	assert.Equal(t, dest, mode.Arg(0).dest)
 }
 
 func TestAddDownloadMetrics(t *testing.T) {

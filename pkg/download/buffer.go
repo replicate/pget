@@ -112,8 +112,21 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 			end = fileSize - 1
 		}
 
+		req, err := m.downloadChunkReq(ctx, client, start, end, target)
+		if err != nil {
+			// FIXME: leaks goroutines
+			return nil, -1, err
+		}
+
+		resp, err := client.Do(req)
+
+		if err != nil {
+			// FIXME: leaks goroutines
+			return nil, -1, err
+		}
+
 		errGroup.Go(func() error {
-			return m.downloadChunk(ctx, client, start, end, data[start:end+1], target)
+			return m.readResponse(ctx, req, resp, data[start:end+1])
 		})
 	}
 
@@ -132,6 +145,30 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 
 	buffer := bytes.NewBuffer(data)
 	return buffer, fileSize, nil
+}
+
+func (m *BufferMode) downloadChunkReq(ctx context.Context, client *client.HTTPClient, start, end int64, target Target) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", target.TrueURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download %s", req.URL.String())
+	}
+
+	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+
+	return req, nil
+}
+
+func (m *BufferMode) readResponse(ctx context.Context, req *http.Request, resp *http.Response, dataSlice []byte) error {
+	defer resp.Body.Close()
+
+	n, err := io.ReadFull(resp.Body, dataSlice)
+	if err != nil && err != io.EOF {
+		return fmt.Errorf("error reading response for %s: %w", req.URL.String(), err)
+	}
+	if n != len(dataSlice) {
+		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, len(dataSlice), req.URL.String())
+	}
+	return nil
 }
 
 func (m *BufferMode) downloadChunk(ctx context.Context, client *client.HTTPClient, start, end int64, dataSlice []byte, target Target) error {

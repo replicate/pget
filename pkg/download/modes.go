@@ -12,27 +12,43 @@ import (
 
 type modeFactoryFunc func() Mode
 
-var modes = map[string]modeFactoryFunc{
-	"buffer": func() Mode {
-		return &BufferMode{Client: client.NewClient(viper.GetBool(optname.ForceHTTP2), viper.GetInt(optname.MaxConnPerHost))}
-	},
-	"tar-extract": func() Mode { return &ExtractTarMode{} },
+type modeFactories struct {
+	modes map[string]modeFactoryFunc
+}
+
+func (m *modeFactories) Get(name string) (Mode, error) {
+	modeFactory, exists := m.modes[name]
+	if !exists {
+		return nil, fmt.Errorf("mode %s does not exist", name)
+	}
+	return modeFactory(), nil
+}
+
+func (m *modeFactories) GetModeNames() []string {
+	var names []string
+	for name := range m.modes {
+		names = append(names, name)
+	}
+	return names
+}
+
+func getModes() *modeFactories {
+	return &modeFactories{
+		modes: map[string]modeFactoryFunc{
+			BufferModeName: func() Mode {
+				return &BufferMode{Client: client.NewClient(
+					viper.GetBool(optname.ForceHTTP2),
+					viper.GetInt(optname.MaxConnPerHost))}
+			},
+			TarExtractModeName: func() Mode { return &ExtractTarMode{} },
+		},
+	}
 }
 
 type Mode interface {
 	DownloadFile(url string, dest string) (fileSize int64, elapsedTime time.Duration, err error)
 }
 
-func GetMode(name string) Mode {
-	return modes[name]()
-}
-
-// AddMode registers a new mode with the given name, this is intended for use with testing only
-// make sure to call the returned function to clean up after the test is done
-func AddMode(name string, factory modeFactoryFunc) (func(), error) {
-	if _, exists := modes[name]; exists {
-		return nil, fmt.Errorf("mode %s already exists", name)
-	}
-	modes[name] = factory
-	return func() { delete(modes, name) }, nil
+func GetMode(name string) (Mode, error) {
+	return getModes().Get(name)
 }

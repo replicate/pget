@@ -87,7 +87,10 @@ func rootExecute(urlString, dest string) error {
 	_ = os.WriteFile(tmpFile, []byte(""), 0644)
 	defer os.Remove(tmpFile)
 
-	mode := download.GetMode(config.Mode)
-	_, _, err := mode.DownloadFile(urlString, dest)
+	mode, err := download.GetMode(config.Mode)
+	if err != nil {
+		return fmt.Errorf("error getting mode: %w", err)
+	}
+	_, _, err = mode.DownloadFile(urlString, dest)
 	return err
 }

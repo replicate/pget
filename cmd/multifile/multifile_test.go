@@ -2,7 +2,6 @@ package multifile
 
 import (
 	"errors"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -37,35 +36,13 @@ func (d *dummyMode) DownloadFile(url string, dest string) (int64, time.Duration,
 	return 100, time.Duration(1) * time.Second, nil
 }
 
-func randomName() string {
-	charset := "abcdefghijklmnopqrstuvwxyz"
-	b := make([]byte, 10)
-	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
-	}
-	return string(b)
-}
-
-// setupDummyMode registers a dummyMode mode with the download package and returns the dummyMode name
-// and a cleanup function to be called after the test is done
-func setupDummyMode(returnErr bool) (string, *dummyMode, func()) {
-	modeName := randomName()
-	dummy := &dummyMode{returnErr: returnErr}
-	cleanupFunc, err := download.AddMode(modeName, func() download.Mode { return dummy })
-	if err != nil {
-		panic(err)
-	}
-	return modeName, dummy, cleanupFunc
-}
-
 func resetPostTest() {
 	downloadMetrics = []multifileDownloadMetric{}
 	config.Mode = "buffer"
 }
 
 func TestDownloadFilesFromHost(t *testing.T) {
-	modeName, mode, cleanupFunc := setupDummyMode(false)
-	defer cleanupFunc()
+	mode := &dummyMode{returnErr: false}
 	defer resetPostTest()
 
 	entries := []manifestEntry{
@@ -73,29 +50,26 @@ func TestDownloadFilesFromHost(t *testing.T) {
 		{"https://example.com/file2.txt", "/tmp/file2.txt"},
 	}
 	eg := initializeErrGroup()
-	config.Mode = modeName
-	_ = downloadFilesFromHost(eg, entries)
+	_ = downloadFilesFromHost(mode, eg, entries)
 	err := eg.Wait()
 	assert.NoError(t, err)
 	assert.Equal(t, 2, mode.timesCalled)
 	assert.Contains(t, mode.args, dummyModeCallerArgs{entries[0].url, entries[0].dest})
 	assert.Contains(t, mode.args, dummyModeCallerArgs{entries[1].url, entries[1].dest})
 
-	failsModeName, _, failsCleanupFunc := setupDummyMode(true)
-	defer failsCleanupFunc()
+	failsMode := &dummyMode{returnErr: true}
 
 	eg = initializeErrGroup()
-	config.Mode = failsModeName
-	_ = downloadFilesFromHost(eg, entries)
+	_ = downloadFilesFromHost(failsMode, eg, entries)
 	err = eg.Wait()
 	assert.Error(t, err)
 
 }
 
 func TestDownloadAndMeasure(t *testing.T) {
-	_, mode, cleanupFunc := setupDummyMode(false)
-	defer cleanupFunc()
 	defer resetPostTest()
+
+	mode := &dummyMode{returnErr: false}
 
 	url := "https://example.com/file1.txt"
 	dest := "/tmp/file1.txt"

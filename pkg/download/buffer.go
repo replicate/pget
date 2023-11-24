@@ -37,6 +37,12 @@ func (t *Target) Basename() string {
 	return filepath.Base(t.Dest)
 }
 
+func getBufferMode(config ModeConfiguration) Mode {
+	return &BufferMode{
+		Client: client.NewHTTPClient(config.forceHTTP2, config.maxConnPerHost),
+	}
+}
+
 func (m *BufferMode) getRemoteFileSize(ctx context.Context, target Target) (string, int64, error) {
 	logger := logging.GetLogger()
 	req, err := http.NewRequestWithContext(ctx, "HEAD", target.URL, nil)

@@ -6,49 +6,42 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/optname"
 )
 
-type modeFactoryFunc func() Mode
+type modeFactory func(config ModeConfiguration) Mode
 
-type modeFactories struct {
-	modes map[string]modeFactoryFunc
-}
-
-func (m *modeFactories) Get(name string) (Mode, error) {
-	modeFactory, exists := m.modes[name]
-	if !exists {
-		return nil, fmt.Errorf("mode %s does not exist", name)
-	}
-	return modeFactory(), nil
-}
-
-func (m *modeFactories) GetModeNames() []string {
-	var names []string
-	for name := range m.modes {
-		names = append(names, name)
-	}
-	return names
-}
-
-func getModes() *modeFactories {
-	return &modeFactories{
-		modes: map[string]modeFactoryFunc{
-			BufferModeName: func() Mode {
-				return &BufferMode{Client: client.NewClient(
-					viper.GetBool(optname.ForceHTTP2),
-					viper.GetInt(optname.MaxConnPerHost))}
-			},
-			TarExtractModeName: func() Mode { return &ExtractTarMode{} },
-		},
-	}
+// ModeConfiguration is a struct that holds the configuration for a Mode
+type ModeConfiguration struct {
+	maxConnPerHost int
+	forceHTTP2     bool
 }
 
 type Mode interface {
 	DownloadFile(url string, dest string) (fileSize int64, elapsedTime time.Duration, err error)
 }
 
+func modeFactories() map[string]modeFactory {
+	return map[string]modeFactory{
+		BufferModeName:     getBufferMode,
+		ExtractTarModeName: getExtractTarMode,
+	}
+}
+
 func GetMode(name string) (Mode, error) {
-	return getModes().Get(name)
+	factory, ok := modeFactories()[name]
+	if !ok {
+		return nil, fmt.Errorf("unknown mode: %s", name)
+	}
+	config := getModeConfig()
+	return factory(config), nil
+}
+
+// getModeConfig returns a ModeConfiguration struct with the values from the viper config
+// This should be the only function withing the modes that directly accesses viper
+func getModeConfig() ModeConfiguration {
+	return ModeConfiguration{
+		maxConnPerHost: viper.GetInt(optname.MaxConnPerHost),
+		forceHTTP2:     viper.GetBool(optname.ForceHTTP2),
+	}
 }

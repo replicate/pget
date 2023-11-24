@@ -1,13 +1,14 @@
 package config
 
 import (
-	"github.com/replicate/pget/pkg/optname"
-	"github.com/rs/zerolog"
-	"github.com/spf13/viper"
 	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/replicate/pget/pkg/optname"
 )
 
 func TestSetLogLevel(t *testing.T) {

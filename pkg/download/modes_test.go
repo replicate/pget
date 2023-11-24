@@ -1,11 +1,12 @@
 package download
 
 import (
-	"github.com/replicate/pget/pkg/optname"
-	"github.com/spf13/viper"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/replicate/pget/pkg/optname"
 )
 
 func TestGetMode(t *testing.T) {

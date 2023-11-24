@@ -3,9 +3,9 @@ package download
 import (
 	"context"
 	"fmt"
-	"github.com/replicate/pget/pkg/client"
 	"time"
 
+	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/extract"
 )
 

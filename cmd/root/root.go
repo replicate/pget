@@ -42,6 +42,16 @@ func GetCommand() *cobra.Command {
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			return config.PersistentStartupProcessFlags()
 		},
+		PreRun: func(cmd *cobra.Command, args []string) {
+			// Override the default MaxConnsPerHost for the single-file
+			// mode. This will ensure we aren't limited by number of
+			// connections but limited only by the number of chunks.
+			//
+			// This is done in the "Run" command because we want to
+			// only apply when we are running the root command and not
+			// when we are running a subcommand.
+			viper.Set(optname.MaxConnPerHost, 0)
+		},
 		RunE:    runRootCMD,
 		Args:    cobra.ExactArgs(2),
 		Example: `  pget https://example.com/file.tar.gz file.tar.gz`,

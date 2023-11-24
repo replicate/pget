@@ -47,7 +47,11 @@ func GetCommand() *cobra.Command {
 		Example: `  pget https://example.com/file.tar.gz file.tar.gz`,
 	}
 	cmd.SetUsageTemplate(cli.UsageTemplate)
-	config.AddFlags(cmd)
+	err := config.AddFlags(cmd)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 	return cmd
 }
 

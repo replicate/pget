@@ -13,7 +13,9 @@ import (
 type modeFactoryFunc func() Mode
 
 var modes = map[string]modeFactoryFunc{
-	"buffer":      func() Mode { return &BufferMode{Client: client.NewClientPool(viper.GetInt(optname.MaxConnPerHost))} },
+	"buffer": func() Mode {
+		return &BufferMode{Client: client.NewClient(viper.GetBool(optname.ForceHTTP2), viper.GetInt(optname.MaxConnPerHost))}
+	},
 	"tar-extract": func() Mode { return &ExtractTarMode{} },
 }
 

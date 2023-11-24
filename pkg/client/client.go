@@ -15,6 +15,7 @@ import (
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/logging"
 	"github.com/replicate/pget/pkg/optname"
+	"github.com/replicate/pget/pkg/version"
 )
 
 const (
@@ -32,26 +33,31 @@ type HTTPClient struct {
 	*http.Client
 }
 
-// newClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
+func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
+	req.Header.Set("User-Agent", fmt.Sprintf("pget/%s", version.GetVersion()))
+	return c.Client.Do(req)
+}
+
+// NewClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
 // per host if the MaxConnPerHost option is set.
-func newClient() *HTTPClient {
+func NewClient(forceHTTP2 bool, maxConnPerHost int) *HTTPClient {
+	disableKeepalives := !viper.GetBool(optname.ForceHTTP2)
+
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: transportDialContext(&net.Dialer{
 			Timeout:   viper.GetDuration(optname.ConnTimeout),
 			KeepAlive: 30 * time.Second,
 		}),
-		ForceAttemptHTTP2:     true,
+		ForceAttemptHTTP2:     forceHTTP2,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		DisableKeepAlives:     false,
+		DisableKeepAlives:     disableKeepalives,
 	}
-	maxConnPerHost := viper.GetInt(optname.MaxConnPerHost)
-	if maxConnPerHost > 0 {
-		transport.MaxConnsPerHost = maxConnPerHost
-	}
+	transport.MaxConnsPerHost = maxConnPerHost
+	transport.MaxIdleConnsPerHost = maxConnPerHost
 
 	retryClient := &retryablehttp.Client{
 		HTTPClient: &http.Client{

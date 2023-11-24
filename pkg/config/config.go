@@ -19,6 +19,7 @@ var (
 	ConnTimeout      time.Duration
 	Extract          bool
 	Force            bool
+	ForceHTTP2       bool
 	IgnoreRetryAfter bool
 	LoggingLevel     string
 	MaxChunkNumber   int
@@ -32,7 +33,7 @@ var (
 // HostToIPResolutionMap is a map of hostnames to IP addresses
 var HostToIPResolutionMap = make(map[string]string)
 
-func AddFlags(cmd *cobra.Command) {
+func AddFlags(cmd *cobra.Command) error {
 	// Non-Persistent Flags (only applies to rootCMD)
 	cmd.Flags().BoolVarP(&Extract, optname.Extract, "x", false, "Extract archive after download")
 	// Persistent Flags (applies to all commands/subcommands)
@@ -46,6 +47,7 @@ func AddFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVarP(&Verbose, optname.Verbose, "v", false, "Verbose mode (equivalent to --log-level debug)")
 	cmd.PersistentFlags().StringVar(&LoggingLevel, optname.LoggingLevel, "info", "Log level (debug, info, warn, error)")
 	cmd.PersistentFlags().BoolVar(&IgnoreRetryAfter, optname.IgnoreRetryAfter, false, "Ignore Retry-After header")
+	cmd.PersistentFlags().BoolVar(&ForceHTTP2, optname.ForceHTTP2, false, "Force HTTP/2")
 
 	viper.SetEnvPrefix("PGET")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
@@ -58,6 +60,13 @@ func AddFlags(cmd *cobra.Command) {
 		panic(err)
 	}
 	viper.RegisterAlias(optname.Concurrency, optname.MaxChunks)
+
+	// Hide flags from help, these are intended to be used for testing/internal benchmarking/debugging only
+	if err := cmd.PersistentFlags().MarkHidden(optname.ForceHTTP2); err != nil {
+		return fmt.Errorf("failed to hide flag %s: %w", optname.ForceHTTP2, err)
+	}
+
+	return nil
 }
 
 func PersistentStartupProcessFlags() error {

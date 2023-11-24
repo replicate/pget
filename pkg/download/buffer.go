@@ -21,7 +21,7 @@ import (
 )
 
 type BufferMode struct {
-	Client client.ClientPool
+	Client *client.HTTPClient
 }
 
 type Target struct {
@@ -109,9 +109,16 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 		if i == chunks-1 {
 			end = fileSize - 1
 		}
-
+		req, err := m.makeRequest(ctx, start, end, target)
+		if err != nil {
+			return nil, -1, err
+		}
+		resp, err := m.Client.Do(req)
+		if err != nil {
+			return nil, -1, fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
+		}
 		errGroup.Go(func() error {
-			return m.downloadChunk(ctx, start, end, data[start:end+1], target)
+			return m.downloadChunk(req, resp, data[start:end+1])
 		})
 	}
 
@@ -132,26 +139,30 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 	return buffer, fileSize, nil
 }
 
-func (m *BufferMode) downloadChunk(ctx context.Context, start, end int64, dataSlice []byte, target Target) error {
+func (m *BufferMode) makeRequest(ctx context.Context, start, end int64, target Target) (*http.Request, error) {
+
 	req, err := http.NewRequestWithContext(ctx, "GET", target.TrueURL, nil)
 	if err != nil {
-		return fmt.Errorf("failed to download %s", req.URL.String())
+		return nil, fmt.Errorf("failed to download %s", req.URL.String())
 	}
 
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 
-	resp, err := m.Client.Do(req)
 	if err != nil {
-		return fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
+		return nil, fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
 	}
-	defer resp.Body.Close()
+	return req, nil
+}
 
+func (m *BufferMode) downloadChunk(req *http.Request, resp *http.Response, dataSlice []byte) error {
+	defer resp.Body.Close()
+	expectedBytes := len(dataSlice)
 	n, err := io.ReadFull(resp.Body, dataSlice)
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("error reading response for %s: %w", req.URL.String(), err)
 	}
-	if n != int(end-start+1) {
-		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, end-start+1, req.URL.String())
+	if n != expectedBytes {
+		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, expectedBytes, req.URL.String())
 	}
 	return nil
 }

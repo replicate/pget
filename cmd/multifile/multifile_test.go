@@ -46,7 +46,7 @@ func randomName() string {
 	return string(b)
 }
 
-// setupDummyMode registers a dummy mode with the download package and returns the dummymode name
+// setupDummyMode registers a dummyMode mode with the download package and returns the dummyMode name
 // and a cleanup function to be called after the test is done
 func setupDummyMode(returnErr bool) (string, *dummyMode, func()) {
 	modeName := randomName()
@@ -119,7 +119,9 @@ func TestAddDownloadMetrics(t *testing.T) {
 func TestMultifilePreRunE(t *testing.T) {
 	defer resetPostTest()
 	cmd := GetCommand()
-	config.AddFlags(cmd)
+	if err := config.AddFlags(cmd); err != nil {
+		t.Fatal(err)
+	}
 
 	// Test that extract cannot be set at the same time as multifile is used
 	viper.Set(optname.Extract, true)

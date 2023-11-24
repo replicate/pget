@@ -102,6 +102,8 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 	data := make([]byte, fileSize)
 	startTime := time.Now()
 
+	client := client.NewClient()
+
 	for i := 0; i < chunks; i++ {
 		start := int64(i) * chunkSize
 		end := start + chunkSize - 1
@@ -111,7 +113,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 		}
 
 		errGroup.Go(func() error {
-			return m.downloadChunk(ctx, start, end, data[start:end+1], target)
+			return m.downloadChunk(ctx, client, start, end, data[start:end+1], target)
 		})
 	}
 
@@ -132,7 +134,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 	return buffer, fileSize, nil
 }
 
-func (m *BufferMode) downloadChunk(ctx context.Context, start, end int64, dataSlice []byte, target Target) error {
+func (m *BufferMode) downloadChunk(ctx context.Context, client *client.HTTPClient, start, end int64, dataSlice []byte, target Target) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", target.TrueURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to download %s", req.URL.String())
@@ -140,7 +142,7 @@ func (m *BufferMode) downloadChunk(ctx context.Context, start, end int64, dataSl
 
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 
-	resp, err := m.Client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
 	}

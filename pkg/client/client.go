@@ -32,6 +32,10 @@ type HTTPClient struct {
 	*http.Client
 }
 
+func NewClient() *HTTPClient {
+	return newClient()
+}
+
 // newClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
 // per host if the MaxConnPerHost option is set.
 func newClient() *HTTPClient {

@@ -8,6 +8,8 @@ import (
 	"github.com/replicate/pget/pkg/extract"
 )
 
+const TarExtractModeName = "tar-extract"
+
 type ExtractTarMode struct {
 }
 

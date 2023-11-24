@@ -20,6 +20,8 @@ import (
 	"github.com/replicate/pget/pkg/optname"
 )
 
+const BufferModeName = "buffer"
+
 type BufferMode struct {
 	Client *client.HTTPClient
 }

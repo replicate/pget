@@ -12,7 +12,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/cli"
-	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/logging"
 	"github.com/replicate/pget/pkg/optname"
@@ -113,6 +112,10 @@ func initializeErrGroup() *errgroup.Group {
 }
 
 func multifileExecute(manifest manifest) error {
+	mode, err := download.GetMode(download.BufferModeName)
+	if err != nil {
+		return fmt.Errorf("error getting mode: %w", err)
+	}
 	if perHostLimit := viper.GetInt(optname.MaxConnPerHost); perHostLimit > 0 {
 		logging.Logger.Debug().Int("max_connections_per_host", perHostLimit).Msg("Config")
 	}
@@ -123,12 +126,12 @@ func multifileExecute(manifest manifest) error {
 	multifileDownloadStart := time.Now()
 
 	for host, entries := range manifest {
-		err := downloadFilesFromHost(eg, entries)
+		err := downloadFilesFromHost(mode, eg, entries)
 		if err != nil {
 			return fmt.Errorf("error initiating download of files from host %s: %w", host, err)
 		}
 	}
-	err := eg.Wait()
+	err = eg.Wait()
 	if err != nil {
 		return fmt.Errorf("error downloading files: %w", err)
 	}
@@ -156,10 +159,7 @@ func aggregateAndPrintMetrics(elapsedTime time.Duration) {
 		Msg("Metrics")
 }
 
-func downloadFilesFromHost(eg *errgroup.Group, entries []manifestEntry) error {
-	// Get the correct mode
-	mode := download.GetMode(config.Mode)
-
+func downloadFilesFromHost(mode download.Mode, eg *errgroup.Group, entries []manifestEntry) error {
 	for _, entry := range entries {
 		// Avoid the `entry` loop variable being captured by the
 		// goroutine by creating new variables

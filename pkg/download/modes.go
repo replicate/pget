@@ -15,6 +15,7 @@ type modeFactory func(config ModeConfiguration) Mode
 type ModeConfiguration struct {
 	maxConnPerHost int
 	forceHTTP2     bool
+	maxRetries     int
 }
 
 type Mode interface {
@@ -43,5 +44,6 @@ func getModeConfig() ModeConfiguration {
 	return ModeConfiguration{
 		maxConnPerHost: viper.GetInt(optname.MaxConnPerHost),
 		forceHTTP2:     viper.GetBool(optname.ForceHTTP2),
+		maxRetries:     viper.GetInt(optname.Retries),
 	}
 }

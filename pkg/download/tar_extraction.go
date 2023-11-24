@@ -18,7 +18,7 @@ type ExtractTarMode struct {
 func getExtractTarMode(config ModeConfiguration) Mode {
 	return &ExtractTarMode{
 		BufferMode: BufferMode{
-			Client: client.NewHTTPClient(config.forceHTTP2, config.maxConnPerHost),
+			Client: client.NewHTTPClient(config.forceHTTP2, config.maxConnPerHost, config.maxRetries),
 		},
 	}
 }

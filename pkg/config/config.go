@@ -28,9 +28,8 @@ var (
 	Verbose          bool
 )
 
-var logger = logging.GetLogger()
-
 // HostToIPResolutionMap is a map of hostnames to IP addresses
+// TODO: Eliminate this global variable
 var HostToIPResolutionMap = make(map[string]string)
 
 func AddRootPersistentFlags(cmd *cobra.Command) error {
@@ -96,6 +95,7 @@ func setLogLevel(logLevel string) {
 }
 
 func convertResolveHostsToMap() error {
+	logger := logging.GetLogger()
 	for _, resolveHost := range viper.GetStringSlice(optname.Resolve) {
 		split := strings.SplitN(resolveHost, ":", 3)
 		if len(split) != 3 {

@@ -38,8 +38,7 @@ func (t *Target) Basename() string {
 }
 
 func (m *BufferMode) getRemoteFileSize(ctx context.Context, target Target) (string, int64, error) {
-	// Acquire a client for the head request
-	// Acquire a client for a download
+	logger := logging.GetLogger()
 	req, err := http.NewRequestWithContext(ctx, "HEAD", target.URL, nil)
 	if err != nil {
 		return "", int64(-1), fmt.Errorf("failed create request for %s", req.URL.String())
@@ -52,7 +51,7 @@ func (m *BufferMode) getRemoteFileSize(ctx context.Context, target Target) (stri
 	defer resp.Body.Close()
 	trueUrl := resp.Request.URL.String()
 	if trueUrl != target.URL {
-		logging.Logger.Info().Str("url", target.URL).Str("redirect_url", trueUrl).Msg("Redirect")
+		logger.Info().Str("url", target.URL).Str("redirect_url", trueUrl).Msg("Redirect")
 	}
 
 	fileSize := resp.ContentLength
@@ -64,6 +63,7 @@ func (m *BufferMode) getRemoteFileSize(ctx context.Context, target Target) (stri
 
 func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Buffer, int64, error) {
 	maxChunks := viper.GetInt(optname.MaxChunks)
+	logger := logging.GetLogger()
 
 	trueURL, fileSize, err := m.getRemoteFileSize(ctx, target)
 	if err != nil {
@@ -92,7 +92,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 		chunks = maxChunks
 		chunkSize = fileSize / int64(chunks)
 	}
-	logging.Logger.Debug().Str("dest", target.Dest).
+	logger.Debug().Str("dest", target.Dest).
 		Str("url", target.URL).
 		Int64("size", fileSize).
 		Int("connections", chunks).
@@ -130,7 +130,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 
 	elapsed := time.Since(startTime)
 	througput := fmt.Sprintf("%s/s", humanize.Bytes(uint64(float64(fileSize)/elapsed.Seconds())))
-	logging.Logger.Info().Str("url", target.URL).
+	logger.Info().Str("url", target.URL).
 		Str("dest", target.Dest).
 		Str("size", humanize.Bytes(uint64(fileSize))).
 		Str("elapsed", fmt.Sprintf("%.3fs", elapsed.Seconds())).
@@ -171,6 +171,7 @@ func (m *BufferMode) downloadChunk(req *http.Request, resp *http.Response, dataS
 
 func (m *BufferMode) DownloadFile(url string, dest string) (int64, time.Duration, error) {
 	ctx := context.Background()
+	logger := logging.GetLogger()
 	schemeHost, err := client.GetSchemeHostKey(url)
 	if err != nil {
 		return int64(-1), 0, fmt.Errorf("error getting scheme host key: %w", err)
@@ -188,7 +189,7 @@ func (m *BufferMode) DownloadFile(url string, dest string) (int64, time.Duration
 		return fileSize, downloadCompleteDuration, fmt.Errorf("error writing file: %w", err)
 	}
 	writeElapsed := time.Since(writeStartTime)
-	logging.Logger.Debug().
+	logger.Debug().
 		Str("dest", dest).
 		Str("elapsed", fmt.Sprintf("%.3fs", writeElapsed.Seconds())).
 		Msg("Write Complete")

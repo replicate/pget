@@ -17,6 +17,7 @@ import (
 func ExtractTarFile(buffer *bytes.Buffer, destDir string, fileSize int64) error {
 	startTime := time.Now()
 	tarReader := tar.NewReader(buffer)
+	logger := logging.GetLogger()
 
 	for {
 		header, err := tarReader.Next()
@@ -59,7 +60,7 @@ func ExtractTarFile(buffer *bytes.Buffer, destDir string, fileSize int64) error 
 	elapsed := time.Since(startTime).Seconds()
 	size := humanize.Bytes(uint64(fileSize))
 	throughput := humanize.Bytes(uint64(float64(fileSize) / elapsed))
-	logging.Logger.Info().
+	logger.Info().
 		Str("size", size).
 		Str("elapsed", fmt.Sprintf("%.3fs", elapsed)).
 		Str("throughput", throughput).

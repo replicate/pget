@@ -114,6 +114,9 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 			return nil, -1, err
 		}
 		resp, err := m.Client.Do(req)
+		if err != nil {
+			return nil, -1, fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
+		}
 		errGroup.Go(func() error {
 			return m.downloadChunk(req, resp, data[start:end+1])
 		})

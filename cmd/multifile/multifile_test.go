@@ -119,7 +119,9 @@ func TestAddDownloadMetrics(t *testing.T) {
 func TestMultifilePreRunE(t *testing.T) {
 	defer resetPostTest()
 	cmd := GetCommand()
-	config.AddFlags(cmd)
+	if err := config.AddFlags(cmd); err != nil {
+		t.Fatal(err)
+	}
 
 	// Test that extract cannot be set at the same time as multifile is used
 	viper.Set(optname.Extract, true)

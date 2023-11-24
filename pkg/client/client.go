@@ -40,7 +40,7 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 
 // NewHTTPClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
 // per host if the MaxConnPerHost option is set.
-func NewHTTPClient(forceHTTP2 bool, maxConnPerHost int) *HTTPClient {
+func NewHTTPClient(forceHTTP2 bool, maxConnPerHost, maxRetries int) *HTTPClient {
 	disableKeepAlives := !forceHTTP2
 
 	transport := &http.Transport{
@@ -67,7 +67,7 @@ func NewHTTPClient(forceHTTP2 bool, maxConnPerHost int) *HTTPClient {
 		Logger:       nil,
 		RetryWaitMin: retryMinWait,
 		RetryWaitMax: retryMaxWait,
-		RetryMax:     viper.GetInt(optname.Retries),
+		RetryMax:     maxRetries,
 		CheckRetry:   retryablehttp.DefaultRetryPolicy,
 		Backoff:      linearJitterRetryAfterBackoff,
 	}

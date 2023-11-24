@@ -39,7 +39,7 @@ func (t *Target) Basename() string {
 
 func getBufferMode(config ModeConfiguration) Mode {
 	return &BufferMode{
-		Client: client.NewHTTPClient(config.forceHTTP2, config.maxConnPerHost),
+		Client: client.NewHTTPClient(config.forceHTTP2, config.maxConnPerHost, config.maxRetries),
 	}
 }
 

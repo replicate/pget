@@ -17,7 +17,6 @@ import (
 
 var (
 	ConnTimeout      time.Duration
-	Extract          bool
 	Force            bool
 	ForceHTTP2       bool
 	IgnoreRetryAfter bool
@@ -34,9 +33,7 @@ var logger = logging.GetLogger()
 // HostToIPResolutionMap is a map of hostnames to IP addresses
 var HostToIPResolutionMap = make(map[string]string)
 
-func AddFlags(cmd *cobra.Command) error {
-	// Non-Persistent Flags (only applies to rootCMD)
-	cmd.Flags().BoolVarP(&Extract, optname.Extract, "x", false, "Extract archive after download")
+func AddRootPersistentFlags(cmd *cobra.Command) error {
 	// Persistent Flags (applies to all commands/subcommands)
 	cmd.PersistentFlags().IntVar(&MaxChunkNumber, optname.Concurrency, runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file (alias for --max-chunks)")
 	cmd.PersistentFlags().IntVarP(&MaxChunkNumber, optname.MaxChunks, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")

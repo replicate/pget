@@ -38,9 +38,9 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	return c.Client.Do(req)
 }
 
-// NewClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
+// NewHTTPClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
 // per host if the MaxConnPerHost option is set.
-func NewClient(forceHTTP2 bool, maxConnPerHost int) *HTTPClient {
+func NewHTTPClient(forceHTTP2 bool, maxConnPerHost int) *HTTPClient {
 	disableKeepAlives := !forceHTTP2
 
 	transport := &http.Transport{

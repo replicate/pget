@@ -99,7 +99,7 @@ func TestAddDownloadMetrics(t *testing.T) {
 
 func TestMultifilePreRunE(t *testing.T) {
 	cmd := GetCommand()
-	if err := config.AddFlags(cmd); err != nil {
+	if err := config.AddRootPersistentFlags(cmd); err != nil {
 		t.Fatal(err)
 	}
 

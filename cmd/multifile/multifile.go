@@ -41,9 +41,6 @@ var (
 	maxConnPerHost     int
 	maxConcurrentFiles int
 
-	metricsMu       = &sync.Mutex{}
-	downloadMetrics []multifileDownloadMetric
-
 	logger = logging.GetLogger()
 )
 
@@ -55,6 +52,11 @@ type manifestEntry struct {
 type multifileDownloadMetric struct {
 	elapsedTime time.Duration
 	fileSize    int64
+}
+
+type downhloadMetrics struct {
+	metrics []multifileDownloadMetric
+	mut     sync.Mutex
 }
 
 func GetCommand() *cobra.Command {
@@ -122,13 +124,18 @@ func multifileExecute(manifest manifest) error {
 		logger.Debug().Int("max_connections_per_host", perHostLimit).Msg("Config")
 	}
 
+	metrics := &downhloadMetrics{
+		metrics: make([]multifileDownloadMetric, 0),
+		mut:     sync.Mutex{},
+	}
+
 	// download each host's files in parallel
 	eg := initializeErrGroup()
 
 	multifileDownloadStart := time.Now()
 
 	for host, entries := range manifest {
-		err := downloadFilesFromHost(mode, eg, entries)
+		err := downloadFilesFromHost(mode, eg, entries, metrics)
 		if err != nil {
 			return fmt.Errorf("error initiating download of files from host %s: %w", host, err)
 		}
@@ -138,30 +145,30 @@ func multifileExecute(manifest manifest) error {
 		return fmt.Errorf("error downloading files: %w", err)
 	}
 
-	aggregateAndPrintMetrics(time.Since(multifileDownloadStart))
+	aggregateAndPrintMetrics(time.Since(multifileDownloadStart), metrics)
 	return nil
 }
 
-func aggregateAndPrintMetrics(elapsedTime time.Duration) {
+func aggregateAndPrintMetrics(elapsedTime time.Duration, metrics *downhloadMetrics) {
 	var totalFileSize int64
 
-	metricsMu.Lock()
-	defer metricsMu.Unlock()
+	metrics.mut.Lock()
+	defer metrics.mut.Unlock()
 
-	for _, metric := range downloadMetrics {
+	for _, metric := range metrics.metrics {
 		totalFileSize += metric.fileSize
 
 	}
 	throughput := float64(totalFileSize) / elapsedTime.Seconds()
 	logger.Info().
-		Int("file_count", len(downloadMetrics)).
+		Int("file_count", len(metrics.metrics)).
 		Str("total_bytes_downloaded", humanize.Bytes(uint64(totalFileSize))).
 		Str("throughput", fmt.Sprintf("%s/s", humanize.Bytes(uint64(throughput)))).
 		Str("elapsed_time", fmt.Sprintf("%.3fs", elapsedTime.Seconds())).
 		Msg("Metrics")
 }
 
-func downloadFilesFromHost(mode download.Mode, eg *errgroup.Group, entries []manifestEntry) error {
+func downloadFilesFromHost(mode download.Mode, eg *errgroup.Group, entries []manifestEntry, metrics *downhloadMetrics) error {
 	for _, entry := range entries {
 		// Avoid the `entry` loop variable being captured by the
 		// goroutine by creating new variables
@@ -169,27 +176,27 @@ func downloadFilesFromHost(mode download.Mode, eg *errgroup.Group, entries []man
 		logger.Debug().Str("url", url).Str("dest", dest).Msg("Queueing Download")
 
 		eg.Go(func() error {
-			return downloadAndMeasure(mode, url, dest)
+			return downloadAndMeasure(mode, url, dest, metrics)
 		})
 	}
 	return nil
 }
 
-func downloadAndMeasure(mode download.Mode, url, dest string) error {
+func downloadAndMeasure(mode download.Mode, url, dest string, metrics *downhloadMetrics) error {
 	fileSize, elapsedTime, err := mode.DownloadFile(url, dest)
 	if err != nil {
 		return err
 	}
-	addDownloadMetrics(elapsedTime, fileSize)
+	addDownloadMetrics(elapsedTime, fileSize, metrics)
 	return nil
 }
 
-func addDownloadMetrics(elapsedTime time.Duration, fileSize int64) {
+func addDownloadMetrics(elapsedTime time.Duration, fileSize int64, metrics *downhloadMetrics) {
 	result := multifileDownloadMetric{
 		elapsedTime: elapsedTime,
 		fileSize:    fileSize,
 	}
-	metricsMu.Lock()
-	defer metricsMu.Unlock()
-	downloadMetrics = append(downloadMetrics, result)
+	metrics.mut.Lock()
+	defer metrics.mut.Unlock()
+	metrics.metrics = append(metrics.metrics, result)
 }

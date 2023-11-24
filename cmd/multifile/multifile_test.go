@@ -2,6 +2,7 @@ package multifile
 
 import (
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,21 +37,20 @@ func (d *dummyMode) DownloadFile(url string, dest string) (int64, time.Duration,
 	return 100, time.Duration(1) * time.Second, nil
 }
 
-func resetPostTest() {
-	downloadMetrics = []multifileDownloadMetric{}
-	config.Mode = "buffer"
-}
-
 func TestDownloadFilesFromHost(t *testing.T) {
 	mode := &dummyMode{returnErr: false}
-	defer resetPostTest()
 
 	entries := []manifestEntry{
 		{"https://example.com/file1.txt", "/tmp/file1.txt"},
 		{"https://example.com/file2.txt", "/tmp/file2.txt"},
 	}
+
+	metrics := &downhloadMetrics{
+		mut: sync.Mutex{},
+	}
+
 	eg := initializeErrGroup()
-	_ = downloadFilesFromHost(mode, eg, entries)
+	_ = downloadFilesFromHost(mode, eg, entries, metrics)
 	err := eg.Wait()
 	assert.NoError(t, err)
 	assert.Equal(t, 2, mode.timesCalled)
@@ -60,20 +60,23 @@ func TestDownloadFilesFromHost(t *testing.T) {
 	failsMode := &dummyMode{returnErr: true}
 
 	eg = initializeErrGroup()
-	_ = downloadFilesFromHost(failsMode, eg, entries)
+	_ = downloadFilesFromHost(failsMode, eg, entries, metrics)
 	err = eg.Wait()
 	assert.Error(t, err)
 
 }
 
 func TestDownloadAndMeasure(t *testing.T) {
-	defer resetPostTest()
 
 	mode := &dummyMode{returnErr: false}
 
+	metrics := &downhloadMetrics{
+		mut: sync.Mutex{},
+	}
+
 	url := "https://example.com/file1.txt"
 	dest := "/tmp/file1.txt"
-	err := downloadAndMeasure(mode, url, dest)
+	err := downloadAndMeasure(mode, url, dest, metrics)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, mode.timesCalled)
 	assert.Equal(t, url, mode.args[0].url)
@@ -81,17 +84,20 @@ func TestDownloadAndMeasure(t *testing.T) {
 }
 
 func TestAddDownloadMetrics(t *testing.T) {
-	defer resetPostTest()
+	metrics := &downhloadMetrics{
+		metrics: []multifileDownloadMetric{},
+		mut:     sync.Mutex{},
+	}
+
 	elapsedTime := time.Duration(1) * time.Second
 	fileSize := int64(100)
-	addDownloadMetrics(elapsedTime, fileSize)
-	assert.Equal(t, 1, len(downloadMetrics))
-	assert.Equal(t, elapsedTime, downloadMetrics[0].elapsedTime)
-	assert.Equal(t, fileSize, downloadMetrics[0].fileSize)
+	addDownloadMetrics(elapsedTime, fileSize, metrics)
+	assert.Equal(t, 1, len(metrics.metrics))
+	assert.Equal(t, elapsedTime, metrics.metrics[0].elapsedTime)
+	assert.Equal(t, fileSize, metrics.metrics[0].fileSize)
 }
 
 func TestMultifilePreRunE(t *testing.T) {
-	defer resetPostTest()
 	cmd := GetCommand()
 	if err := config.AddFlags(cmd); err != nil {
 		t.Fatal(err)

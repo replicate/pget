@@ -97,7 +97,12 @@ func rootExecute(urlString, dest string) error {
 	_ = os.WriteFile(tmpFile, []byte(""), 0644)
 	defer os.Remove(tmpFile)
 
-	mode, err := download.GetMode(config.Mode)
+	modeName := download.BufferModeName
+	if viper.GetBool(optname.Extract) {
+		modeName = download.ExtractTarModeName
+	}
+
+	mode, err := download.GetMode(modeName)
 	if err != nil {
 		return fmt.Errorf("error getting mode: %w", err)
 	}

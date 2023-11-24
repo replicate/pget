@@ -24,7 +24,6 @@ var (
 	LoggingLevel     string
 	MaxChunkNumber   int
 	MinimumChunkSize string
-	Mode             string
 	ResolveHosts     []string
 	Retries          int
 	Verbose          bool
@@ -72,12 +71,20 @@ func AddFlags(cmd *cobra.Command) error {
 }
 
 func PersistentStartupProcessFlags() error {
-	Mode = "buffer"
 	if viper.GetBool(optname.Verbose) {
 		viper.Set(optname.LoggingLevel, "debug")
 	}
+	setLogLevel(viper.GetString(optname.LoggingLevel))
+	if err := convertResolveHostsToMap(); err != nil {
+		return err
+	}
+	return nil
+
+}
+
+func setLogLevel(logLevel string) {
 	// Set log-level
-	switch strings.ToLower(viper.GetString(optname.LoggingLevel)) {
+	switch logLevel {
 	case "debug":
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	case "info":
@@ -89,14 +96,6 @@ func PersistentStartupProcessFlags() error {
 	default:
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
-	if viper.GetBool(optname.Extract) {
-		Mode = "tar-extract"
-	}
-	if err := convertResolveHostsToMap(); err != nil {
-		return err
-	}
-	return nil
-
 }
 
 func convertResolveHostsToMap() error {

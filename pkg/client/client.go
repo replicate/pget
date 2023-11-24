@@ -41,7 +41,7 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 // NewClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
 // per host if the MaxConnPerHost option is set.
 func NewClient(forceHTTP2 bool, maxConnPerHost int) *HTTPClient {
-	disableKeepalives := !viper.GetBool(optname.ForceHTTP2)
+	disableKeepAlives := !forceHTTP2
 
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -54,7 +54,7 @@ func NewClient(forceHTTP2 bool, maxConnPerHost int) *HTTPClient {
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		DisableKeepAlives:     disableKeepalives,
+		DisableKeepAlives:     disableKeepAlives,
 	}
 	transport.MaxConnsPerHost = maxConnPerHost
 	transport.MaxIdleConnsPerHost = maxConnPerHost

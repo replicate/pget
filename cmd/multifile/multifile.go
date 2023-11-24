@@ -40,8 +40,6 @@ const multifileExamples = `
 var (
 	maxConnPerHost     int
 	maxConcurrentFiles int
-
-	logger = logging.GetLogger()
 )
 
 type manifestEntry struct {
@@ -105,6 +103,8 @@ func runMultifileCMD(cmd *cobra.Command, args []string) error {
 }
 
 func initializeErrGroup() *errgroup.Group {
+	logger := logging.GetLogger()
+
 	var eg errgroup.Group
 
 	// If `--max-concurrent-files` is set, limit the number of concurrent files
@@ -116,6 +116,8 @@ func initializeErrGroup() *errgroup.Group {
 }
 
 func multifileExecute(manifest manifest) error {
+	logger := logging.GetLogger()
+
 	mode, err := download.GetMode(download.BufferModeName)
 	if err != nil {
 		return fmt.Errorf("error getting mode: %w", err)
@@ -150,6 +152,8 @@ func multifileExecute(manifest manifest) error {
 }
 
 func aggregateAndPrintMetrics(elapsedTime time.Duration, metrics *downhloadMetrics) {
+	logger := logging.GetLogger()
+
 	var totalFileSize int64
 
 	metrics.mut.Lock()
@@ -169,6 +173,8 @@ func aggregateAndPrintMetrics(elapsedTime time.Duration, metrics *downhloadMetri
 }
 
 func downloadFilesFromHost(mode download.Mode, eg *errgroup.Group, entries []manifestEntry, metrics *downhloadMetrics) error {
+	logger := logging.GetLogger()
+
 	for _, entry := range entries {
 		// Avoid the `entry` loop variable being captured by the
 		// goroutine by creating new variables

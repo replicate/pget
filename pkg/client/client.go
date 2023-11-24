@@ -25,8 +25,6 @@ const (
 	retryMaxWait = 1250 * time.Millisecond
 )
 
-var logger = logging.GetLogger()
-
 // HTTPClient is a wrapper around http.Client that allows for limiting the number of concurrent connections per host
 // utilizing a client pool. If the MaxConnPerHost option is not set, the client pool will not be used.
 type HTTPClient struct {
@@ -113,6 +111,8 @@ func shouldApplyRetryAfter(resp *http.Response) bool {
 
 // checkRedirectFunc is a wrapper around http.Client.CheckRedirect that allows for printing out redirects
 func checkRedirectFunc(req *http.Request, via []*http.Request) error {
+	logger := logging.GetLogger()
+
 	logger.Trace().
 		Str("redirect_url", req.URL.String()).
 		Str("url", via[0].URL.String()).
@@ -124,6 +124,8 @@ func checkRedirectFunc(req *http.Request, via []*http.Request) error {
 // transportDialContext is a wrapper around net.Dialer that allows for overriding DNS lookups via the values passed to
 // `--resolve` argument.
 func transportDialContext(dialer *net.Dialer) func(context.Context, string, string) (net.Conn, error) {
+	logger := logging.GetLogger()
+
 	// Allow for overriding DNS lookups in the dialer without impacting Host and SSL resolution
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		if addrOverride := config.HostToIPResolutionMap[addr]; addrOverride != "" {

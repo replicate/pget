@@ -121,6 +121,8 @@ func convertResolveHostsToMap() error {
 		HostToIPResolutionMap[hostPort] = net.JoinHostPort(addr, port)
 	}
 	if logger.GetLevel() == zerolog.DebugLevel {
+		logger := logging.GetLogger()
+
 		for key, elem := range HostToIPResolutionMap {
 			logger.Debug().Str("host_port", key).Str("resolve_target", elem).Msg("Config")
 		}

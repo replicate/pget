@@ -43,6 +43,8 @@ var (
 
 	metricsMu       = &sync.Mutex{}
 	downloadMetrics []multifileDownloadMetric
+
+	logger = logging.GetLogger()
 )
 
 type manifestEntry struct {
@@ -105,7 +107,7 @@ func initializeErrGroup() *errgroup.Group {
 
 	// If `--max-concurrent-files` is set, limit the number of concurrent files
 	if concurrentFileLimit := viper.GetInt(optname.MaxConcurrentFiles); concurrentFileLimit > 0 {
-		logging.Logger.Debug().Int("concurrent_file_limit", concurrentFileLimit).Msg("Config")
+		logger.Debug().Int("concurrent_file_limit", concurrentFileLimit).Msg("Config")
 		eg.SetLimit(concurrentFileLimit)
 	}
 	return &eg
@@ -117,7 +119,7 @@ func multifileExecute(manifest manifest) error {
 		return fmt.Errorf("error getting mode: %w", err)
 	}
 	if perHostLimit := viper.GetInt(optname.MaxConnPerHost); perHostLimit > 0 {
-		logging.Logger.Debug().Int("max_connections_per_host", perHostLimit).Msg("Config")
+		logger.Debug().Int("max_connections_per_host", perHostLimit).Msg("Config")
 	}
 
 	// download each host's files in parallel
@@ -151,7 +153,7 @@ func aggregateAndPrintMetrics(elapsedTime time.Duration) {
 
 	}
 	throughput := float64(totalFileSize) / elapsedTime.Seconds()
-	logging.Logger.Info().
+	logger.Info().
 		Int("file_count", len(downloadMetrics)).
 		Str("total_bytes_downloaded", humanize.Bytes(uint64(totalFileSize))).
 		Str("throughput", fmt.Sprintf("%s/s", humanize.Bytes(uint64(throughput)))).
@@ -164,7 +166,7 @@ func downloadFilesFromHost(mode download.Mode, eg *errgroup.Group, entries []man
 		// Avoid the `entry` loop variable being captured by the
 		// goroutine by creating new variables
 		url, dest := entry.url, entry.dest
-		logging.Logger.Debug().Str("url", url).Str("dest", dest).Msg("Queueing Download")
+		logger.Debug().Str("url", url).Str("dest", dest).Msg("Queueing Download")
 
 		eg.Go(func() error {
 			return downloadAndMeasure(mode, url, dest)

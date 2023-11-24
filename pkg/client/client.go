@@ -25,7 +25,7 @@ const (
 	retryMaxWait = 1250 * time.Millisecond
 )
 
-var logger = logging.Logger
+var logger = logging.GetLogger()
 
 // HTTPClient is a wrapper around http.Client that allows for limiting the number of concurrent connections per host
 // utilizing a client pool. If the MaxConnPerHost option is not set, the client pool will not be used.

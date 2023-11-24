@@ -10,9 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var Logger zerolog.Logger
-
-func init() {
+func SetupLogger() {
 	// TODO: Make color configurable? Disabled so we don't have to deal with ANSI escape codes in our logoutput
 	output := zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339, NoColor: true}
 	output.FormatLevel = func(i interface{}) string {
@@ -22,5 +20,8 @@ func init() {
 		return fmt.Sprintf("[ %s ]", i)
 	}
 	log.Logger = zerolog.New(output).With().Timestamp().Logger()
-	Logger = log.Logger
+}
+
+func GetLogger() zerolog.Logger {
+	return log.Logger
 }

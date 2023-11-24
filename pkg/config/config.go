@@ -30,6 +30,8 @@ var (
 	Verbose          bool
 )
 
+var logger = logging.GetLogger()
+
 // HostToIPResolutionMap is a map of hostnames to IP addresses
 var HostToIPResolutionMap = make(map[string]string)
 
@@ -116,9 +118,9 @@ func convertResolveHostsToMap() error {
 		}
 		HostToIPResolutionMap[hostPort] = net.JoinHostPort(addr, port)
 	}
-	if logging.Logger.GetLevel() == zerolog.DebugLevel {
+	if logger.GetLevel() == zerolog.DebugLevel {
 		for key, elem := range HostToIPResolutionMap {
-			logging.Logger.Debug().Str("host_port", key).Str("resolve_target", elem).Msg("Config")
+			logger.Debug().Str("host_port", key).Str("resolve_target", elem).Msg("Config")
 		}
 	}
 	return nil

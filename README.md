@@ -82,12 +82,8 @@ Pipe to multifile form from another command:
   - Type `Integer`
 
 ### Global Command-Line Options
-- `--concurrency`
-    - Maximum number of chunks for downloading a given file (alias for --max-chunks)
-    - Type: `Integer`
-    - Default: `4 * runtime.NumCPU()`
 - `--max-chunks`
-    - Maximum number of chunks for downloading a given file (alias for --max-chunks)
+    - Maximum number of chunks for downloading a given file
     - Type: `Integer`
     - Default: `4 * runtime.NumCPU()`
 - `--connect-timeout`
@@ -117,6 +113,12 @@ Pipe to multifile form from another command:
   - Verbose mode (equivalent to `--log-level debug`)
   - Type: `bool`
   - Default: `false`
+
+#### Deprecated
+- `--concurrency` (deprecated, use `--max-chunks` instead)
+  - Maximum number of chunks for downloading a given file
+  - Type: `Integer`
+  - Default: `4 * runtime.NumCPU()`
 
 ## Error Handling
 

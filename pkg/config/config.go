@@ -34,7 +34,7 @@ var HostToIPResolutionMap = make(map[string]string)
 
 func AddRootPersistentFlags(cmd *cobra.Command) error {
 	// Persistent Flags (applies to all commands/subcommands)
-	cmd.PersistentFlags().IntVar(&MaxChunkNumber, optname.Concurrency, runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file (alias for --max-chunks)")
+	cmd.PersistentFlags().IntVar(&MaxChunkNumber, optname.Concurrency, runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
 	cmd.PersistentFlags().IntVarP(&MaxChunkNumber, optname.MaxChunks, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
 	cmd.PersistentFlags().DurationVar(&ConnTimeout, optname.ConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
 	cmd.PersistentFlags().StringVarP(&MinimumChunkSize, optname.MinimumChunkSize, "m", "16M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
@@ -61,6 +61,12 @@ func AddRootPersistentFlags(cmd *cobra.Command) error {
 	// Hide flags from help, these are intended to be used for testing/internal benchmarking/debugging only
 	if err := cmd.PersistentFlags().MarkHidden(optname.ForceHTTP2); err != nil {
 		return fmt.Errorf("failed to hide flag %s: %w", optname.ForceHTTP2, err)
+	}
+
+	// Deprecated flags
+	err := cmd.PersistentFlags().MarkDeprecated(optname.Concurrency, "use --max-chunks instead")
+	if err != nil {
+		return fmt.Errorf("failed to mark flag as deprecated: %w", err)
 	}
 
 	return nil

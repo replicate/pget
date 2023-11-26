@@ -80,7 +80,7 @@ func TestDownloadFilesFromHost(t *testing.T) {
 		{"https://example.com/file2.txt", "/tmp/file2.txt"},
 	}
 
-	metrics := &downhloadMetrics{
+	metrics := &downloadMetrics{
 		mut: sync.Mutex{},
 	}
 
@@ -105,7 +105,7 @@ func TestDownloadAndMeasure(t *testing.T) {
 
 	mode := getDummyMode(false)
 
-	metrics := &downhloadMetrics{
+	metrics := &downloadMetrics{
 		mut: sync.Mutex{},
 	}
 
@@ -119,7 +119,7 @@ func TestDownloadAndMeasure(t *testing.T) {
 }
 
 func TestAddDownloadMetrics(t *testing.T) {
-	metrics := &downhloadMetrics{
+	metrics := &downloadMetrics{
 		metrics: []multifileDownloadMetric{},
 		mut:     sync.Mutex{},
 	}

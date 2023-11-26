@@ -52,7 +52,7 @@ type multifileDownloadMetric struct {
 	fileSize    int64
 }
 
-type downhloadMetrics struct {
+type downloadMetrics struct {
 	metrics []multifileDownloadMetric
 	mut     sync.Mutex
 }
@@ -126,7 +126,7 @@ func multifileExecute(manifest manifest) error {
 		logger.Debug().Int("max_connections_per_host", perHostLimit).Msg("Config")
 	}
 
-	metrics := &downhloadMetrics{
+	metrics := &downloadMetrics{
 		metrics: make([]multifileDownloadMetric, 0),
 		mut:     sync.Mutex{},
 	}
@@ -151,7 +151,7 @@ func multifileExecute(manifest manifest) error {
 	return nil
 }
 
-func aggregateAndPrintMetrics(elapsedTime time.Duration, metrics *downhloadMetrics) {
+func aggregateAndPrintMetrics(elapsedTime time.Duration, metrics *downloadMetrics) {
 	logger := logging.GetLogger()
 
 	var totalFileSize int64
@@ -172,7 +172,7 @@ func aggregateAndPrintMetrics(elapsedTime time.Duration, metrics *downhloadMetri
 		Msg("Metrics")
 }
 
-func downloadFilesFromHost(mode download.Mode, eg *errgroup.Group, entries []manifestEntry, metrics *downhloadMetrics) error {
+func downloadFilesFromHost(mode download.Mode, eg *errgroup.Group, entries []manifestEntry, metrics *downloadMetrics) error {
 	logger := logging.GetLogger()
 
 	for _, entry := range entries {
@@ -188,7 +188,7 @@ func downloadFilesFromHost(mode download.Mode, eg *errgroup.Group, entries []man
 	return nil
 }
 
-func downloadAndMeasure(mode download.Mode, url, dest string, metrics *downhloadMetrics) error {
+func downloadAndMeasure(mode download.Mode, url, dest string, metrics *downloadMetrics) error {
 	fileSize, elapsedTime, err := mode.DownloadFile(url, dest)
 	if err != nil {
 		return err
@@ -197,7 +197,7 @@ func downloadAndMeasure(mode download.Mode, url, dest string, metrics *downhload
 	return nil
 }
 
-func addDownloadMetrics(elapsedTime time.Duration, fileSize int64, metrics *downhloadMetrics) {
+func addDownloadMetrics(elapsedTime time.Duration, fileSize int64, metrics *downloadMetrics) {
 	result := multifileDownloadMetric{
 		elapsedTime: elapsedTime,
 		fileSize:    fileSize,

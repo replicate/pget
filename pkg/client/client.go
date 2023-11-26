@@ -36,10 +36,16 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	return c.Client.Do(req)
 }
 
+type HTTPClientOpts struct {
+	ForceHTTP2     bool
+	MaxConnPerHost int
+	MaxRetries     int
+}
+
 // NewHTTPClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
 // per host if the MaxConnPerHost option is set.
-func NewHTTPClient(forceHTTP2 bool, maxConnPerHost, maxRetries int) *HTTPClient {
-	disableKeepAlives := !forceHTTP2
+func NewHTTPClient(opts HTTPClientOpts) *HTTPClient {
+	disableKeepAlives := !opts.ForceHTTP2
 
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -47,15 +53,15 @@ func NewHTTPClient(forceHTTP2 bool, maxConnPerHost, maxRetries int) *HTTPClient 
 			Timeout:   viper.GetDuration(optname.ConnTimeout),
 			KeepAlive: 30 * time.Second,
 		}),
-		ForceAttemptHTTP2:     forceHTTP2,
+		ForceAttemptHTTP2:     opts.ForceHTTP2,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		DisableKeepAlives:     disableKeepAlives,
 	}
-	transport.MaxConnsPerHost = maxConnPerHost
-	transport.MaxIdleConnsPerHost = maxConnPerHost
+	transport.MaxConnsPerHost = opts.MaxConnPerHost
+	transport.MaxIdleConnsPerHost = opts.MaxConnPerHost
 
 	retryClient := &retryablehttp.Client{
 		HTTPClient: &http.Client{
@@ -65,7 +71,7 @@ func NewHTTPClient(forceHTTP2 bool, maxConnPerHost, maxRetries int) *HTTPClient 
 		Logger:       nil,
 		RetryWaitMin: retryMinWait,
 		RetryWaitMax: retryMaxWait,
-		RetryMax:     maxRetries,
+		RetryMax:     opts.MaxRetries,
 		CheckRetry:   retryablehttp.DefaultRetryPolicy,
 		Backoff:      linearJitterRetryAfterBackoff,
 	}

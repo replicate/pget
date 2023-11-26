@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/cli"
+	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/logging"
 	"github.com/replicate/pget/pkg/optname"
@@ -118,7 +119,13 @@ func initializeErrGroup() *errgroup.Group {
 func multifileExecute(manifest manifest) error {
 	logger := logging.GetLogger()
 
-	mode, err := download.GetMode(download.BufferModeName)
+	clientOpts := client.HTTPClientOpts{
+		MaxConnPerHost: viper.GetInt(optname.MaxConnPerHost),
+		ForceHTTP2:     viper.GetBool(optname.ForceHTTP2),
+		MaxRetries:     viper.GetInt(optname.Retries),
+	}
+	httpClient := client.NewHTTPClient(clientOpts)
+	mode, err := download.GetMode(download.BufferModeName, httpClient)
 	if err != nil {
 		return fmt.Errorf("error getting mode: %w", err)
 	}

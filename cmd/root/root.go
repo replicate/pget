@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/replicate/pget/pkg/cli"
+	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/optname"
@@ -107,8 +108,13 @@ func rootExecute(urlString, dest string) error {
 	if viper.GetBool(optname.Extract) {
 		modeName = download.ExtractTarModeName
 	}
-
-	mode, err := download.GetMode(modeName)
+	clientOpts := client.HTTPClientOpts{
+		MaxConnPerHost: viper.GetInt(optname.MaxConnPerHost),
+		ForceHTTP2:     viper.GetBool(optname.ForceHTTP2),
+		MaxRetries:     viper.GetInt(optname.Retries),
+	}
+	httpClient := client.NewHTTPClient(clientOpts)
+	mode, err := download.GetMode(modeName, httpClient)
 	if err != nil {
 		return fmt.Errorf("error getting mode: %w", err)
 	}

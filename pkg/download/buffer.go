@@ -37,9 +37,9 @@ func (t *Target) Basename() string {
 	return filepath.Base(t.Dest)
 }
 
-func getBufferMode(config ModeConfiguration) Mode {
+func getBufferMode(client *client.HTTPClient) Mode {
 	return &BufferMode{
-		Client: client.NewHTTPClient(config.forceHTTP2, config.maxConnPerHost, config.maxRetries),
+		Client: client,
 	}
 }
 

@@ -3,6 +3,8 @@ package download
 import (
 	"testing"
 
+	"github.com/replicate/pget/pkg/client"
+
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 
@@ -10,6 +12,12 @@ import (
 )
 
 func TestGetMode(t *testing.T) {
+	clientOpts := client.HTTPClientOpts{
+		MaxConnPerHost: viper.GetInt(optname.MaxConnPerHost),
+		ForceHTTP2:     viper.GetBool(optname.ForceHTTP2),
+		MaxRetries:     viper.GetInt(optname.Retries),
+	}
+	httpClient := client.NewHTTPClient(clientOpts)
 	testCases := []struct {
 		name     string
 		modeName string
@@ -22,7 +30,7 @@ func TestGetMode(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mode, err := GetMode(tc.modeName)
+			mode, err := GetMode(tc.modeName, httpClient)
 			assert.IsType(t, tc.mode, mode)
 			assert.Equal(t, tc.err, err != nil)
 		})
@@ -30,12 +38,12 @@ func TestGetMode(t *testing.T) {
 }
 
 func TestGetBufferMode(t *testing.T) {
-	config := getModeConfig()
-	assert.IsType(t, &BufferMode{}, getBufferMode(config))
-}
+	clientOpts := client.HTTPClientOpts{
+		MaxConnPerHost: viper.GetInt(optname.MaxConnPerHost),
+		ForceHTTP2:     viper.GetBool(optname.ForceHTTP2),
+		MaxRetries:     viper.GetInt(optname.Retries),
+	}
+	httpClient := client.NewHTTPClient(clientOpts)
 
-func TestGetModeConfig(t *testing.T) {
-	config := getModeConfig()
-	assert.Equal(t, viper.GetInt(optname.MaxConnPerHost), config.maxConnPerHost)
-	assert.Equal(t, viper.GetBool(optname.ForceHTTP2), config.forceHTTP2)
+	assert.IsType(t, &BufferMode{}, getBufferMode(httpClient))
 }

@@ -59,7 +59,9 @@ func (m *BufferMode) getRemoteFileSize(ctx context.Context, target Target) (stri
 	if trueUrl != target.URL {
 		logger.Info().Str("url", target.URL).Str("redirect_url", trueUrl).Msg("Redirect")
 	}
-
+	if resp.StatusCode == 0 || resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", int64(-1), fmt.Errorf("unexpected http status downloading %s: %s", req.URL.String(), resp.Status)
+	}
 	fileSize := resp.ContentLength
 	if fileSize <= 0 {
 		return "", int64(-1), fmt.Errorf("unable to determine file size")
@@ -124,6 +126,9 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 		resp, err := m.Client.Do(req)
 		if err != nil {
 			return nil, -1, fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
+		}
+		if resp.StatusCode == 0 || resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return &bytes.Buffer{}, -1, fmt.Errorf("unexpected http status downloading %s: %s", req.URL.String(), resp.Status)
 		}
 		errGroup.Go(func() error {
 			return m.downloadChunk(req, resp, data[start:end+1])

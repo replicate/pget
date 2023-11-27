@@ -1,4 +1,4 @@
-package download_test
+package download
 
 import (
 	"io"
@@ -13,7 +13,6 @@ import (
 	"testing/iotest"
 
 	"github.com/replicate/pget/pkg/client"
-	"github.com/replicate/pget/pkg/download"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,7 +26,7 @@ func init() {
 	zerolog.SetGlobalLevel(zerolog.WarnLevel)
 }
 
-func makeBufferMode() *download.BufferMode {
+func makeBufferMode() *BufferMode {
 	clientOpts := client.Options{
 		MaxConnPerHost: 40,
 		ForceHTTP2:     false,
@@ -35,7 +34,7 @@ func makeBufferMode() *download.BufferMode {
 	}
 	client := client.NewHTTPClient(clientOpts)
 
-	return &download.BufferMode{Client: client}
+	return &BufferMode{Client: client}
 }
 
 func tempFilename() string {
@@ -138,16 +137,3 @@ func BenchmarkDownload10K(b *testing.B)  { benchmarkDownloadSingleFile(10*1024, 
 func BenchmarkDownload10M(b *testing.B)  { benchmarkDownloadSingleFile(10*1024*1024, b) }
 func BenchmarkDownload100M(b *testing.B) { benchmarkDownloadSingleFile(100*1024*1024, b) }
 func BenchmarkDownload1G(b *testing.B)   { benchmarkDownloadSingleFile(1024*1024*1024, b) }
-func BenchmarkDownload10G(b *testing.B)  { benchmarkDownloadSingleFile(10*1024*1024*1024, b) }
-
-func BenchmarkDownloadDollyTensors(b *testing.B) {
-	bufferMode := makeBufferMode()
-
-	for n := 0; n < b.N; n++ {
-		dest := tempFilename()
-		defer os.Remove(dest)
-
-		_, _, err := bufferMode.DownloadFile("https://storage.googleapis.com/replicate-weights/dolly-v2-12b-fp16.tensors", dest)
-		assert.NoError(b, err)
-	}
-}

@@ -12,10 +12,11 @@ import (
 	"testing/fstest"
 	"testing/iotest"
 
-	"github.com/replicate/pget/pkg/client"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/replicate/pget/pkg/client"
 )
 
 var testFS = fstest.MapFS{

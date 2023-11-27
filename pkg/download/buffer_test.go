@@ -139,3 +139,15 @@ func BenchmarkDownload10M(b *testing.B)  { benchmarkDownloadSingleFile(10*1024*1
 func BenchmarkDownload100M(b *testing.B) { benchmarkDownloadSingleFile(100*1024*1024, b) }
 func BenchmarkDownload1G(b *testing.B)   { benchmarkDownloadSingleFile(1024*1024*1024, b) }
 func BenchmarkDownload10G(b *testing.B)  { benchmarkDownloadSingleFile(10*1024*1024*1024, b) }
+
+func BenchmarkDownloadDollyTensors(b *testing.B) {
+	bufferMode := makeBufferMode()
+
+	for n := 0; n < b.N; n++ {
+		dest := tempFilename()
+		defer os.Remove(dest)
+
+		_, _, err := bufferMode.DownloadFile("https://storage.googleapis.com/replicate-weights/dolly-v2-12b-fp16.tensors", dest)
+		assert.NoError(b, err)
+	}
+}

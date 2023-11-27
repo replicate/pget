@@ -20,6 +20,7 @@ import (
 )
 
 const BufferModeName = "buffer"
+const defaultMinChunkSize = 16 * 1024 * 1024
 
 type BufferMode struct {
 	Client *client.HTTPClient
@@ -56,7 +57,7 @@ func (m *BufferMode) maxChunks() int {
 func (m *BufferMode) minChunkSize() int64 {
 	minChunkSize := m.MinChunkSize
 	if minChunkSize == 0 {
-		return 16 * 1024 * 1024
+		return defaultMinChunkSize
 	}
 	return minChunkSize
 }

@@ -26,15 +26,13 @@ func init() {
 	zerolog.SetGlobalLevel(zerolog.WarnLevel)
 }
 
-func makeBufferMode() *BufferMode {
-	clientOpts := client.Options{
-		MaxConnPerHost: 40,
-		ForceHTTP2:     false,
-		MaxRetries:     2,
-	}
-	client := client.NewHTTPClient(clientOpts)
+var defaultOpts = Options{Client: client.Options{}}
+var http2Opts = Options{Client: client.Options{ForceHTTP2: true}}
 
-	return &BufferMode{Client: client}
+func makeBufferMode(opts Options) *BufferMode {
+	client := client.NewHTTPClient(opts.Client)
+
+	return &BufferMode{Client: client, Options: opts}
 }
 
 func tempFilename() string {
@@ -94,7 +92,7 @@ func TestDownloadSmallFile(t *testing.T) {
 	dest := tempFilename()
 	defer os.Remove(dest)
 
-	bufferMode := makeBufferMode()
+	bufferMode := makeBufferMode(defaultOpts)
 
 	_, _, err := bufferMode.DownloadFile(ts.URL+"/hello.txt", dest)
 	assert.NoError(t, err)
@@ -102,7 +100,7 @@ func TestDownloadSmallFile(t *testing.T) {
 	assertFileHasContent(t, testFS["hello.txt"].Data, dest)
 }
 
-func benchmarkDownloadSingleFile(size int64, b *testing.B) {
+func benchmarkDownloadSingleFile(opts Options, size int64, b *testing.B) {
 	dir, err := os.MkdirTemp("", "pget-buffer-test")
 	require.NoError(b, err)
 	defer os.RemoveAll(dir)
@@ -114,7 +112,7 @@ func benchmarkDownloadSingleFile(size int64, b *testing.B) {
 	ts := httptest.NewServer(http.FileServer(http.Dir(dir)))
 	defer ts.Close()
 
-	bufferMode := makeBufferMode()
+	bufferMode := makeBufferMode(opts)
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
@@ -133,7 +131,14 @@ func benchmarkDownloadSingleFile(size int64, b *testing.B) {
 	}
 }
 
-func BenchmarkDownload10K(b *testing.B)  { benchmarkDownloadSingleFile(10*1024, b) }
-func BenchmarkDownload10M(b *testing.B)  { benchmarkDownloadSingleFile(10*1024*1024, b) }
-func BenchmarkDownload100M(b *testing.B) { benchmarkDownloadSingleFile(100*1024*1024, b) }
-func BenchmarkDownload1G(b *testing.B)   { benchmarkDownloadSingleFile(1024*1024*1024, b) }
+func BenchmarkDownload10K(b *testing.B)  { benchmarkDownloadSingleFile(defaultOpts, 10*1024, b) }
+func BenchmarkDownload10M(b *testing.B)  { benchmarkDownloadSingleFile(defaultOpts, 10*1024*1024, b) }
+func BenchmarkDownload100M(b *testing.B) { benchmarkDownloadSingleFile(defaultOpts, 100*1024*1024, b) }
+func BenchmarkDownload1G(b *testing.B)   { benchmarkDownloadSingleFile(defaultOpts, 1024*1024*1024, b) }
+
+func BenchmarkDownload10KH2(b *testing.B) { benchmarkDownloadSingleFile(http2Opts, 10*1024, b) }
+func BenchmarkDownload10MH2(b *testing.B) { benchmarkDownloadSingleFile(http2Opts, 10*1024*1024, b) }
+func BenchmarkDownload100MH2(b *testing.B) {
+	benchmarkDownloadSingleFile(http2Opts, 100*1024*1024, b)
+}
+func BenchmarkDownload1GH2(b *testing.B) { benchmarkDownloadSingleFile(http2Opts, 1024*1024*1024, b) }

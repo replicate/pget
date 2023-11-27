@@ -119,13 +119,23 @@ func initializeErrGroup() *errgroup.Group {
 func multifileExecute(manifest manifest) error {
 	logger := logging.GetLogger()
 
-	clientOpts := client.HTTPClientOpts{
+	minChunkSize, err := humanize.ParseBytes(viper.GetString(optname.MinimumChunkSize))
+	if err != nil {
+		return err
+	}
+
+	clientOpts := client.Options{
 		MaxConnPerHost: viper.GetInt(optname.MaxConnPerHost),
 		ForceHTTP2:     viper.GetBool(optname.ForceHTTP2),
 		MaxRetries:     viper.GetInt(optname.Retries),
+		ConnectTimeout: viper.GetDuration(optname.ConnTimeout),
 	}
-	httpClient := client.NewHTTPClient(clientOpts)
-	mode, err := download.GetMode(download.BufferModeName, httpClient)
+	downloadOpts := download.Options{
+		MaxChunks:    viper.GetInt(optname.MaxChunks),
+		MinChunkSize: int64(minChunkSize),
+		Client:       clientOpts,
+	}
+	mode, err := download.GetMode(download.BufferModeName, downloadOpts)
 	if err != nil {
 		return fmt.Errorf("error getting mode: %w", err)
 	}

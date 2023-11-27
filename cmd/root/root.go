@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dustin/go-humanize"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -104,17 +105,23 @@ func rootExecute(urlString, dest string) error {
 	_ = os.WriteFile(tmpFile, []byte(""), 0644)
 	defer os.Remove(tmpFile)
 
-	modeName := download.BufferModeName
-	if viper.GetBool(optname.Extract) {
-		modeName = download.ExtractTarModeName
+	minChunkSize, err := humanize.ParseBytes(viper.GetString(optname.MinimumChunkSize))
+	if err != nil {
+		return err
 	}
-	clientOpts := client.HTTPClientOpts{
+
+	clientOpts := client.Options{
 		MaxConnPerHost: viper.GetInt(optname.MaxConnPerHost),
 		ForceHTTP2:     viper.GetBool(optname.ForceHTTP2),
 		MaxRetries:     viper.GetInt(optname.Retries),
+		ConnectTimeout: viper.GetDuration(optname.ConnTimeout),
 	}
-	httpClient := client.NewHTTPClient(clientOpts)
-	mode, err := download.GetMode(modeName, httpClient)
+	downloadOpts := download.Options{
+		MaxChunks:    viper.GetInt(optname.MaxChunks),
+		MinChunkSize: int64(minChunkSize),
+		Client:       clientOpts,
+	}
+	mode, err := download.GetMode(download.BufferModeName, downloadOpts)
 	if err != nil {
 		return fmt.Errorf("error getting mode: %w", err)
 	}

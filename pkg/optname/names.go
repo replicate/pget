@@ -6,7 +6,6 @@ const (
 	Extract            = "extract"
 	Force              = "force"
 	ForceHTTP2         = "force-http2"
-	IgnoreRetryAfter   = "ignore-retry-after"
 	LoggingLevel       = "log-level"
 	MaxConnPerHost     = "max-conn-per-host"
 	MaxChunks          = "max-chunks"

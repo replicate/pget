@@ -7,10 +7,22 @@ import (
 	"github.com/replicate/pget/pkg/client"
 )
 
-type modeFactory func(client *client.HTTPClient) Mode
+type modeFactory func(opts Options) Mode
 
 type Mode interface {
 	DownloadFile(url string, dest string) (fileSize int64, elapsedTime time.Duration, err error)
+}
+
+type Options struct {
+
+	// Maximum number of chunks to download. If set to zero, GOMAXPROCS*4
+	// will be used.
+	MaxChunks int
+
+	// Minimum number of bytes per chunk. If set to zero, 16 MiB will be
+	// used.
+	MinChunkSize int64
+	Client       client.Options
 }
 
 func modeFactories() map[string]modeFactory {
@@ -20,10 +32,10 @@ func modeFactories() map[string]modeFactory {
 	}
 }
 
-func GetMode(name string, client *client.HTTPClient) (Mode, error) {
+func GetMode(name string, opts Options) (Mode, error) {
 	factory, ok := modeFactories()[name]
 	if !ok {
 		return nil, fmt.Errorf("unknown mode: %s", name)
 	}
-	return factory(client), nil
+	return factory(opts), nil
 }

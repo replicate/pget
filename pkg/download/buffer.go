@@ -9,21 +9,21 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/logging"
-	"github.com/replicate/pget/pkg/optname"
 )
 
 const BufferModeName = "buffer"
 
 type BufferMode struct {
 	Client *client.HTTPClient
+	Options
 }
 
 type Target struct {
@@ -37,10 +37,28 @@ func (t *Target) Basename() string {
 	return filepath.Base(t.Dest)
 }
 
-func getBufferMode(client *client.HTTPClient) Mode {
+func getBufferMode(opts Options) Mode {
+	client := client.NewHTTPClient(opts.Client)
 	return &BufferMode{
-		Client: client,
+		Client:  client,
+		Options: opts,
 	}
+}
+
+func (m *BufferMode) maxChunks() int {
+	maxChunks := m.MaxChunks
+	if maxChunks == 0 {
+		return runtime.GOMAXPROCS(0) * 4
+	}
+	return maxChunks
+}
+
+func (m *BufferMode) minChunkSize() int64 {
+	minChunkSize := m.MinChunkSize
+	if minChunkSize == 0 {
+		return 16 * 1024 * 1024
+	}
+	return minChunkSize
 }
 
 func (m *BufferMode) getRemoteFileSize(ctx context.Context, target Target) (string, int64, error) {
@@ -70,7 +88,6 @@ func (m *BufferMode) getRemoteFileSize(ctx context.Context, target Target) (stri
 }
 
 func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Buffer, int64, error) {
-	maxChunks := viper.GetInt(optname.MaxChunks)
 	logger := logging.GetLogger()
 
 	trueURL, fileSize, err := m.getRemoteFileSize(ctx, target)
@@ -81,14 +98,9 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 		target.TrueURL = trueURL
 	}
 
-	// TODO split this into separate functions
-	minChunkSize, err := humanize.ParseBytes(viper.GetString(optname.MinimumChunkSize))
-	if err != nil {
-		return nil, -1, fmt.Errorf("unable to parse minimum chunk size: %v", err)
-	}
-	chunkSize := fileSize / int64(maxChunks)
-	if chunkSize < int64(minChunkSize) {
-		chunkSize = int64(minChunkSize)
+	chunkSize := fileSize / int64(m.maxChunks())
+	if chunkSize < m.minChunkSize() {
+		chunkSize = m.minChunkSize()
 	}
 	if chunkSize < 0 {
 		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
@@ -96,8 +108,8 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 	// not more than one connection per min chunk size
 	chunks := int(math.Ceil(float64(fileSize) / float64(chunkSize)))
 
-	if chunks > maxChunks {
-		chunks = maxChunks
+	if chunks > m.maxChunks() {
+		chunks = m.maxChunks()
 		chunkSize = fileSize / int64(chunks)
 	}
 	logger.Debug().Str("dest", target.Dest).

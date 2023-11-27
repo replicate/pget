@@ -10,11 +10,9 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/spf13/viper"
 
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/logging"
-	"github.com/replicate/pget/pkg/optname"
 	"github.com/replicate/pget/pkg/version"
 )
 
@@ -36,21 +34,22 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	return c.Client.Do(req)
 }
 
-type HTTPClientOpts struct {
+type Options struct {
 	ForceHTTP2     bool
 	MaxConnPerHost int
 	MaxRetries     int
+	ConnectTimeout time.Duration
 }
 
 // NewHTTPClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
 // per host if the MaxConnPerHost option is set.
-func NewHTTPClient(opts HTTPClientOpts) *HTTPClient {
+func NewHTTPClient(opts Options) *HTTPClient {
 	disableKeepAlives := !opts.ForceHTTP2
 
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: transportDialContext(&net.Dialer{
-			Timeout:   viper.GetDuration(optname.ConnTimeout),
+			Timeout:   opts.ConnectTimeout,
 			KeepAlive: 30 * time.Second,
 		}),
 		ForceAttemptHTTP2:     opts.ForceHTTP2,
@@ -112,7 +111,7 @@ func evaluateRetryAfter(resp *http.Response) time.Duration {
 }
 
 func shouldApplyRetryAfter(resp *http.Response) bool {
-	return !viper.GetBool(optname.IgnoreRetryAfter) && resp != nil && resp.StatusCode == http.StatusTooManyRequests
+	return resp != nil && resp.StatusCode == http.StatusTooManyRequests
 }
 
 // checkRedirectFunc is a wrapper around http.Client.CheckRedirect that allows for printing out redirects

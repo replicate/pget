@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/download"
@@ -85,9 +86,9 @@ func TestDownloadFilesFromHost(t *testing.T) {
 		mut: sync.Mutex{},
 	}
 
-	ctx, eg := initializeErrGroup(context.Background())
-	_ = downloadFilesFromHost(ctx, mode, eg, entries, metrics)
-	err := eg.Wait()
+	errGroup, ctx := errgroup.WithContext(context.Background())
+	_ = downloadFilesFromHost(ctx, mode, errGroup, entries, metrics)
+	err := errGroup.Wait()
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(mode.Args()))
 	assert.Contains(t, mode.Args(), dummyModeCallerArgs{entries[0].url, entries[0].dest})
@@ -95,9 +96,9 @@ func TestDownloadFilesFromHost(t *testing.T) {
 
 	failsMode := getDummyMode(true)
 
-	ctx, eg = initializeErrGroup(context.Background())
-	_ = downloadFilesFromHost(ctx, failsMode, eg, entries, metrics)
-	err = eg.Wait()
+	errGroup, ctx = errgroup.WithContext(context.Background())
+	_ = downloadFilesFromHost(ctx, failsMode, errGroup, entries, metrics)
+	err = errGroup.Wait()
 	_ = failsMode.Args()
 	assert.Error(t, err)
 }

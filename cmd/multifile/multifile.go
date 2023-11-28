@@ -40,8 +40,7 @@ const multifileExamples = `
 
 // multifile mode config vars
 var (
-	maxConnPerHost     int
-	maxConcurrentFiles int
+	maxConnPerHost int
 )
 
 type manifestEntry struct {
@@ -71,7 +70,6 @@ func GetCommand() *cobra.Command {
 	}
 
 	cmd.PersistentFlags().IntVar(&maxConnPerHost, optname.MaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host (default 40)")
-	cmd.PersistentFlags().IntVar(&maxConcurrentFiles, optname.MaxConcurrentFiles, 40, "Maximum number of files to download concurrently")
 	err := viper.BindPFlags(cmd.PersistentFlags())
 	if err != nil {
 		fmt.Println(err)
@@ -102,19 +100,6 @@ func runMultifileCMD(cmd *cobra.Command, args []string) error {
 	}
 
 	return multifileExecute(cmd.Context(), manifest)
-}
-
-func initializeErrGroup(ctx context.Context) (context.Context, *errgroup.Group) {
-	logger := logging.GetLogger()
-	var eg *errgroup.Group
-	eg, ctx = errgroup.WithContext(ctx)
-
-	// If `--max-concurrent-files` is set, limit the number of concurrent files
-	if concurrentFileLimit := viper.GetInt(optname.MaxConcurrentFiles); concurrentFileLimit > 0 {
-		logger.Debug().Int("concurrent_file_limit", concurrentFileLimit).Msg("Config")
-		eg.SetLimit(concurrentFileLimit)
-	}
-	return ctx, eg
 }
 
 func multifileExecute(ctx context.Context, manifest manifest) error {
@@ -151,7 +136,7 @@ func multifileExecute(ctx context.Context, manifest manifest) error {
 	}
 
 	// download each host's files in parallel
-	ctx, errGroup = initializeErrGroup(ctx)
+	errGroup, ctx = errgroup.WithContext(ctx)
 
 	multifileDownloadStart := time.Now()
 

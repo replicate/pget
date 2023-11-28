@@ -4,10 +4,7 @@
 package download
 
 import (
-	"context"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func BenchmarkDownload10G(b *testing.B) {

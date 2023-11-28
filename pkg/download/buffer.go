@@ -198,8 +198,7 @@ func (m *BufferMode) downloadChunk(resp *http.Response, dataSlice []byte) error 
 	return nil
 }
 
-func (m *BufferMode) DownloadFile(url string, dest string) (int64, time.Duration, error) {
-	ctx := context.Background()
+func (m *BufferMode) DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {
 	logger := logging.GetLogger()
 	schemeHost, err := client.GetSchemeHostKey(url)
 	if err != nil {

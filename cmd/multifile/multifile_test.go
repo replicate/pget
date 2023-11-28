@@ -1,6 +1,7 @@
 package multifile
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -28,7 +29,7 @@ type dummyMode struct {
 // ensure *dummyMode implements download.Mode
 var _ download.Mode = &dummyMode{}
 
-func (d *dummyMode) DownloadFile(url string, dest string) (int64, time.Duration, error) {
+func (d *dummyMode) DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {
 	d.calls <- dummyModeCallerArgs{url, dest}
 	if d.returnErr {
 		return -1, time.Duration(0), errors.New("test error")
@@ -84,8 +85,8 @@ func TestDownloadFilesFromHost(t *testing.T) {
 		mut: sync.Mutex{},
 	}
 
-	eg := initializeErrGroup()
-	_ = downloadFilesFromHost(mode, eg, entries, metrics)
+	ctx, eg := initializeErrGroup(context.Background())
+	_ = downloadFilesFromHost(ctx, mode, eg, entries, metrics)
 	err := eg.Wait()
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(mode.Args()))
@@ -94,8 +95,8 @@ func TestDownloadFilesFromHost(t *testing.T) {
 
 	failsMode := getDummyMode(true)
 
-	eg = initializeErrGroup()
-	_ = downloadFilesFromHost(failsMode, eg, entries, metrics)
+	ctx, eg = initializeErrGroup(context.Background())
+	_ = downloadFilesFromHost(ctx, failsMode, eg, entries, metrics)
 	err = eg.Wait()
 	_ = failsMode.Args()
 	assert.Error(t, err)
@@ -111,7 +112,7 @@ func TestDownloadAndMeasure(t *testing.T) {
 
 	url := "https://example.com/file1.txt"
 	dest := "/tmp/file1.txt"
-	err := downloadAndMeasure(mode, url, dest, metrics)
+	err := downloadAndMeasure(context.Background(), mode, url, dest, metrics)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(mode.Args()))
 	assert.Equal(t, url, mode.Arg(0).url)

@@ -1,6 +1,7 @@
 package multifile
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sync"
@@ -100,24 +101,25 @@ func runMultifileCMD(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error processing manifest file %s: %w", manifestPath, err)
 	}
 
-	return multifileExecute(manifest)
+	return multifileExecute(cmd.Context(), manifest)
 }
 
-func initializeErrGroup() *errgroup.Group {
+func initializeErrGroup(ctx context.Context) (context.Context, *errgroup.Group) {
 	logger := logging.GetLogger()
-
-	var eg errgroup.Group
+	var eg *errgroup.Group
+	eg, ctx = errgroup.WithContext(ctx)
 
 	// If `--max-concurrent-files` is set, limit the number of concurrent files
 	if concurrentFileLimit := viper.GetInt(optname.MaxConcurrentFiles); concurrentFileLimit > 0 {
 		logger.Debug().Int("concurrent_file_limit", concurrentFileLimit).Msg("Config")
 		eg.SetLimit(concurrentFileLimit)
 	}
-	return &eg
+	return ctx, eg
 }
 
-func multifileExecute(manifest manifest) error {
+func multifileExecute(ctx context.Context, manifest manifest) error {
 	logger := logging.GetLogger()
+	var errGroup *errgroup.Group
 
 	minChunkSize, err := humanize.ParseBytes(viper.GetString(optname.MinimumChunkSize))
 	if err != nil {
@@ -149,17 +151,17 @@ func multifileExecute(manifest manifest) error {
 	}
 
 	// download each host's files in parallel
-	eg := initializeErrGroup()
+	ctx, errGroup = initializeErrGroup(ctx)
 
 	multifileDownloadStart := time.Now()
 
 	for host, entries := range manifest {
-		err := downloadFilesFromHost(mode, eg, entries, metrics)
+		err := downloadFilesFromHost(ctx, mode, errGroup, entries, metrics)
 		if err != nil {
 			return fmt.Errorf("error initiating download of files from host %s: %w", host, err)
 		}
 	}
-	err = eg.Wait()
+	err = errGroup.Wait()
 	if err != nil {
 		return fmt.Errorf("error downloading files: %w", err)
 	}
@@ -189,7 +191,7 @@ func aggregateAndPrintMetrics(elapsedTime time.Duration, metrics *downloadMetric
 		Msg("Metrics")
 }
 
-func downloadFilesFromHost(mode download.Mode, eg *errgroup.Group, entries []manifestEntry, metrics *downloadMetrics) error {
+func downloadFilesFromHost(ctx context.Context, mode download.Mode, eg *errgroup.Group, entries []manifestEntry, metrics *downloadMetrics) error {
 	logger := logging.GetLogger()
 
 	for _, entry := range entries {
@@ -199,14 +201,14 @@ func downloadFilesFromHost(mode download.Mode, eg *errgroup.Group, entries []man
 		logger.Debug().Str("url", url).Str("dest", dest).Msg("Queueing Download")
 
 		eg.Go(func() error {
-			return downloadAndMeasure(mode, url, dest, metrics)
+			return downloadAndMeasure(ctx, mode, url, dest, metrics)
 		})
 	}
 	return nil
 }
 
-func downloadAndMeasure(mode download.Mode, url, dest string, metrics *downloadMetrics) error {
-	fileSize, elapsedTime, err := mode.DownloadFile(url, dest)
+func downloadAndMeasure(ctx context.Context, mode download.Mode, url, dest string, metrics *downloadMetrics) error {
+	fileSize, elapsedTime, err := mode.DownloadFile(ctx, url, dest)
 	if err != nil {
 		return err
 	}

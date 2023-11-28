@@ -96,7 +96,7 @@ func TestDownloadSmallFile(t *testing.T) {
 
 	bufferMode := makeBufferMode(defaultOpts)
 
-	_, _, err := bufferMode.DownloadFile(ts.URL+"/hello.txt", dest)
+	_, _, err := bufferMode.DownloadFile(context.Background(), ts.URL+"/hello.txt", dest)
 	assert.NoError(t, err)
 
 	assertFileHasContent(t, testFS["hello.txt"].Data, dest)
@@ -119,7 +119,7 @@ func testDownloadSingleFile(opts Options, size int64, t *testing.T) {
 	dest := tempFilename()
 	defer os.Remove(dest)
 
-	_, _, err = bufferMode.DownloadFile(ts.URL+"/random-bytes", dest)
+	_, _, err = bufferMode.DownloadFile(context.Background(), ts.URL+"/random-bytes", dest)
 	assert.NoError(t, err)
 
 	cmd := exec.Command("diff", "-q", srcFilename, dest)

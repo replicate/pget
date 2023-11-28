@@ -1,6 +1,7 @@
 package root
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -80,7 +81,7 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := rootExecute(urlString, dest); err != nil {
+	if err := rootExecute(cmd.Context(), urlString, dest); err != nil {
 		return err
 	}
 
@@ -89,7 +90,7 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 
 // rootExecute is the main function of the program and encapsulates the general logic
 // returns any/all errors to the caller.
-func rootExecute(urlString, dest string) error {
+func rootExecute(ctx context.Context, urlString, dest string) error {
 	// allows us to see how many pget procs are running at a time
 	tmpFile := fmt.Sprintf("/tmp/.pget-%d", os.Getpid())
 	_ = os.WriteFile(tmpFile, []byte(""), 0644)
@@ -114,6 +115,6 @@ func rootExecute(urlString, dest string) error {
 	if err != nil {
 		return fmt.Errorf("error getting mode: %w", err)
 	}
-	_, _, err = mode.DownloadFile(urlString, dest)
+	_, _, err = mode.DownloadFile(ctx, urlString, dest)
 	return err
 }

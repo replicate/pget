@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -21,6 +23,8 @@ import (
 
 const BufferModeName = "buffer"
 const defaultMinChunkSize = 16 * 1024 * 1024
+
+var contentRangeRegexp = regexp.MustCompile(`^bytes .*/([0-9]+)$`)
 
 type BufferMode struct {
 	Client *client.HTTPClient
@@ -62,48 +66,50 @@ func (m *BufferMode) minChunkSize() int64 {
 	return minChunkSize
 }
 
-func (m *BufferMode) getRemoteFileSize(ctx context.Context, target Target) (string, int64, error) {
-	logger := logging.GetLogger()
-	req, err := http.NewRequestWithContext(ctx, "HEAD", target.URL, nil)
-	if err != nil {
-		return "", int64(-1), fmt.Errorf("failed create request for %s", req.URL.String())
+func (m *BufferMode) getFileSizeFromContentRange(contentRange string) (int64, error) {
+	groups := contentRangeRegexp.FindStringSubmatch(contentRange)
+	if groups == nil {
+		return -1, fmt.Errorf("Couldn't parse Content-Range: %s", contentRange)
 	}
-
-	resp, err := m.Client.Do(req)
-	if err != nil {
-		return "", int64(-1), err
-	}
-	defer resp.Body.Close()
-	trueUrl := resp.Request.URL.String()
-	if trueUrl != target.URL {
-		logger.Info().Str("url", target.URL).Str("redirect_url", trueUrl).Msg("Redirect")
-	}
-	if resp.StatusCode == 0 || resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", int64(-1), fmt.Errorf("unexpected http status downloading %s: %s", req.URL.String(), resp.Status)
-	}
-	fileSize := resp.ContentLength
-	if fileSize <= 0 {
-		return "", int64(-1), fmt.Errorf("unable to determine file size")
-	}
-	return trueUrl, fileSize, nil
+	return strconv.ParseInt(groups[1], 10, 64)
 }
 
 func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Buffer, int64, error) {
 	logger := logging.GetLogger()
 
-	trueURL, fileSize, err := m.getRemoteFileSize(ctx, target)
+	firstChunkResp, err := m.doRequest(ctx, 0, m.minChunkSize()-1, target)
 	if err != nil {
 		return nil, -1, err
 	}
+
+	trueURL := firstChunkResp.Request.URL.String()
 	if trueURL != target.URL {
+		logger.Info().Str("url", target.URL).Str("redirect_url", trueURL).Msg("Redirect")
 		target.TrueURL = trueURL
 	}
 
-	chunkSize := fileSize / int64(m.maxChunks())
+	fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
+	if err != nil {
+		firstChunkResp.Body.Close()
+		return nil, -1, err
+	}
+
+	data := make([]byte, fileSize)
+	if fileSize < m.minChunkSize() {
+		// we only need a single chunk: just download it and finish
+		err = m.downloadChunk(firstChunkResp, data[0:fileSize])
+		if err != nil {
+			return nil, -1, err
+		}
+		return bytes.NewBuffer(data), fileSize, nil
+	}
+
+	chunkSize := (fileSize - m.minChunkSize()) / int64(m.maxChunks()-1)
 	if chunkSize < m.minChunkSize() {
 		chunkSize = m.minChunkSize()
 	}
 	if chunkSize < 0 {
+		firstChunkResp.Body.Close()
 		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
 	}
 	// not more than one connection per min chunk size
@@ -122,29 +128,25 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 
 	errGroup, ctx := errgroup.WithContext(ctx)
 
-	data := make([]byte, fileSize)
 	startTime := time.Now()
 
-	for i := 0; i < chunks; i++ {
+	errGroup.Go(func() error {
+		return m.downloadChunk(firstChunkResp, data[0:m.minChunkSize()])
+	})
+
+	for i := 1; i < chunks; i++ {
 		start := int64(i) * chunkSize
 		end := start + chunkSize - 1
 
 		if i == chunks-1 {
 			end = fileSize - 1
 		}
-		req, err := m.makeRequest(ctx, start, end, target)
+		resp, err := m.doRequest(ctx, start, end, target)
 		if err != nil {
 			return nil, -1, err
 		}
-		resp, err := m.Client.Do(req)
-		if err != nil {
-			return nil, -1, fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
-		}
-		if resp.StatusCode == 0 || resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return &bytes.Buffer{}, -1, fmt.Errorf("unexpected http status downloading %s: %s", req.URL.String(), resp.Status)
-		}
 		errGroup.Go(func() error {
-			return m.downloadChunk(req, resp, data[start:end+1])
+			return m.downloadChunk(resp, data[start:end+1])
 		})
 	}
 
@@ -165,30 +167,33 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 	return buffer, fileSize, nil
 }
 
-func (m *BufferMode) makeRequest(ctx context.Context, start, end int64, target Target) (*http.Request, error) {
-
+func (m *BufferMode) doRequest(ctx context.Context, start, end int64, target Target) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", target.TrueURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to download %s", req.URL.String())
+		return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
 	}
-
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 
+	resp, err := m.Client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
 	}
-	return req, nil
+	if resp.StatusCode == 0 || resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("unexpected http status downloading %s: %s", req.URL.String(), resp.Status)
+	}
+
+	return resp, nil
 }
 
-func (m *BufferMode) downloadChunk(req *http.Request, resp *http.Response, dataSlice []byte) error {
+func (m *BufferMode) downloadChunk(resp *http.Response, dataSlice []byte) error {
 	defer resp.Body.Close()
 	expectedBytes := len(dataSlice)
 	n, err := io.ReadFull(resp.Body, dataSlice)
 	if err != nil && err != io.EOF {
-		return fmt.Errorf("error reading response for %s: %w", req.URL.String(), err)
+		return fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)
 	}
 	if n != expectedBytes {
-		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, expectedBytes, req.URL.String())
+		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, expectedBytes, resp.Request.URL.String())
 	}
 	return nil
 }

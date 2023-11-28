@@ -1,6 +1,7 @@
 package download
 
 import (
+	"context"
 	"io"
 	"math/rand"
 	"net/http"
@@ -132,6 +133,18 @@ func benchmarkDownloadSingleFile(opts Options, size int64, b *testing.B) {
 	}
 }
 
+func benchmarkDownloadURL(opts Options, url string, b *testing.B) {
+	bufferMode := makeBufferMode(opts)
+
+	for n := 0; n < b.N; n++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		_, _, err := bufferMode.fileToBuffer(ctx, Target{URL: url, TrueURL: url})
+		assert.NoError(b, err)
+	}
+}
+
 func BenchmarkDownload10K(b *testing.B)  { benchmarkDownloadSingleFile(defaultOpts, 10*1024, b) }
 func BenchmarkDownload10M(b *testing.B)  { benchmarkDownloadSingleFile(defaultOpts, 10*1024*1024, b) }
 func BenchmarkDownload100M(b *testing.B) { benchmarkDownloadSingleFile(defaultOpts, 100*1024*1024, b) }
@@ -143,3 +156,10 @@ func BenchmarkDownload100MH2(b *testing.B) {
 	benchmarkDownloadSingleFile(http2Opts, 100*1024*1024, b)
 }
 func BenchmarkDownload1GH2(b *testing.B) { benchmarkDownloadSingleFile(http2Opts, 1024*1024*1024, b) }
+
+func BenchmarkDownloadBert(b *testing.B) {
+	benchmarkDownloadURL(defaultOpts, "https://storage.googleapis.com/replicate-weights/bert-base-uncased-hf-cache.tar", b)
+}
+func BenchmarkDownloadBertH2(b *testing.B) {
+	benchmarkDownloadURL(defaultOpts, "https://storage.googleapis.com/replicate-weights/bert-base-uncased-hf-cache.tar", b)
+}

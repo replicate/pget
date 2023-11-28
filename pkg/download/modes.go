@@ -1,6 +1,7 @@
 package download
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 type modeFactory func(opts Options) Mode
 
 type Mode interface {
-	DownloadFile(url string, dest string) (fileSize int64, elapsedTime time.Duration, err error)
+	DownloadFile(ctx context.Context, url string, dest string) (fileSize int64, elapsedTime time.Duration, err error)
 }
 
 type Options struct {

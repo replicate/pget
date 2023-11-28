@@ -91,11 +91,6 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 // rootExecute is the main function of the program and encapsulates the general logic
 // returns any/all errors to the caller.
 func rootExecute(ctx context.Context, urlString, dest string) error {
-	// allows us to see how many pget procs are running at a time
-	tmpFile := fmt.Sprintf("/tmp/.pget-%d", os.Getpid())
-	_ = os.WriteFile(tmpFile, []byte(""), 0644)
-	defer os.Remove(tmpFile)
-
 	minChunkSize, err := humanize.ParseBytes(viper.GetString(optname.MinimumChunkSize))
 	if err != nil {
 		return err

@@ -1,0 +1,2 @@
+https://storage.googleapis.com/replicate-weights/bert-base-uncased-hf-cache.tar medium-dl-bert-base.tar
+https://storage.googleapis.com/replicate-hf-weights/openai/whisper-large-v3/1940b900b8d4d8fdf72a31be85a0d223b9488e00/model.fp32-00002-of-00002.safetensors medium-dl-whisper.safetensors

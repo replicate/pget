@@ -102,36 +102,35 @@ func TestDownloadSmallFile(t *testing.T) {
 	assertFileHasContent(t, testFS["hello.txt"].Data, dest)
 }
 
-func benchmarkDownloadSingleFile(opts Options, size int64, b *testing.B) {
+func testDownloadSingleFile(opts Options, size int64, t *testing.T) {
 	dir, err := os.MkdirTemp("", "pget-buffer-test")
-	require.NoError(b, err)
+	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	srcFilename := filepath.Join(dir, "random-bytes")
 
-	writeRandomFile(b, srcFilename, size)
+	writeRandomFile(t, srcFilename, size)
 
 	ts := httptest.NewServer(http.FileServer(http.Dir(dir)))
 	defer ts.Close()
 
 	bufferMode := makeBufferMode(opts)
 
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		dest := tempFilename()
-		defer os.Remove(dest)
+	dest := tempFilename()
+	defer os.Remove(dest)
 
-		_, _, err = bufferMode.DownloadFile(ts.URL+"/random-bytes", dest)
-		assert.NoError(b, err)
+	_, _, err = bufferMode.DownloadFile(ts.URL+"/random-bytes", dest)
+	assert.NoError(t, err)
 
-		// don't count `diff` in benchmark time
-		b.StopTimer()
-		cmd := exec.Command("diff", "-q", srcFilename, dest)
-		err = cmd.Run()
-		assert.NoError(b, err, "source file and dest file should be identical")
-		b.StartTimer()
-	}
+	cmd := exec.Command("diff", "-q", srcFilename, dest)
+	err = cmd.Run()
+	assert.NoError(t, err, "source file and dest file should be identical")
 }
+
+func TestDownload10MH1(t *testing.T)  { testDownloadSingleFile(defaultOpts, 10*1024*1024, t) }
+func TestDownload100MH1(t *testing.T) { testDownloadSingleFile(defaultOpts, 100*1024*1024, t) }
+func TestDownload10MH2(t *testing.T)  { testDownloadSingleFile(http2Opts, 10*1024*1024, t) }
+func TestDownload100MH2(t *testing.T) { testDownloadSingleFile(http2Opts, 100*1024*1024, t) }
 
 func benchmarkDownloadURL(opts Options, url string, b *testing.B) {
 	bufferMode := makeBufferMode(opts)
@@ -145,21 +144,15 @@ func benchmarkDownloadURL(opts Options, url string, b *testing.B) {
 	}
 }
 
-func BenchmarkDownload10K(b *testing.B)  { benchmarkDownloadSingleFile(defaultOpts, 10*1024, b) }
-func BenchmarkDownload10M(b *testing.B)  { benchmarkDownloadSingleFile(defaultOpts, 10*1024*1024, b) }
-func BenchmarkDownload100M(b *testing.B) { benchmarkDownloadSingleFile(defaultOpts, 100*1024*1024, b) }
-func BenchmarkDownload1G(b *testing.B)   { benchmarkDownloadSingleFile(defaultOpts, 1024*1024*1024, b) }
-
-func BenchmarkDownload10KH2(b *testing.B) { benchmarkDownloadSingleFile(http2Opts, 10*1024, b) }
-func BenchmarkDownload10MH2(b *testing.B) { benchmarkDownloadSingleFile(http2Opts, 10*1024*1024, b) }
-func BenchmarkDownload100MH2(b *testing.B) {
-	benchmarkDownloadSingleFile(http2Opts, 100*1024*1024, b)
-}
-func BenchmarkDownload1GH2(b *testing.B) { benchmarkDownloadSingleFile(http2Opts, 1024*1024*1024, b) }
-
-func BenchmarkDownloadBert(b *testing.B) {
+func BenchmarkDownloadBertH1(b *testing.B) {
 	benchmarkDownloadURL(defaultOpts, "https://storage.googleapis.com/replicate-weights/bert-base-uncased-hf-cache.tar", b)
 }
 func BenchmarkDownloadBertH2(b *testing.B) {
-	benchmarkDownloadURL(defaultOpts, "https://storage.googleapis.com/replicate-weights/bert-base-uncased-hf-cache.tar", b)
+	benchmarkDownloadURL(http2Opts, "https://storage.googleapis.com/replicate-weights/bert-base-uncased-hf-cache.tar", b)
+}
+func BenchmarkDownloadLlama7bChatH1(b *testing.B) {
+	benchmarkDownloadURL(defaultOpts, "https://storage.googleapis.com/replicate-weights/Llama-2-7b-Chat-GPTQ/gptq_model-4bit-32g.safetensors", b)
+}
+func BenchmarkDownloadLlama7bChatH2(b *testing.B) {
+	benchmarkDownloadURL(http2Opts, "https://storage.googleapis.com/replicate-weights/Llama-2-7b-Chat-GPTQ/gptq_model-4bit-32g.safetensors", b)
 }

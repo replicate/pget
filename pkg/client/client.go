@@ -44,7 +44,7 @@ type Options struct {
 // NewHTTPClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
 // per host if the MaxConnPerHost option is set.
 func NewHTTPClient(opts Options) *HTTPClient {
-	disableKeepAlives := !opts.ForceHTTP2
+	disableKeepAlives := opts.ForceHTTP2
 
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,

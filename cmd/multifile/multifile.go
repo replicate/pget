@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
 
+	pget "github.com/replicate/pget/pkg"
 	"github.com/replicate/pget/pkg/cli"
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/download"
@@ -56,6 +57,11 @@ type multifileDownloadMetric struct {
 type downloadMetrics struct {
 	metrics []multifileDownloadMetric
 	mut     sync.Mutex
+}
+
+// test seam
+type Getter interface {
+	DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error)
 }
 
 func GetCommand() *cobra.Command {
@@ -122,7 +128,9 @@ func multifileExecute(ctx context.Context, manifest manifest) error {
 		MinChunkSize: int64(minChunkSize),
 		Client:       clientOpts,
 	}
-	mode := download.GetBufferMode(downloadOpts)
+	getter := &pget.Getter{
+		Downloader: download.GetBufferMode(downloadOpts),
+	}
 	if perHostLimit := viper.GetInt(optname.MaxConnPerHost); perHostLimit > 0 {
 		logger.Debug().Int("max_connections_per_host", perHostLimit).Msg("Config")
 	}
@@ -138,7 +146,7 @@ func multifileExecute(ctx context.Context, manifest manifest) error {
 	multifileDownloadStart := time.Now()
 
 	for host, entries := range manifest {
-		err := downloadFilesFromHost(ctx, mode, errGroup, entries, metrics)
+		err := downloadFilesFromHost(ctx, getter, errGroup, entries, metrics)
 		if err != nil {
 			return fmt.Errorf("error initiating download of files from host %s: %w", host, err)
 		}
@@ -173,7 +181,7 @@ func aggregateAndPrintMetrics(elapsedTime time.Duration, metrics *downloadMetric
 		Msg("Metrics")
 }
 
-func downloadFilesFromHost(ctx context.Context, mode download.Mode, eg *errgroup.Group, entries []manifestEntry, metrics *downloadMetrics) error {
+func downloadFilesFromHost(ctx context.Context, getter Getter, eg *errgroup.Group, entries []manifestEntry, metrics *downloadMetrics) error {
 	logger := logging.GetLogger()
 
 	for _, entry := range entries {
@@ -183,14 +191,14 @@ func downloadFilesFromHost(ctx context.Context, mode download.Mode, eg *errgroup
 		logger.Debug().Str("url", url).Str("dest", dest).Msg("Queueing Download")
 
 		eg.Go(func() error {
-			return downloadAndMeasure(ctx, mode, url, dest, metrics)
+			return downloadAndMeasure(ctx, getter, url, dest, metrics)
 		})
 	}
 	return nil
 }
 
-func downloadAndMeasure(ctx context.Context, mode download.Mode, url, dest string, metrics *downloadMetrics) error {
-	fileSize, elapsedTime, err := mode.DownloadFile(ctx, url, dest)
+func downloadAndMeasure(ctx context.Context, getter Getter, url, dest string, metrics *downloadMetrics) error {
+	fileSize, elapsedTime, err := getter.DownloadFile(ctx, url, dest)
 	if err != nil {
 		return err
 	}

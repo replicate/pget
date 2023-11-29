@@ -7,7 +7,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"os"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -189,25 +188,4 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (result io.Reader, f
 		return nil, 0, err
 	}
 	return buffer, fileSize, nil
-}
-
-func (m *BufferMode) DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {
-	logger := logging.GetLogger()
-	downloadStartTime := time.Now()
-	buffer, fileSize, err := m.fileToBuffer(ctx, url)
-	if err != nil {
-		return fileSize, 0, err
-	}
-	downloadCompleteDuration := time.Since(downloadStartTime)
-	writeStartTime := time.Now()
-	err = os.WriteFile(dest, buffer.Bytes(), 0644)
-	if err != nil {
-		return fileSize, downloadCompleteDuration, fmt.Errorf("error writing file: %w", err)
-	}
-	writeElapsed := time.Since(writeStartTime)
-	logger.Debug().
-		Str("dest", dest).
-		Str("elapsed", fmt.Sprintf("%.3fs", writeElapsed.Seconds())).
-		Msg("Write Complete")
-	return fileSize, downloadCompleteDuration, nil
 }

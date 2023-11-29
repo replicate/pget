@@ -30,11 +30,6 @@ type BufferMode struct {
 	Options
 }
 
-type Target struct {
-	URL     string
-	TrueURL string
-}
-
 func GetBufferMode(opts Options) Mode {
 	client := client.NewHTTPClient(opts.Client)
 	return &BufferMode{
@@ -67,18 +62,17 @@ func (m *BufferMode) getFileSizeFromContentRange(contentRange string) (int64, er
 	return strconv.ParseInt(groups[1], 10, 64)
 }
 
-func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Buffer, int64, error) {
+func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffer, int64, error) {
 	logger := logging.GetLogger()
 
-	firstChunkResp, err := m.doRequest(ctx, 0, m.minChunkSize()-1, target)
+	firstChunkResp, err := m.doRequest(ctx, 0, m.minChunkSize()-1, url)
 	if err != nil {
 		return nil, -1, err
 	}
 
 	trueURL := firstChunkResp.Request.URL.String()
-	if trueURL != target.URL {
-		logger.Info().Str("url", target.URL).Str("redirect_url", trueURL).Msg("Redirect")
-		target.TrueURL = trueURL
+	if trueURL != url {
+		logger.Info().Str("url", url).Str("redirect_url", trueURL).Msg("Redirect")
 	}
 
 	fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
@@ -112,7 +106,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 		chunks = m.maxChunks()
 		chunkSize = fileSize / int64(chunks)
 	}
-	logger.Debug().Str("url", target.URL).
+	logger.Debug().Str("url", url).
 		Int64("size", fileSize).
 		Int("connections", chunks).
 		Int64("chunkSize", chunkSize).
@@ -133,7 +127,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 		if i == chunks-1 {
 			end = fileSize - 1
 		}
-		resp, err := m.doRequest(ctx, start, end, target)
+		resp, err := m.doRequest(ctx, start, end, trueURL)
 		if err != nil {
 			return nil, -1, err
 		}
@@ -148,7 +142,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 
 	elapsed := time.Since(startTime)
 	througput := fmt.Sprintf("%s/s", humanize.Bytes(uint64(float64(fileSize)/elapsed.Seconds())))
-	logger.Info().Str("url", target.URL).
+	logger.Info().Str("url", url).
 		Str("size", humanize.Bytes(uint64(fileSize))).
 		Str("elapsed", fmt.Sprintf("%.3fs", elapsed.Seconds())).
 		Str("throughput", througput).
@@ -158,8 +152,8 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 	return buffer, fileSize, nil
 }
 
-func (m *BufferMode) doRequest(ctx context.Context, start, end int64, target Target) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", target.TrueURL, nil)
+func (m *BufferMode) doRequest(ctx context.Context, start, end int64, trueURL string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", trueURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
 	}
@@ -192,8 +186,7 @@ func (m *BufferMode) downloadChunk(resp *http.Response, dataSlice []byte) error 
 func (m *BufferMode) DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {
 	logger := logging.GetLogger()
 	downloadStartTime := time.Now()
-	target := Target{URL: url, TrueURL: url}
-	buffer, fileSize, err := m.fileToBuffer(ctx, target)
+	buffer, fileSize, err := m.fileToBuffer(ctx, url)
 	if err != nil {
 		return fileSize, 0, err
 	}

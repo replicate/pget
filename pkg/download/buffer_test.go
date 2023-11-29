@@ -139,7 +139,7 @@ func benchmarkDownloadURL(opts Options, url string, b *testing.B) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		_, _, err := bufferMode.fileToBuffer(ctx, Target{URL: url, TrueURL: url})
+		_, _, err := bufferMode.fileToBuffer(ctx, url)
 		assert.NoError(b, err)
 	}
 }

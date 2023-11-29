@@ -27,7 +27,7 @@ func GetExtractTarMode(opts Options) Mode {
 
 func (m *ExtractTarMode) DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {
 	startTime := time.Now()
-	target := Target{URL: url, TrueURL: url, Dest: dest}
+	target := Target{URL: url, TrueURL: url}
 	buffer, fileSize, err := m.fileToBuffer(ctx, target)
 	if err != nil {
 		return int64(-1), 0, fmt.Errorf("error downloading file: %w", err)

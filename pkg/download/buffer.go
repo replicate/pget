@@ -8,7 +8,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -34,12 +33,7 @@ type BufferMode struct {
 type Target struct {
 	URL           string
 	TrueURL       string
-	Dest          string
 	SchemeHostKey string
-}
-
-func (t *Target) Basename() string {
-	return filepath.Base(t.Dest)
 }
 
 func GetBufferMode(opts Options) Mode {
@@ -119,8 +113,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 		chunks = m.maxChunks()
 		chunkSize = fileSize / int64(chunks)
 	}
-	logger.Debug().Str("dest", target.Dest).
-		Str("url", target.URL).
+	logger.Debug().Str("url", target.URL).
 		Int64("size", fileSize).
 		Int("connections", chunks).
 		Int64("chunkSize", chunkSize).
@@ -157,7 +150,6 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, target Target) (*bytes.Bu
 	elapsed := time.Since(startTime)
 	througput := fmt.Sprintf("%s/s", humanize.Bytes(uint64(float64(fileSize)/elapsed.Seconds())))
 	logger.Info().Str("url", target.URL).
-		Str("dest", target.Dest).
 		Str("size", humanize.Bytes(uint64(fileSize))).
 		Str("elapsed", fmt.Sprintf("%.3fs", elapsed.Seconds())).
 		Str("throughput", througput).
@@ -205,7 +197,7 @@ func (m *BufferMode) DownloadFile(ctx context.Context, url string, dest string) 
 		return int64(-1), 0, fmt.Errorf("error getting scheme host key: %w", err)
 	}
 	downloadStartTime := time.Now()
-	target := Target{URL: url, TrueURL: url, Dest: dest, SchemeHostKey: schemeHost}
+	target := Target{URL: url, TrueURL: url, SchemeHostKey: schemeHost}
 	buffer, fileSize, err := m.fileToBuffer(ctx, target)
 	if err != nil {
 		return fileSize, 0, err

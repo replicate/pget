@@ -1,7 +1,7 @@
 //go:build slow
 // +build slow
 
-package download
+package download_test
 
 import (
 	"testing"

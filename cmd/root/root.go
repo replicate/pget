@@ -10,9 +10,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	pget "github.com/replicate/pget/pkg"
 	"github.com/replicate/pget/pkg/cli"
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
+	"github.com/replicate/pget/pkg/consumer"
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/optname"
 )
@@ -106,11 +108,14 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		MinChunkSize: int64(minChunkSize),
 		Client:       clientOpts,
 	}
-	modeFn := download.GetBufferMode
-	if viper.GetBool(optname.Extract) {
-		modeFn = download.GetExtractTarMode
+	getter := pget.Getter{
+		Downloader: download.GetBufferMode(downloadOpts),
 	}
-	mode := modeFn(downloadOpts)
-	_, _, err = mode.DownloadFile(ctx, urlString, dest)
+
+	if viper.GetBool(optname.Extract) {
+		getter.Consumer = &consumer.TarExtracter{}
+	}
+
+	_, _, err = getter.DownloadFile(ctx, urlString, dest)
 	return err
 }

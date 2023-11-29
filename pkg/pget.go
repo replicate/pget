@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+
 	"github.com/replicate/pget/pkg/consumer"
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/logging"

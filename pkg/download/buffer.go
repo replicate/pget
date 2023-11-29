@@ -4,16 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"math"
 	"net/http"
 	"regexp"
 	"runtime"
 	"strconv"
-	"time"
-
-	"github.com/dustin/go-humanize"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/logging"
@@ -112,9 +109,6 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 		Msg("Downloading")
 
 	errGroup, ctx := errgroup.WithContext(ctx)
-
-	startTime := time.Now()
-
 	errGroup.Go(func() error {
 		return m.downloadChunk(firstChunkResp, data[0:m.minChunkSize()])
 	})
@@ -138,14 +132,6 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 	if err := errGroup.Wait(); err != nil {
 		return nil, -1, err // return the first error we encounter
 	}
-
-	elapsed := time.Since(startTime)
-	througput := fmt.Sprintf("%s/s", humanize.Bytes(uint64(float64(fileSize)/elapsed.Seconds())))
-	logger.Info().Str("url", url).
-		Str("size", humanize.Bytes(uint64(fileSize))).
-		Str("elapsed", fmt.Sprintf("%.3fs", elapsed.Seconds())).
-		Str("throughput", througput).
-		Msg("Complete")
 
 	buffer := bytes.NewBuffer(data)
 	return buffer, fileSize, nil

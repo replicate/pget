@@ -74,7 +74,7 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 	urlString := args[0]
 	dest := args[1]
 
-	log.Info().Str("urlString", urlString).
+	log.Info().Str("url", urlString).
 		Str("dest", dest).
 		Str("minimum_chunk_size", viper.GetString(optname.MinimumChunkSize)).
 		Msg("Initiating")

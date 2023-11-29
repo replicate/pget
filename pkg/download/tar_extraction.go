@@ -15,7 +15,7 @@ type ExtractTarMode struct {
 	BufferMode
 }
 
-func getExtractTarMode(opts Options) Mode {
+func GetExtractTarMode(opts Options) Mode {
 	client := client.NewHTTPClient(opts.Client)
 	return &ExtractTarMode{
 		BufferMode: BufferMode{

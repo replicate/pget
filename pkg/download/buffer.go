@@ -42,7 +42,7 @@ func (t *Target) Basename() string {
 	return filepath.Base(t.Dest)
 }
 
-func getBufferMode(opts Options) Mode {
+func GetBufferMode(opts Options) Mode {
 	client := client.NewHTTPClient(opts.Client)
 	return &BufferMode{
 		Client:  client,

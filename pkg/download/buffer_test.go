@@ -3,7 +3,6 @@ package download_test
 import (
 	"context"
 	"testing"
-	"testing/fstest"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -11,10 +10,6 @@ import (
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/download"
 )
-
-var testFS = fstest.MapFS{
-	"hello.txt": {Data: []byte("hello, world!")},
-}
 
 func init() {
 	zerolog.SetGlobalLevel(zerolog.WarnLevel)

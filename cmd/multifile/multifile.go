@@ -122,10 +122,7 @@ func multifileExecute(ctx context.Context, manifest manifest) error {
 		MinChunkSize: int64(minChunkSize),
 		Client:       clientOpts,
 	}
-	mode, err := download.GetMode(download.BufferModeName, downloadOpts)
-	if err != nil {
-		return fmt.Errorf("error getting mode: %w", err)
-	}
+	mode := download.GetBufferMode(downloadOpts)
 	if perHostLimit := viper.GetInt(optname.MaxConnPerHost); perHostLimit > 0 {
 		logger.Debug().Int("max_connections_per_host", perHostLimit).Msg("Config")
 	}

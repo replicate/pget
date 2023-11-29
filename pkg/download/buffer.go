@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"io"
 	"math"
 	"net/http"
 	"regexp"
 	"runtime"
 	"strconv"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/logging"

@@ -11,7 +11,7 @@ import (
 	"github.com/replicate/pget/pkg/logging"
 )
 
-func ExtractTarFile(reader io.Reader, destDir string) error {
+func TarFile(reader io.Reader, destDir string) error {
 	startTime := time.Now()
 	tarReader := tar.NewReader(reader)
 	logger := logging.GetLogger()

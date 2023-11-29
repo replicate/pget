@@ -17,7 +17,6 @@ import (
 	"github.com/replicate/pget/pkg/logging"
 )
 
-const BufferModeName = "buffer"
 const defaultMinChunkSize = 16 * 1024 * 1024
 
 var contentRangeRegexp = regexp.MustCompile(`^bytes .*/([0-9]+)$`)
@@ -54,7 +53,7 @@ func (m *BufferMode) minChunkSize() int64 {
 func (m *BufferMode) getFileSizeFromContentRange(contentRange string) (int64, error) {
 	groups := contentRangeRegexp.FindStringSubmatch(contentRange)
 	if groups == nil {
-		return -1, fmt.Errorf("Couldn't parse Content-Range: %s", contentRange)
+		return -1, fmt.Errorf("couldn't parse Content-Range: %s", contentRange)
 	}
 	return strconv.ParseInt(groups[1], 10, 64)
 }

@@ -113,7 +113,7 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 	}
 
 	if viper.GetBool(optname.Extract) {
-		getter.Consumer = &consumer.TarExtracter{}
+		getter.Consumer = &consumer.TarExtractor{}
 	}
 
 	_, _, err = getter.DownloadFile(ctx, urlString, dest)

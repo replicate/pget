@@ -16,6 +16,10 @@ func ExtractTarFile(reader io.Reader, destDir string) error {
 	tarReader := tar.NewReader(reader)
 	logger := logging.GetLogger()
 
+	logger.Debug().
+		Str("extractor", "tar").
+		Str("status", "starting").
+		Msg("Extract")
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
@@ -55,8 +59,10 @@ func ExtractTarFile(reader io.Reader, destDir string) error {
 		}
 	}
 	elapsed := time.Since(startTime).Seconds()
-	logger.Info().
-		Str("elapsed", fmt.Sprintf("%.3fs", elapsed)).
-		Msg("Extracted")
+	logger.Debug().
+		Str("extractor", "tar").
+		Float64("elapsed_time", elapsed).
+		Str("status", "complete").
+		Msg("Extract")
 	return nil
 }

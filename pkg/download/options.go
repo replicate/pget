@@ -1,15 +1,8 @@
 package download
 
 import (
-	"context"
-	"time"
-
 	"github.com/replicate/pget/pkg/client"
 )
-
-type Mode interface {
-	DownloadFile(ctx context.Context, url string, dest string) (fileSize int64, elapsedTime time.Duration, err error)
-}
 
 type Options struct {
 	// Maximum number of chunks to download. If set to zero, GOMAXPROCS*4

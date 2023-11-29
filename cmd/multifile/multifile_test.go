@@ -12,26 +12,25 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/config"
-	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/optname"
 )
 
-type dummyModeCallerArgs struct {
+type dummyGetterCallerArgs struct {
 	url  string
 	dest string
 }
 
-type dummyMode struct {
-	args      []dummyModeCallerArgs
+type dummyGetter struct {
+	args      []dummyGetterCallerArgs
 	returnErr bool
-	calls     chan dummyModeCallerArgs
+	calls     chan dummyGetterCallerArgs
 }
 
-// ensure *dummyMode implements download.Mode
-var _ download.Mode = &dummyMode{}
+// ensure *dummyGetter implements Getter
+var _ Getter = &dummyGetter{}
 
-func (d *dummyMode) DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {
-	d.calls <- dummyModeCallerArgs{url, dest}
+func (d *dummyGetter) DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {
+	d.calls <- dummyGetterCallerArgs{url, dest}
 	if d.returnErr {
 		return -1, time.Duration(0), errors.New("test error")
 	}
@@ -39,7 +38,7 @@ func (d *dummyMode) DownloadFile(ctx context.Context, url string, dest string) (
 }
 
 // Args returns the args that DownloadFile was called with.
-func (d *dummyMode) Args() []dummyModeCallerArgs {
+func (d *dummyGetter) Args() []dummyGetterCallerArgs {
 DONE:
 	// non-blocking read the whole channel into d.args
 	for {
@@ -53,29 +52,19 @@ DONE:
 	return d.args
 }
 
-func (d *dummyMode) Arg(i int) dummyModeCallerArgs {
+func (d *dummyGetter) Arg(i int) dummyGetterCallerArgs {
 	return d.Args()[i]
 }
 
-// initializeDummyMode returns a download.Mode that returns an error if returnErr is true
-// This function returns a download.Mode instead of a *dummyMode so that we can ensure
-// that *dummyMode implements download.Mode
-func initializeDummyMode(returnErr bool) download.Mode {
-	dummy := &dummyMode{
+func getDummyGetter(returnErr bool) *dummyGetter {
+	return &dummyGetter{
 		returnErr: returnErr,
-		calls:     make(chan dummyModeCallerArgs, 100),
+		calls:     make(chan dummyGetterCallerArgs, 100),
 	}
-	return dummy
-}
-
-// getDummyMode returns a dummyMode wrapping initializeDummyMode
-// tests should use getDummyMode instead of initializeDummyMode
-func getDummyMode(returnErr bool) *dummyMode {
-	return initializeDummyMode(returnErr).(*dummyMode)
 }
 
 func TestDownloadFilesFromHost(t *testing.T) {
-	mode := getDummyMode(false)
+	getter := getDummyGetter(false)
 
 	entries := []manifestEntry{
 		{"https://example.com/file1.txt", "/tmp/file1.txt"},
@@ -87,25 +76,25 @@ func TestDownloadFilesFromHost(t *testing.T) {
 	}
 
 	errGroup, ctx := errgroup.WithContext(context.Background())
-	_ = downloadFilesFromHost(ctx, mode, errGroup, entries, metrics)
+	_ = downloadFilesFromHost(ctx, getter, errGroup, entries, metrics)
 	err := errGroup.Wait()
 	assert.NoError(t, err)
-	assert.Equal(t, 2, len(mode.Args()))
-	assert.Contains(t, mode.Args(), dummyModeCallerArgs{entries[0].url, entries[0].dest})
-	assert.Contains(t, mode.Args(), dummyModeCallerArgs{entries[1].url, entries[1].dest})
+	assert.Equal(t, 2, len(getter.Args()))
+	assert.Contains(t, getter.Args(), dummyGetterCallerArgs{entries[0].url, entries[0].dest})
+	assert.Contains(t, getter.Args(), dummyGetterCallerArgs{entries[1].url, entries[1].dest})
 
-	failsMode := getDummyMode(true)
+	failsGetter := getDummyGetter(true)
 
 	errGroup, ctx = errgroup.WithContext(context.Background())
-	_ = downloadFilesFromHost(ctx, failsMode, errGroup, entries, metrics)
+	_ = downloadFilesFromHost(ctx, failsGetter, errGroup, entries, metrics)
 	err = errGroup.Wait()
-	_ = failsMode.Args()
+	_ = failsGetter.Args()
 	assert.Error(t, err)
 }
 
 func TestDownloadAndMeasure(t *testing.T) {
 
-	mode := getDummyMode(false)
+	getter := getDummyGetter(false)
 
 	metrics := &downloadMetrics{
 		mut: sync.Mutex{},
@@ -113,11 +102,11 @@ func TestDownloadAndMeasure(t *testing.T) {
 
 	url := "https://example.com/file1.txt"
 	dest := "/tmp/file1.txt"
-	err := downloadAndMeasure(context.Background(), mode, url, dest, metrics)
+	err := downloadAndMeasure(context.Background(), getter, url, dest, metrics)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, len(mode.Args()))
-	assert.Equal(t, url, mode.Arg(0).url)
-	assert.Equal(t, dest, mode.Arg(0).dest)
+	assert.Equal(t, 1, len(getter.Args()))
+	assert.Equal(t, url, getter.Arg(0).url)
+	assert.Equal(t, dest, getter.Arg(0).dest)
 }
 
 func TestAddDownloadMetrics(t *testing.T) {

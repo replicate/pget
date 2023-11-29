@@ -31,9 +31,8 @@ type BufferMode struct {
 }
 
 type Target struct {
-	URL           string
-	TrueURL       string
-	SchemeHostKey string
+	URL     string
+	TrueURL string
 }
 
 func GetBufferMode(opts Options) Mode {
@@ -192,12 +191,8 @@ func (m *BufferMode) downloadChunk(resp *http.Response, dataSlice []byte) error 
 
 func (m *BufferMode) DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {
 	logger := logging.GetLogger()
-	schemeHost, err := client.GetSchemeHostKey(url)
-	if err != nil {
-		return int64(-1), 0, fmt.Errorf("error getting scheme host key: %w", err)
-	}
 	downloadStartTime := time.Now()
-	target := Target{URL: url, TrueURL: url, SchemeHostKey: schemeHost}
+	target := Target{URL: url, TrueURL: url}
 	buffer, fileSize, err := m.fileToBuffer(ctx, target)
 	if err != nil {
 		return fileSize, 0, err

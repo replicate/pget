@@ -30,7 +30,7 @@ type BufferMode struct {
 	Options
 }
 
-func GetBufferMode(opts Options) Mode {
+func GetBufferMode(opts Options) *BufferMode {
 	client := client.NewHTTPClient(opts.Client)
 	return &BufferMode{
 		Client:  client,
@@ -181,6 +181,14 @@ func (m *BufferMode) downloadChunk(resp *http.Response, dataSlice []byte) error 
 		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, expectedBytes, resp.Request.URL.String())
 	}
 	return nil
+}
+
+func (m *BufferMode) Fetch(ctx context.Context, url string) (result io.Reader, fileSize int64, err error) {
+	buffer, fileSize, err := m.fileToBuffer(ctx, url)
+	if err != nil {
+		return nil, 0, err
+	}
+	return buffer, fileSize, nil
 }
 
 func (m *BufferMode) DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {

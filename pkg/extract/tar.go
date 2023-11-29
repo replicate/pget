@@ -2,21 +2,18 @@ package extract
 
 import (
 	"archive/tar"
-	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/dustin/go-humanize"
-
 	"github.com/replicate/pget/pkg/logging"
 )
 
-func ExtractTarFile(buffer *bytes.Buffer, destDir string, fileSize int64) error {
+func ExtractTarFile(reader io.Reader, destDir string) error {
 	startTime := time.Now()
-	tarReader := tar.NewReader(buffer)
+	tarReader := tar.NewReader(reader)
 	logger := logging.GetLogger()
 
 	for {
@@ -58,12 +55,8 @@ func ExtractTarFile(buffer *bytes.Buffer, destDir string, fileSize int64) error 
 		}
 	}
 	elapsed := time.Since(startTime).Seconds()
-	size := humanize.Bytes(uint64(fileSize))
-	throughput := humanize.Bytes(uint64(float64(fileSize) / elapsed))
 	logger.Info().
-		Str("size", size).
 		Str("elapsed", fmt.Sprintf("%.3fs", elapsed)).
-		Str("throughput", throughput).
 		Msg("Extracted")
 	return nil
 }

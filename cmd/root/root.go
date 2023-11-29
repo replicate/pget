@@ -106,7 +106,11 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		MinChunkSize: int64(minChunkSize),
 		Client:       clientOpts,
 	}
-	mode, err := download.GetMode(download.BufferModeName, downloadOpts)
+	modeName := download.BufferModeName
+	if viper.GetBool(optname.Extract) {
+		modeName = download.ExtractTarModeName
+	}
+	mode, err := download.GetMode(modeName, downloadOpts)
 	if err != nil {
 		return fmt.Errorf("error getting mode: %w", err)
 	}

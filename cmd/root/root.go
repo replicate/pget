@@ -99,7 +99,7 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		ConnectTimeout: viper.GetDuration(optname.ConnTimeout),
 	}
 	downloadOpts := download.Options{
-		MaxChunks:    viper.GetInt(optname.MaxChunks),
+		MaxChunks:    viper.GetInt(optname.Concurrency),
 		MinChunkSize: int64(minChunkSize),
 		Client:       clientOpts,
 	}

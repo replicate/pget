@@ -23,8 +23,8 @@ var HostToIPResolutionMap = make(map[string]string)
 
 func AddRootPersistentFlags(cmd *cobra.Command) error {
 	// Persistent Flags (applies to all commands/subcommands)
-	cmd.PersistentFlags().IntVar(&concurrency, optname.Concurrency, runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
-	cmd.PersistentFlags().IntVarP(&concurrency, optname.MaxChunks, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
+	cmd.PersistentFlags().IntVarP(&concurrency, optname.Concurrency, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
+	cmd.PersistentFlags().IntVar(&concurrency, optname.MaxChunks, runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
 	cmd.PersistentFlags().Duration(optname.ConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
 	cmd.PersistentFlags().StringP(optname.MinimumChunkSize, "m", "16M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
 	cmd.PersistentFlags().BoolP(optname.Force, "f", false, "Force download, overwriting existing file")
@@ -47,12 +47,13 @@ func AddRootPersistentFlags(cmd *cobra.Command) error {
 	viper.RegisterAlias(optname.Concurrency, optname.MaxChunks)
 
 	// Hide flags from help, these are intended to be used for testing/internal benchmarking/debugging only
-	if err := cmd.PersistentFlags().MarkHidden(optname.ForceHTTP2); err != nil {
-		return fmt.Errorf("failed to hide flag %s: %w", optname.ForceHTTP2, err)
+	for _, flag := range []string{optname.ForceHTTP2, optname.MaxChunks} {
+		if err := cmd.PersistentFlags().MarkHidden(flag); err != nil {
+			return fmt.Errorf("failed to hide flag %s: %w", optname.ForceHTTP2, err)
+		}
 	}
-
 	// Deprecated flags
-	err := cmd.PersistentFlags().MarkDeprecated(optname.Concurrency, "use --max-chunks instead")
+	err := cmd.PersistentFlags().MarkDeprecated(optname.MaxChunks, "use --concurrency instead")
 	if err != nil {
 		return fmt.Errorf("failed to mark flag as deprecated: %w", err)
 	}

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
-	"math"
 	"net/http"
+	"net/url"
 	"runtime"
 	"strconv"
 
@@ -25,6 +25,9 @@ type ConsistentHashingMode struct {
 func GetConsistentHashingMode(opts Options) (Strategy, error) {
 	if opts.SliceSize == 0 {
 		return nil, fmt.Errorf("Must specify slice size in consistent hashing mode")
+	}
+	if opts.Semaphore != nil && opts.MaxConcurrency == 0 {
+		return nil, fmt.Errorf("If you provide a semaphore you must specify MaxConcurrency")
 	}
 	client := client.NewHTTPClient(opts.Client)
 	return &ConsistentHashingMode{
@@ -60,23 +63,29 @@ func (m *ConsistentHashingMode) getFileSizeFromContentRange(contentRange string)
 	return strconv.ParseInt(groups[1], 10, 64)
 }
 
-func (m *ConsistentHashingMode) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
+func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io.Reader, int64, error) {
 	logger := logging.GetLogger()
 
-	if m.Semaphore != nil {
-		err := m.Semaphore.Acquire(ctx, 1)
-		if err != nil {
-			return nil, 0, err
+	parsed, err := url.Parse(urlString)
+	shouldContinue := false
+	for _, host := range m.DomainsToCache {
+		if host == parsed.Host {
+			shouldContinue = true
+			break
 		}
 	}
-	firstChunkResp, err := m.doRequest(ctx, 0, m.minChunkSize()-1, url)
+	if !shouldContinue {
+		return nil, -1, fmt.Errorf("ConsistentHashingMode not implemented for domains outside DomainsToCache")
+	}
+
+	firstChunkResp, err := m.doRequest(ctx, 0, m.minChunkSize()-1, urlString)
 	if err != nil {
 		return nil, -1, err
 	}
 
 	trueURL := firstChunkResp.Request.URL.String()
-	if trueURL != url {
-		logger.Info().Str("url", url).Str("redirect_url", trueURL).Msg("Redirect")
+	if trueURL != urlString {
+		logger.Info().Str("url", urlString).Str("redirect_url", trueURL).Msg("Redirect")
 	}
 
 	fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
@@ -92,49 +101,61 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, url string) (io.Reade
 		if err != nil {
 			return nil, -1, err
 		}
+		// TODO: rather than eagerly downloading here, we could return
+		// an io.ReadCloser that downloads the file and releases the
+		// semaphore when closed
 		return bytes.NewBuffer(data), fileSize, nil
 	}
 
-	chunkSize := (fileSize - m.minChunkSize()) / int64(m.maxChunks()-1)
-	if chunkSize < m.minChunkSize() {
-		chunkSize = m.minChunkSize()
-	}
-	if chunkSize < 0 {
-		firstChunkResp.Body.Close()
-		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
-	}
-	// not more than one connection per min chunk size
-	chunks := int(math.Ceil(float64(fileSize) / float64(chunkSize)))
-
-	if chunks > m.maxChunks() {
-		chunks = m.maxChunks()
-		chunkSize = fileSize / int64(chunks)
-	}
-	logger.Debug().Str("url", url).
-		Int64("size", fileSize).
-		Int("connections", chunks).
-		Int64("chunkSize", chunkSize).
-		Msg("Downloading")
+	totalSlices := fileSize / m.SliceSize
+	totalSlices++
 
 	errGroup, ctx := errgroup.WithContext(ctx)
 	errGroup.Go(func() error {
 		return m.downloadChunk(firstChunkResp, data[0:m.minChunkSize()])
 	})
 
-	for i := 1; i < chunks; i++ {
-		start := int64(i) * chunkSize
-		end := start + chunkSize - 1
+	if m.MaxConcurrency-1 <= int(totalSlices) {
+		// special case: we should just download each slice in full and rely on the semaphore to manage concurrency
+		return nil, -1, fmt.Errorf("Not implemented yet")
+	}
 
-		if i == chunks-1 {
-			end = fileSize - 1
+	// TODO: what if we already fetched the whole first slice?
+	// TODO: respect m.minChunkSize()
+	chunksPerSlice := EqualSplit(int64(m.maxChunks()-1), totalSlices)
+
+	logger.Debug().Str("url", urlString).
+		Int64("size", fileSize).
+		Int("concurrency", m.maxChunks()).
+		Ints64("chunks_per_slice", chunksPerSlice).
+		Msg("Downloading")
+
+	for slice, numChunks := range chunksPerSlice {
+		start := m.SliceSize * int64(slice)
+		chunkSizes := EqualSplit(m.SliceSize, numChunks)
+		if slice == 0 {
+			start = firstChunkResp.ContentLength
+			chunkSizes = EqualSplit(m.SliceSize-firstChunkResp.ContentLength, numChunks)
 		}
-		resp, err := m.doRequest(ctx, start, end, trueURL)
-		if err != nil {
-			return nil, -1, err
+		if slice == int(totalSlices)-1 {
+			chunkSizes = EqualSplit(fileSize%m.SliceSize, numChunks)
 		}
-		errGroup.Go(func() error {
-			return m.downloadChunk(resp, data[start:end+1])
-		})
+		for _, chunkSize := range chunkSizes {
+			end := start + chunkSize - 1
+
+			logger.Debug().Int64("start", start).Int64("end", end).Msg("starting request")
+			resp, err := m.doRequest(ctx, start, end, urlString)
+			if err != nil {
+				return nil, -1, err
+			}
+
+			dataSlice := data[start : end+1]
+			errGroup.Go(func() error {
+				return m.downloadChunk(resp, dataSlice)
+			})
+
+			start = start + chunkSize
+		}
 	}
 
 	if err := errGroup.Wait(); err != nil {
@@ -145,16 +166,25 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, url string) (io.Reade
 	return buffer, fileSize, nil
 }
 
-func (m *ConsistentHashingMode) doRequest(ctx context.Context, start, end int64, trueURL string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", trueURL, nil)
+func (m *ConsistentHashingMode) doRequest(ctx context.Context, start, end int64, urlString string) (*http.Response, error) {
+	logger := logging.GetLogger()
+	if m.Semaphore != nil {
+		err := m.Semaphore.Acquire(ctx, 1)
+		if err != nil {
+			return nil, err
+		}
+	}
+	req, err := http.NewRequestWithContext(ctx, "GET", urlString, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
 	}
-	err = m.consistentHashIfNeeded(req, start/m.SliceSize, end/m.SliceSize)
+	err = m.consistentHashIfNeeded(req, start, end)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+
+	logger.Debug().Str("url", urlString).Str("munged_url", req.URL.String()).Str("host", req.Host).Int64("start", start).Int64("end", end).Msg("request")
 
 	resp, err := m.Client.Do(req)
 	if err != nil {
@@ -168,6 +198,7 @@ func (m *ConsistentHashingMode) doRequest(ctx context.Context, start, end int64,
 }
 
 func (m *ConsistentHashingMode) consistentHashIfNeeded(req *http.Request, start int64, end int64) error {
+	logger := logging.GetLogger()
 	for _, host := range m.DomainsToCache {
 		if host == req.URL.Host {
 			if start/m.SliceSize != end/m.SliceSize {
@@ -175,7 +206,7 @@ func (m *ConsistentHashingMode) consistentHashIfNeeded(req *http.Request, start 
 			}
 			slice := start / m.SliceSize
 
-			key := fmt.Sprintf("%s#slice%d", req.URL, slice)
+			key := fmt.Sprintf("%s#%d", req.URL, slice)
 			hasher := fnv.New64a()
 			hasher.Write([]byte(key))
 			// jump is an implementation of Google's Jump Consistent Hash.
@@ -183,6 +214,7 @@ func (m *ConsistentHashingMode) consistentHashIfNeeded(req *http.Request, start 
 			// See http://arxiv.org/abs/1406.2294 for details.
 			cachePodIndex := int(jump.Hash(hasher.Sum64(), len(m.CacheHosts)))
 			cacheHost := m.CacheHosts[cachePodIndex]
+			logger.Debug().Str("cache_key", key).Int64("start", start).Int64("end", end).Int64("slice_size", m.SliceSize).Int("bucket", cachePodIndex).Msg("consistent hashing")
 			if cacheHost != "" {
 				req.URL.Scheme = "http"
 				req.URL.Host = cacheHost
@@ -194,6 +226,7 @@ func (m *ConsistentHashingMode) consistentHashIfNeeded(req *http.Request, start 
 }
 
 func (m *ConsistentHashingMode) downloadChunk(resp *http.Response, dataSlice []byte) error {
+	logger := logging.GetLogger()
 	defer resp.Body.Close()
 	if m.Semaphore != nil {
 		defer m.Semaphore.Release(1)
@@ -206,5 +239,6 @@ func (m *ConsistentHashingMode) downloadChunk(resp *http.Response, dataSlice []b
 	if n != expectedBytes {
 		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, expectedBytes, resp.Request.URL.String())
 	}
+	logger.Debug().Int("size", len(dataSlice)).Int("downloaded", n).Bytes("bytes", dataSlice).Msg("downloaded chunk")
 	return nil
 }

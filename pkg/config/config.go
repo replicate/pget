@@ -15,35 +15,22 @@ import (
 	"github.com/replicate/pget/pkg/optname"
 )
 
-var (
-	ConnTimeout      time.Duration
-	Force            bool
-	ForceHTTP2       bool
-	IgnoreRetryAfter bool
-	LoggingLevel     string
-	MaxChunkNumber   int
-	MinimumChunkSize string
-	ResolveHosts     []string
-	Retries          int
-	Verbose          bool
-)
-
 // HostToIPResolutionMap is a map of hostnames to IP addresses
 // TODO: Eliminate this global variable
 var HostToIPResolutionMap = make(map[string]string)
 
 func AddRootPersistentFlags(cmd *cobra.Command) error {
 	// Persistent Flags (applies to all commands/subcommands)
-	cmd.PersistentFlags().IntVar(&MaxChunkNumber, optname.Concurrency, runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
-	cmd.PersistentFlags().IntVarP(&MaxChunkNumber, optname.MaxChunks, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
-	cmd.PersistentFlags().DurationVar(&ConnTimeout, optname.ConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
-	cmd.PersistentFlags().StringVarP(&MinimumChunkSize, optname.MinimumChunkSize, "m", "16M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
-	cmd.PersistentFlags().BoolVarP(&Force, optname.Force, "f", false, "Force download, overwriting existing file")
-	cmd.PersistentFlags().StringSliceVar(&ResolveHosts, optname.Resolve, []string{}, "Resolve hostnames to specific IPs")
-	cmd.PersistentFlags().IntVarP(&Retries, optname.Retries, "r", 5, "Number of retries when attempting to retrieve a file")
-	cmd.PersistentFlags().BoolVarP(&Verbose, optname.Verbose, "v", false, "Verbose mode (equivalent to --log-level debug)")
-	cmd.PersistentFlags().StringVar(&LoggingLevel, optname.LoggingLevel, "info", "Log level (debug, info, warn, error)")
-	cmd.PersistentFlags().BoolVar(&ForceHTTP2, optname.ForceHTTP2, false, "Force HTTP/2")
+	cmd.PersistentFlags().Int(optname.Concurrency, runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
+	cmd.PersistentFlags().IntP(optname.MaxChunks, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
+	cmd.PersistentFlags().Duration(optname.ConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
+	cmd.PersistentFlags().StringP(optname.MinimumChunkSize, "m", "16M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
+	cmd.PersistentFlags().BoolP(optname.Force, "f", false, "Force download, overwriting existing file")
+	cmd.PersistentFlags().StringSlice(optname.Resolve, []string{}, "Resolve hostnames to specific IPs")
+	cmd.PersistentFlags().IntP(optname.Retries, "r", 5, "Number of retries when attempting to retrieve a file")
+	cmd.PersistentFlags().BoolP(optname.Verbose, "v", false, "Verbose mode (equivalent to --log-level debug)")
+	cmd.PersistentFlags().String(optname.LoggingLevel, "info", "Log level (debug, info, warn, error)")
+	cmd.PersistentFlags().Bool(optname.ForceHTTP2, false, "Force HTTP/2")
 
 	viper.SetEnvPrefix("PGET")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))

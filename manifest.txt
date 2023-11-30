@@ -1,2 +1,0 @@
-https://google.com/robots.txt google-robots
-https://replicate.com/robots.txt r8-robots

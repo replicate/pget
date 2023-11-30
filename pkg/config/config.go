@@ -15,14 +15,16 @@ import (
 	"github.com/replicate/pget/pkg/optname"
 )
 
+var concurrency int
+
 // HostToIPResolutionMap is a map of hostnames to IP addresses
 // TODO: Eliminate this global variable
 var HostToIPResolutionMap = make(map[string]string)
 
 func AddRootPersistentFlags(cmd *cobra.Command) error {
 	// Persistent Flags (applies to all commands/subcommands)
-	cmd.PersistentFlags().Int(optname.Concurrency, runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
-	cmd.PersistentFlags().IntP(optname.MaxChunks, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
+	cmd.PersistentFlags().IntVar(&concurrency, optname.Concurrency, runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
+	cmd.PersistentFlags().IntVarP(&concurrency, optname.MaxChunks, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
 	cmd.PersistentFlags().Duration(optname.ConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
 	cmd.PersistentFlags().StringP(optname.MinimumChunkSize, "m", "16M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
 	cmd.PersistentFlags().BoolP(optname.Force, "f", false, "Force download, overwriting existing file")

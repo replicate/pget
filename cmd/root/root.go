@@ -39,11 +39,6 @@ performance, especially when dealing with large tar files. This makes PGet not j
 efficient file extractor, providing a streamlined solution for fetching and unpacking files.
 `
 
-var (
-	// Config for local flags
-	Extract bool
-)
-
 func GetCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pget [flags] <url> <dest>",
@@ -56,7 +51,7 @@ func GetCommand() *cobra.Command {
 		Args:    cobra.ExactArgs(2),
 		Example: `  pget https://example.com/file.tar.gz file.tar.gz`,
 	}
-	cmd.Flags().BoolVarP(&Extract, optname.Extract, "x", false, "Extract archive after download")
+	cmd.Flags().BoolP(optname.Extract, "x", false, "Extract archive after download")
 	cmd.SetUsageTemplate(cli.UsageTemplate)
 	err := config.AddRootPersistentFlags(cmd)
 	if err != nil {

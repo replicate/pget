@@ -39,11 +39,6 @@ const multifileExamples = `
   cat multifile.txt | pget multifile -
 `
 
-// multifile mode config vars
-var (
-	maxConnPerHost int
-)
-
 type manifestEntry struct {
 	url  string
 	dest string
@@ -75,7 +70,7 @@ func GetCommand() *cobra.Command {
 		Example: multifileExamples,
 	}
 
-	cmd.PersistentFlags().IntVar(&maxConnPerHost, optname.MaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host (default 40)")
+	cmd.PersistentFlags().Int(optname.MaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host")
 	err := viper.BindPFlags(cmd.PersistentFlags())
 	if err != nil {
 		fmt.Println(err)

@@ -34,7 +34,7 @@ func GetBufferMode(opts Options) *BufferMode {
 }
 
 func (m *BufferMode) maxChunks() int {
-	maxChunks := m.MaxChunks
+	maxChunks := m.MaxConcurrency
 	if maxChunks == 0 {
 		return runtime.NumCPU() * 4
 	}

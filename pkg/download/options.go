@@ -7,7 +7,7 @@ import (
 type Options struct {
 	// Maximum number of chunks to download. If set to zero, GOMAXPROCS*4
 	// will be used.
-	MaxChunks int
+	MaxConcurrency int
 
 	// Minimum number of bytes per chunk. If set to zero, 16 MiB will be
 	// used.

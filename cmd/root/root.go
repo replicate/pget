@@ -97,11 +97,12 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		ForceHTTP2:     viper.GetBool(optname.ForceHTTP2),
 		MaxRetries:     viper.GetInt(optname.Retries),
 		ConnectTimeout: viper.GetDuration(optname.ConnTimeout),
+		MaxConnPerHost: viper.GetInt(optname.MaxConnPerHost),
 	}
 	downloadOpts := download.Options{
-		MaxChunks:    viper.GetInt(optname.Concurrency),
-		MinChunkSize: int64(minChunkSize),
-		Client:       clientOpts,
+		MaxConcurrency: viper.GetInt(optname.Concurrency),
+		MinChunkSize:   int64(minChunkSize),
+		Client:         clientOpts,
 	}
 	getter := pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),

@@ -37,19 +37,123 @@ func makeConsistentHashingMode(opts download.Options) *download.ConsistentHashin
 	return &download.ConsistentHashingMode{Client: client, Options: opts}
 }
 
+type chTestCase struct {
+	concurrency    int
+	sliceSize      int64
+	minChunkSize   int64
+	numCacheHosts  int
+	expectedOutput string
+}
+
+var chTestCases = []chTestCase{
+	{ // pre-computed demo that only some slices change as we add a new cache host
+		concurrency:    8,
+		sliceSize:      3,
+		numCacheHosts:  1,
+		minChunkSize:   1,
+		expectedOutput: "0000000000000000",
+	},
+	{
+		concurrency:    8,
+		sliceSize:      3,
+		numCacheHosts:  2,
+		minChunkSize:   1,
+		expectedOutput: "1110000001111111",
+	},
+	{
+		concurrency:    8,
+		sliceSize:      3,
+		numCacheHosts:  3,
+		minChunkSize:   1,
+		expectedOutput: "1110000002222222",
+	},
+	{
+		concurrency:    8,
+		sliceSize:      3,
+		numCacheHosts:  4,
+		minChunkSize:   1,
+		expectedOutput: "1113330002222222",
+	},
+	{
+		concurrency:    8,
+		sliceSize:      3,
+		numCacheHosts:  5,
+		minChunkSize:   1,
+		expectedOutput: "1114440002222224",
+	},
+	{
+		concurrency:    8,
+		sliceSize:      3,
+		numCacheHosts:  6,
+		minChunkSize:   1,
+		expectedOutput: "1114440002222224",
+	},
+	{
+		concurrency:    8,
+		sliceSize:      3,
+		numCacheHosts:  7,
+		minChunkSize:   1,
+		expectedOutput: "1114440002226664",
+	},
+	{
+		concurrency:    8,
+		sliceSize:      3,
+		numCacheHosts:  8,
+		minChunkSize:   1,
+		expectedOutput: "1117770002226667",
+	},
+	{ // test when fileSize % sliceSize == 0
+		concurrency:    8,
+		sliceSize:      4,
+		numCacheHosts:  8,
+		minChunkSize:   1,
+		expectedOutput: "1111777700002222",
+	},
+	{ // test when minChunkSize == sliceSize
+		concurrency:    8,
+		sliceSize:      3,
+		numCacheHosts:  8,
+		minChunkSize:   3,
+		expectedOutput: "1117770002226667",
+	},
+	{ // test when concurrency > file size
+		concurrency:    24,
+		sliceSize:      3,
+		numCacheHosts:  8,
+		minChunkSize:   3,
+		expectedOutput: "1117770002226667",
+	},
+	{ // test when concurrency < number of slices
+		concurrency:    3,
+		sliceSize:      3,
+		numCacheHosts:  8,
+		minChunkSize:   3,
+		expectedOutput: "1117770002226667",
+	},
+	{ // test when minChunkSize == file size
+		concurrency:    4,
+		sliceSize:      16,
+		numCacheHosts:  8,
+		minChunkSize:   16,
+		expectedOutput: "1111111111111111",
+	},
+	{ // test when minChunkSize > file size
+		concurrency:    4,
+		sliceSize:      24,
+		numCacheHosts:  8,
+		minChunkSize:   24,
+		expectedOutput: "1111111111111111",
+	},
+	{ // if minChunkSize > sliceSize, sliceSize overrides it
+		concurrency:    8,
+		sliceSize:      3,
+		numCacheHosts:  8,
+		minChunkSize:   24,
+		expectedOutput: "1117770002226667",
+	},
+}
+
 func TestConsistentHashing(t *testing.T) {
-	opts := download.Options{
-		Client:         client.Options{},
-		MaxConcurrency: 8,
-		MinChunkSize:   1,
-		Semaphore:      semaphore.NewWeighted(4),
-		DomainsToCache: []string{"fake.replicate.delivery"},
-		SliceSize:      3,
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	hostnames := make([]string, len(testFSes))
 	for i, fs := range testFSes {
 		ts := httptest.NewServer(http.FileServer(http.FS(fs)))
@@ -58,14 +162,28 @@ func TestConsistentHashing(t *testing.T) {
 		require.NoError(t, err)
 		hostnames[i] = url.Host
 	}
-	opts.CacheHosts = hostnames
 
-	strategy := makeConsistentHashingMode(opts)
+	for _, tc := range chTestCases {
+		opts := download.Options{
+			Client:         client.Options{},
+			MaxConcurrency: tc.concurrency,
+			MinChunkSize:   tc.minChunkSize,
+			Semaphore:      semaphore.NewWeighted(int64(tc.concurrency)),
+			CacheHosts:     hostnames[0:tc.numCacheHosts],
+			DomainsToCache: []string{"fake.replicate.delivery"},
+			SliceSize:      tc.sliceSize,
+		}
 
-	reader, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
-	assert.NoError(t, err)
-	bytes, err := io.ReadAll(reader)
-	assert.NoError(t, err)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-	assert.Equal(t, "1117770002226667", string(bytes))
+		strategy := makeConsistentHashingMode(opts)
+
+		reader, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
+		assert.NoError(t, err)
+		bytes, err := io.ReadAll(reader)
+		assert.NoError(t, err)
+
+		assert.Equal(t, tc.expectedOutput, string(bytes))
+	}
 }

@@ -36,7 +36,7 @@ func GetConsistentHashingMode(opts Options) (Strategy, error) {
 	}, nil
 }
 
-func (m *ConsistentHashingMode) maxChunks() int {
+func (m *ConsistentHashingMode) maxConcurrency() int {
 	maxChunks := m.MaxConcurrency
 	if maxChunks == 0 {
 		return runtime.NumCPU() * 4
@@ -95,7 +95,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 	}
 
 	data := make([]byte, fileSize)
-	if fileSize < m.minChunkSize() {
+	if fileSize <= m.minChunkSize() {
 		// we only need a single chunk: just download it and finish
 		err = m.downloadChunk(firstChunkResp, data[0:fileSize])
 		if err != nil {
@@ -108,38 +108,58 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 	}
 
 	totalSlices := fileSize / m.SliceSize
-	totalSlices++
+	if fileSize%m.SliceSize != 0 {
+		totalSlices++
+	}
 
 	errGroup, ctx := errgroup.WithContext(ctx)
 	errGroup.Go(func() error {
 		return m.downloadChunk(firstChunkResp, data[0:m.minChunkSize()])
 	})
 
-	if m.MaxConcurrency-1 <= int(totalSlices) {
+	// we subtract one because we've already got firstChunkResp in flight
+	concurrency := m.maxConcurrency() - 1
+	if concurrency <= int(totalSlices) {
 		// special case: we should just download each slice in full and rely on the semaphore to manage concurrency
-		return nil, -1, fmt.Errorf("Not implemented yet")
+		concurrency = int(totalSlices)
 	}
 
-	// TODO: what if we already fetched the whole first slice?
-	// TODO: respect m.minChunkSize()
-	chunksPerSlice := EqualSplit(int64(m.maxChunks()-1), totalSlices)
+	chunksPerSlice := EqualSplit(int64(concurrency), totalSlices)
+	if m.minChunkSize() == m.SliceSize {
+		// firstChunkResp will download the whole first chunk in full;
+		// we set slice 0 to a special value of 0 so we skip it later
+		chunksPerSlice = append([]int64{0}, EqualSplit(int64(concurrency), totalSlices-1)...)
+	}
 
 	logger.Debug().Str("url", urlString).
 		Int64("size", fileSize).
-		Int("concurrency", m.maxChunks()).
+		Int("concurrency", m.maxConcurrency()).
 		Ints64("chunks_per_slice", chunksPerSlice).
 		Msg("Downloading")
 
 	for slice, numChunks := range chunksPerSlice {
+		if numChunks == 0 {
+			// this happens if we've already downloaded the whole first slice
+			continue
+		}
 		start := m.SliceSize * int64(slice)
-		chunkSizes := EqualSplit(m.SliceSize, numChunks)
+		sliceSize := m.SliceSize
 		if slice == 0 {
 			start = firstChunkResp.ContentLength
-			chunkSizes = EqualSplit(m.SliceSize-firstChunkResp.ContentLength, numChunks)
+			sliceSize = sliceSize - firstChunkResp.ContentLength
 		}
 		if slice == int(totalSlices)-1 {
-			chunkSizes = EqualSplit(fileSize%m.SliceSize, numChunks)
+			sliceSize = (fileSize-1)%m.SliceSize + 1
 		}
+		if sliceSize/numChunks < m.minChunkSize() {
+			// reset numChunks to respect minChunkSize
+			numChunks = sliceSize / m.minChunkSize()
+			// although we must always have at least one chunk
+			if numChunks == 0 {
+				numChunks = 1
+			}
+		}
+		chunkSizes := EqualSplit(sliceSize, numChunks)
 		for _, chunkSize := range chunkSizes {
 			end := start + chunkSize - 1
 

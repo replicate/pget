@@ -87,11 +87,6 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		return nil, -1, err
 	}
 
-	trueURL := firstChunkResp.Request.URL.String()
-	if trueURL != urlString {
-		logger.Info().Str("url", urlString).Str("redirect_url", trueURL).Msg("Redirect")
-	}
-
 	fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
 	if err != nil {
 		firstChunkResp.Body.Close()
@@ -101,7 +96,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 	data := make([]byte, fileSize)
 	if fileSize <= m.minChunkSize() {
 		// we only need a single chunk: just download it and finish
-		err = m.downloadChunk(firstChunkResp, data[0:fileSize])
+		err = m.downloadChunk(firstChunkResp, data)
 		if err != nil {
 			return nil, -1, err
 		}

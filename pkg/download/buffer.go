@@ -13,6 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dustin/go-humanize"
+
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/logging"
 )

@@ -13,6 +13,7 @@ import (
 	"testing/fstest"
 	"testing/iotest"
 
+	"github.com/dustin/go-humanize"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -62,7 +63,7 @@ func writeRandomFile(t require.TestingT, path string, size int64) {
 	rnd := rand.New(rand.NewSource(99))
 
 	// under 1 MiB, just fill the whole file with random data
-	if size < 1024*1024 {
+	if size < 1*humanize.MiByte {
 		_, err = io.CopyN(file, rnd, size)
 		require.NoError(t, err)
 		return
@@ -73,13 +74,13 @@ func writeRandomFile(t require.TestingT, path string, size int64) {
 	require.NoError(t, err)
 
 	// write some random data to the start
-	_, err = io.CopyN(file, rnd, 1024)
+	_, err = io.CopyN(file, rnd, 1*humanize.KiByte)
 	require.NoError(t, err)
 
 	// and somewhere else in the file
-	_, err = file.Seek(rnd.Int63()%(size-1024), io.SeekStart)
+	_, err = file.Seek(rnd.Int63()%(size-1*humanize.KiByte), io.SeekStart)
 	require.NoError(t, err)
-	_, err = io.CopyN(file, rnd, 1024)
+	_, err = io.CopyN(file, rnd, 1*humanize.KiByte)
 	require.NoError(t, err)
 }
 
@@ -131,7 +132,7 @@ func testDownloadSingleFile(opts download.Options, size int64, t *testing.T) {
 	assert.NoError(t, err, "source file and dest file should be identical")
 }
 
-func TestDownload10MH1(t *testing.T)  { testDownloadSingleFile(defaultOpts, 10*1024*1024, t) }
-func TestDownload100MH1(t *testing.T) { testDownloadSingleFile(defaultOpts, 100*1024*1024, t) }
-func TestDownload10MH2(t *testing.T)  { testDownloadSingleFile(http2Opts, 10*1024*1024, t) }
-func TestDownload100MH2(t *testing.T) { testDownloadSingleFile(http2Opts, 100*1024*1024, t) }
+func TestDownload10MH1(t *testing.T)  { testDownloadSingleFile(defaultOpts, 10*humanize.MiByte, t) }
+func TestDownload100MH1(t *testing.T) { testDownloadSingleFile(defaultOpts, 100*humanize.MiByte, t) }
+func TestDownload10MH2(t *testing.T)  { testDownloadSingleFile(http2Opts, 10*humanize.MiByte, t) }
+func TestDownload100MH2(t *testing.T) { testDownloadSingleFile(http2Opts, 100*humanize.MiByte, t) }

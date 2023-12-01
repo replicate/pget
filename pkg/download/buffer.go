@@ -12,11 +12,12 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dustin/go-humanize"
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/logging"
 )
 
-const defaultMinChunkSize = 16 * 1024 * 1024
+const defaultMinChunkSize = 16 * humanize.MiByte
 
 var contentRangeRegexp = regexp.MustCompile(`^bytes .*/([0-9]+)$`)
 

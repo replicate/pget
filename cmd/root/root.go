@@ -110,7 +110,7 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		Downloader: download.GetBufferMode(downloadOpts),
 	}
 	if srvName := viper.GetString(optname.CacheNodesSRVName); srvName != "" {
-		downloadOpts.SliceSize = 512 * 1024 * 1024 * 1024
+		downloadOpts.SliceSize = 512 * humanize.MiByte
 		// FIXME: make this a config option
 		downloadOpts.DomainsToCache = []string{"weights.replicate.delivery"}
 		getter.Downloader, err = download.GetConsistentHashingMode(downloadOpts)

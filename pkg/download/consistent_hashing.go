@@ -12,9 +12,10 @@ import (
 	"strconv"
 
 	jump "github.com/dgryski/go-jump"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/logging"
-	"golang.org/x/sync/errgroup"
 )
 
 type ConsistentHashingMode struct {
@@ -67,6 +68,9 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 	logger := logging.GetLogger()
 
 	parsed, err := url.Parse(urlString)
+	if err != nil {
+		return nil, -1, err
+	}
 	shouldContinue := false
 	for _, host := range m.DomainsToCache {
 		if host == parsed.Host {

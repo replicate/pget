@@ -9,11 +9,12 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/replicate/pget/pkg/client"
-	"github.com/replicate/pget/pkg/download"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/replicate/pget/pkg/client"
+	"github.com/replicate/pget/pkg/download"
 )
 
 var testFSes = []fstest.MapFS{
@@ -25,10 +26,6 @@ var testFSes = []fstest.MapFS{
 	{"hello.txt": {Data: []byte("5555555555555555")}},
 	{"hello.txt": {Data: []byte("6666666666666666")}},
 	{"hello.txt": {Data: []byte("7777777777777777")}},
-}
-
-var consistentHashingOpts = download.Options{
-	Client: client.Options{},
 }
 
 func makeConsistentHashingMode(opts download.Options) *download.ConsistentHashingMode {

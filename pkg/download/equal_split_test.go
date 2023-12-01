@@ -3,8 +3,9 @@ package download_test
 import (
 	"testing"
 
-	"github.com/replicate/pget/pkg/download"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/replicate/pget/pkg/download"
 )
 
 type equalSplitTestCase struct {

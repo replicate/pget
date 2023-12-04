@@ -11,7 +11,7 @@ require (
 	github.com/spf13/viper v1.17.0
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/sync v0.5.0
-	golang.org/x/tools v0.15.0
+	golang.org/x/tools v0.16.0
 	gotest.tools/gotestsum v1.11.0
 )
 

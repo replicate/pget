@@ -3,75 +3,84 @@ package config
 import (
 	"fmt"
 	"net"
-	"runtime"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/replicate/pget/pkg/logging"
-	"github.com/replicate/pget/pkg/optname"
 )
 
-var concurrency int
+const viperEnvPrefix = "PGET"
+
+type DeprecatedFlag struct {
+	Flag string
+	Msg  string
+}
 
 // HostToIPResolutionMap is a map of hostnames to IP addresses
 // TODO: Eliminate this global variable
 var HostToIPResolutionMap = make(map[string]string)
 
-func AddRootPersistentFlags(cmd *cobra.Command) error {
-	// Persistent Flags (applies to all commands/subcommands)
-	cmd.PersistentFlags().IntVarP(&concurrency, optname.Concurrency, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
-	cmd.PersistentFlags().IntVar(&concurrency, optname.MaxChunks, runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
-	cmd.PersistentFlags().Duration(optname.ConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
-	cmd.PersistentFlags().StringP(optname.MinimumChunkSize, "m", "16M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
-	cmd.PersistentFlags().BoolP(optname.Force, "f", false, "Force download, overwriting existing file")
-	cmd.PersistentFlags().StringSlice(optname.Resolve, []string{}, "Resolve hostnames to specific IPs")
-	cmd.PersistentFlags().IntP(optname.Retries, "r", 5, "Number of retries when attempting to retrieve a file")
-	cmd.PersistentFlags().BoolP(optname.Verbose, "v", false, "Verbose mode (equivalent to --log-level debug)")
-	cmd.PersistentFlags().String(optname.LoggingLevel, "info", "Log level (debug, info, warn, error)")
-	cmd.PersistentFlags().Bool(optname.ForceHTTP2, false, "Force HTTP/2")
-	cmd.PersistentFlags().Int(optname.MaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host")
-
-	viper.SetEnvPrefix("PGET")
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	viper.AutomaticEnv()
-
-	if err := viper.BindPFlags(cmd.Flags()); err != nil {
-		panic(err)
-	}
-	if err := viper.BindPFlags(cmd.PersistentFlags()); err != nil {
-		panic(err)
-	}
-	viper.RegisterAlias(optname.Concurrency, optname.MaxChunks)
-
-	// Hide flags from help, these are intended to be used for testing/internal benchmarking/debugging only
-	for _, flag := range []string{optname.ForceHTTP2, optname.MaxChunks, optname.MaxConnPerHost} {
-		if err := cmd.PersistentFlags().MarkHidden(flag); err != nil {
-			return fmt.Errorf("failed to hide flag %s: %w", optname.ForceHTTP2, err)
-		}
-	}
-	// Deprecated flags
-	err := cmd.PersistentFlags().MarkDeprecated(optname.MaxChunks, "use --concurrency instead")
-	if err != nil {
-		return fmt.Errorf("failed to mark flag as deprecated: %w", err)
-	}
-
-	return nil
-}
-
 func PersistentStartupProcessFlags() error {
-	if viper.GetBool(optname.Verbose) {
-		viper.Set(optname.LoggingLevel, "debug")
+	if viper.GetBool(OptVerbose) {
+		viper.Set(OptLoggingLevel, "debug")
 	}
-	setLogLevel(viper.GetString(optname.LoggingLevel))
+	setLogLevel(viper.GetString(OptLoggingLevel))
 	if err := convertResolveHostsToMap(); err != nil {
 		return err
 	}
 	return nil
 
+}
+
+func HideFlags(cmd *cobra.Command, flags ...string) error {
+	for _, flag := range flags {
+		f := cmd.Flag(flag)
+		if f == nil {
+			return fmt.Errorf("flag %s does not exist", flag)
+		}
+		// Try hiding a non-persistent flag, if it doesn't exist, try hiding a persistent flag of the same name
+		// this is similar to how cobra implements the .Flag() lookup
+		err := cmd.Flags().MarkHidden(flag)
+		if err != nil {
+			// We shouldn't be able to get an error here because we check f := cmd.Flag(flag) which does the
+			// check across both persistent and non-persistent flags
+			_ = cmd.PersistentFlags().MarkHidden(flag)
+		}
+	}
+	return nil
+}
+
+func DeprecateFlags(cmd *cobra.Command, deprecations ...DeprecatedFlag) error {
+	for _, config := range deprecations {
+		f := cmd.Flag(config.Flag)
+		if f == nil {
+			return fmt.Errorf("flag %s does not exist", config.Flag)
+		}
+		err := cmd.Flags().MarkDeprecated(config.Flag, config.Msg)
+		if err != nil {
+			return fmt.Errorf("failed to mark flag as deprecated: %w", err)
+		}
+	}
+	return nil
+}
+
+func AddFlagAlias(cmd *cobra.Command, alias, flag string) error {
+	f := cmd.Flag(flag)
+	if f == nil {
+		return fmt.Errorf("flag %s does not exist", flag)
+	}
+
+	viper.RegisterAlias(alias, flag)
+	return nil
+}
+
+func ViperInit() {
+	viper.SetEnvPrefix(viperEnvPrefix)
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	viper.AutomaticEnv()
 }
 
 func setLogLevel(logLevel string) {
@@ -92,7 +101,7 @@ func setLogLevel(logLevel string) {
 
 func convertResolveHostsToMap() error {
 	logger := logging.GetLogger()
-	for _, resolveHost := range viper.GetStringSlice(optname.Resolve) {
+	for _, resolveHost := range viper.GetStringSlice(OptResolve) {
 		split := strings.SplitN(resolveHost, ":", 3)
 		if len(split) != 3 {
 			return fmt.Errorf("invalid resolve host format, expected <hostname>:port:<ip>, got: %s", resolveHost)

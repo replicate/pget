@@ -7,8 +7,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/replicate/pget/pkg/optname"
 )
 
 func TestSetLogLevel(t *testing.T) {
@@ -55,7 +53,7 @@ func TestConvertResolveHostsToMap(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			HostToIPResolutionMap = map[string]string{}
-			viper.Set(optname.Resolve, strings.Join(tc.resolve, " "))
+			viper.Set(OptResolve, strings.Join(tc.resolve, " "))
 			err := convertResolveHostsToMap()
 			assert.Equal(t, tc.err, err != nil)
 			assert.Equal(t, tc.expected, HostToIPResolutionMap)

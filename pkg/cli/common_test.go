@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/replicate/pget/pkg/optname"
+	"github.com/replicate/pget/pkg/config"
 )
 
 func TestEnsureDestinationNotExist(t *testing.T) {
@@ -33,7 +33,7 @@ func TestEnsureDestinationNotExist(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			viper.Set(optname.Force, tc.force)
+			viper.Set(config.OptForce, tc.force)
 			err := EnsureDestinationNotExist(tc.fileName)
 			assert.Equal(t, tc.err, err != nil)
 		})

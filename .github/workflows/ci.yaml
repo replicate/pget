@@ -50,11 +50,18 @@ jobs:
     runs-on: ubuntu-latest-8-cores
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
       - run: make
       - uses: ncipollo/release-action@v1
-        if: ${{ startsWith(github.ref, 'refs/tags') }}
+        if: github.ref_type=='tag' && !contains(github.ref_name, '-')
         with:
           artifacts: "pget"
+      - uses: ncipollo/release-action@v1
+        if: github.ref_type=='tag' && contains(github.ref_name, '-')
+        with:
+          artifacts: "pget"
+          prerelease: true

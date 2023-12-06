@@ -65,6 +65,11 @@ func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
 			maxChunks:    1,
 		},
 		{
+			name:         "minChunkSize equal to contentSize",
+			minChunkSize: contentSize,
+			maxChunks:    1,
+		},
+		{
 			name:         "minChunkSize less than contentSize",
 			minChunkSize: contentSize - 1,
 			maxChunks:    2,

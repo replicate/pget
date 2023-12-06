@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"regexp"
 	"runtime"
@@ -78,7 +77,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 	}
 
 	data := make([]byte, fileSize)
-	if fileSize < m.minChunkSize() {
+	if fileSize <= m.minChunkSize() {
 		// we only need a single chunk: just download it and finish
 		err = m.downloadChunk(firstChunkResp, data[0:fileSize])
 		if err != nil {
@@ -87,24 +86,25 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 		return bytes.NewBuffer(data), fileSize, nil
 	}
 
-	chunkSize := (fileSize - m.minChunkSize()) / int64(m.maxChunks()-1)
-	if chunkSize < m.minChunkSize() {
-		chunkSize = m.minChunkSize()
+	remainingBytes := fileSize - m.minChunkSize()
+	numChunks := int(remainingBytes / m.minChunkSize())
+	// Number of chunks can never be 0
+	if numChunks <= 0 {
+		numChunks = 1
 	}
+	if numChunks > m.maxChunks() {
+		numChunks = m.maxChunks()
+	}
+
+	chunkSize := remainingBytes / int64(numChunks)
 	if chunkSize < 0 {
 		firstChunkResp.Body.Close()
 		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
 	}
-	// not more than one connection per min chunk size
-	chunks := int(math.Ceil(float64(fileSize) / float64(chunkSize)))
 
-	if chunks > m.maxChunks() {
-		chunks = m.maxChunks()
-		chunkSize = fileSize / int64(chunks)
-	}
 	logger.Debug().Str("url", url).
 		Int64("size", fileSize).
-		Int("connections", chunks).
+		Int("connections", numChunks).
 		Int64("chunkSize", chunkSize).
 		Msg("Downloading")
 
@@ -113,11 +113,13 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 		return m.downloadChunk(firstChunkResp, data[0:m.minChunkSize()])
 	})
 
-	for i := 1; i < chunks; i++ {
-		start := int64(i) * chunkSize
+	startOffset := m.minChunkSize()
+
+	for i := 0; i < numChunks; i++ {
+		start := startOffset + chunkSize*int64(i)
 		end := start + chunkSize - 1
 
-		if i == chunks-1 {
+		if i == numChunks-1 {
 			end = fileSize - 1
 		}
 		resp, err := m.doRequest(ctx, start, end, trueURL)

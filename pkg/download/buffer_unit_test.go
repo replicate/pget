@@ -2,15 +2,16 @@ package download
 
 import (
 	"context"
-	"github.com/dustin/go-humanize"
-	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 	"testing/fstest"
+
+	"github.com/dustin/go-humanize"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/replicate/pget/pkg/client"
 )

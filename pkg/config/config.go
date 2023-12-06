@@ -33,6 +33,7 @@ func AddRootPersistentFlags(cmd *cobra.Command) error {
 	cmd.PersistentFlags().BoolP(optname.Verbose, "v", false, "Verbose mode (equivalent to --log-level debug)")
 	cmd.PersistentFlags().String(optname.LoggingLevel, "info", "Log level (debug, info, warn, error)")
 	cmd.PersistentFlags().Bool(optname.ForceHTTP2, false, "Force HTTP/2")
+	cmd.PersistentFlags().Int(optname.MaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host")
 
 	viper.SetEnvPrefix("PGET")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
@@ -47,7 +48,7 @@ func AddRootPersistentFlags(cmd *cobra.Command) error {
 	viper.RegisterAlias(optname.Concurrency, optname.MaxChunks)
 
 	// Hide flags from help, these are intended to be used for testing/internal benchmarking/debugging only
-	for _, flag := range []string{optname.ForceHTTP2, optname.MaxChunks} {
+	for _, flag := range []string{optname.ForceHTTP2, optname.MaxChunks, optname.MaxConnPerHost} {
 		if err := cmd.PersistentFlags().MarkHidden(flag); err != nil {
 			return fmt.Errorf("failed to hide flag %s: %w", optname.ForceHTTP2, err)
 		}

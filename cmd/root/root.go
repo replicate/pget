@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/sync/semaphore"
 
 	pget "github.com/replicate/pget/pkg"
 	"github.com/replicate/pget/pkg/cli"
@@ -97,14 +98,29 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		ForceHTTP2:     viper.GetBool(optname.ForceHTTP2),
 		MaxRetries:     viper.GetInt(optname.Retries),
 		ConnectTimeout: viper.GetDuration(optname.ConnTimeout),
+		MaxConnPerHost: viper.GetInt(optname.MaxConnPerHost),
 	}
 	downloadOpts := download.Options{
-		MaxChunks:    viper.GetInt(optname.Concurrency),
-		MinChunkSize: int64(minChunkSize),
-		Client:       clientOpts,
+		MaxConcurrency: viper.GetInt(optname.Concurrency),
+		MinChunkSize:   int64(minChunkSize),
+		Client:         clientOpts,
+		Semaphore:      semaphore.NewWeighted(int64(viper.GetInt(optname.Concurrency))),
 	}
 	getter := pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
+	}
+	if srvName := viper.GetString(optname.CacheNodesSRVName); srvName != "" {
+		downloadOpts.SliceSize = 512 * humanize.MiByte
+		// FIXME: make this a config option
+		downloadOpts.DomainsToCache = []string{"weights.replicate.delivery"}
+		getter.Downloader, err = download.GetConsistentHashingMode(downloadOpts)
+		if err != nil {
+			return err
+		}
+		downloadOpts.CacheHosts, err = cli.LookupCacheHosts(srvName)
+		if err != nil {
+			return err
+		}
 	}
 
 	if viper.GetBool(optname.Extract) {

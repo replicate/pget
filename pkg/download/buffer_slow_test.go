@@ -4,14 +4,16 @@
 package download_test
 
 import (
+	"github.com/dustin/go-humanize"
+
 	"testing"
 )
 
 func BenchmarkDownload10G(b *testing.B) {
-	benchmarkDownloadSingleFile(defaultOpts, 10*1024*1024*1024, b)
+	benchmarkDownloadSingleFile(defaultOpts, 10*humanize.GiByte, b)
 }
 func BenchmarkDownload10GH2(b *testing.B) {
-	benchmarkDownloadSingleFile(http2Opts, 10*1024*1024*1024, b)
+	benchmarkDownloadSingleFile(http2Opts, 10*humanize.GiByte, b)
 }
 
 func BenchmarkDownloadDollyTensors(b *testing.B) {

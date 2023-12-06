@@ -70,7 +70,6 @@ func GetCommand() *cobra.Command {
 		Example: multifileExamples,
 	}
 
-	cmd.PersistentFlags().Int(optname.MaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host")
 	err := viper.BindPFlags(cmd.PersistentFlags())
 	if err != nil {
 		fmt.Println(err)
@@ -104,7 +103,6 @@ func runMultifileCMD(cmd *cobra.Command, args []string) error {
 }
 
 func multifileExecute(ctx context.Context, manifest manifest) error {
-	logger := logging.GetLogger()
 	var errGroup *errgroup.Group
 
 	minChunkSize, err := humanize.ParseBytes(viper.GetString(optname.MinimumChunkSize))
@@ -119,15 +117,12 @@ func multifileExecute(ctx context.Context, manifest manifest) error {
 		ConnectTimeout: viper.GetDuration(optname.ConnTimeout),
 	}
 	downloadOpts := download.Options{
-		MaxChunks:    viper.GetInt(optname.Concurrency),
-		MinChunkSize: int64(minChunkSize),
-		Client:       clientOpts,
+		MaxConcurrency: viper.GetInt(optname.Concurrency),
+		MinChunkSize:   int64(minChunkSize),
+		Client:         clientOpts,
 	}
 	getter := &pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
-	}
-	if perHostLimit := viper.GetInt(optname.MaxConnPerHost); perHostLimit > 0 {
-		logger.Debug().Int("max_connections_per_host", perHostLimit).Msg("Config")
 	}
 
 	metrics := &downloadMetrics{

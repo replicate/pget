@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"net"
 	"os"
 	"testing"
 
@@ -36,5 +37,60 @@ func TestEnsureDestinationNotExist(t *testing.T) {
 			err := EnsureDestinationNotExist(tc.fileName)
 			assert.Equal(t, tc.err, err != nil)
 		})
+	}
+}
+
+type tc struct {
+	srvs           []*net.SRV
+	expectedOutput []string
+}
+
+var testCases = []tc{
+	{ // basic functionality
+		srvs:           []*net.SRV{{Target: "cache-0.cache-service.cache-namespace.svc.cluster.local.", Port: 80}},
+		expectedOutput: []string{"cache-0.cache-service.cache-namespace.svc.cluster.local"},
+	},
+	{ // append port number if nonstandard
+		srvs:           []*net.SRV{{Target: "cache-0.cache-service.cache-namespace.svc.cluster.local.", Port: 8080}},
+		expectedOutput: []string{"cache-0.cache-service.cache-namespace.svc.cluster.local:8080"},
+	},
+	{ // multiple cache hosts
+		srvs: []*net.SRV{
+			{Target: "cache-0.cache-service.cache-namespace.svc.cluster.local.", Port: 80},
+			{Target: "cache-1.cache-service.cache-namespace.svc.cluster.local.", Port: 80},
+		},
+		expectedOutput: []string{
+			"cache-0.cache-service.cache-namespace.svc.cluster.local",
+			"cache-1.cache-service.cache-namespace.svc.cluster.local",
+		},
+	},
+	{ // canonical ordering
+		srvs: []*net.SRV{
+			{Target: "cache-1.cache-service.cache-namespace.svc.cluster.local.", Port: 80},
+			{Target: "cache-0.cache-service.cache-namespace.svc.cluster.local.", Port: 80},
+		},
+		expectedOutput: []string{
+			"cache-0.cache-service.cache-namespace.svc.cluster.local",
+			"cache-1.cache-service.cache-namespace.svc.cluster.local",
+		},
+	},
+	{ // ensure missing hosts are represented
+		srvs: []*net.SRV{
+			{Target: "cache-0.cache-service.cache-namespace.svc.cluster.local.", Port: 80},
+			{Target: "cache-2.cache-service.cache-namespace.svc.cluster.local.", Port: 80},
+		},
+		expectedOutput: []string{
+			"cache-0.cache-service.cache-namespace.svc.cluster.local",
+			"",
+			"cache-2.cache-service.cache-namespace.svc.cluster.local",
+		},
+	},
+}
+
+func TestOrderCacheHosts(t *testing.T) {
+	for _, testCase := range testCases {
+		cacheHosts, err := orderCacheHosts(testCase.srvs)
+		assert.NoError(t, err)
+		assert.Equal(t, testCase.expectedOutput, cacheHosts)
 	}
 }

@@ -55,58 +55,58 @@ func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
 	// This ensures that we're always testing the case where the number of chunks exceeds the maxChunks
 	// Additional cases added to validate various cases where the final chunk is less than minChunkSize
 	tc := []struct {
-		name         string
-		maxChunks    int
-		minChunkSize int64
+		name           string
+		maxConcurrency int
+		minChunkSize   int64
 	}{
 		// In these first cases we will never have more than 2 chunks as the minChunkSize is greater than 0.5*contentSize
 		{
-			name:         "minChunkSize greater than contentSize",
-			minChunkSize: contentSize + 1,
-			maxChunks:    1,
+			name:           "minChunkSize greater than contentSize",
+			minChunkSize:   contentSize + 1,
+			maxConcurrency: 1,
 		},
 		{
-			name:         "minChunkSize equal to contentSize",
-			minChunkSize: contentSize,
-			maxChunks:    1,
+			name:           "minChunkSize equal to contentSize",
+			minChunkSize:   contentSize,
+			maxConcurrency: 1,
 		},
 		{
-			name:         "minChunkSize less than contentSize",
-			minChunkSize: contentSize - 1,
-			maxChunks:    2,
+			name:           "minChunkSize less than contentSize",
+			minChunkSize:   contentSize - 1,
+			maxConcurrency: 2,
 		},
 		{
-			name:         "minChunkSize is 3/4 contentSize",
-			minChunkSize: int64(float64(contentSize) * 0.75),
-			maxChunks:    2,
+			name:           "minChunkSize is 3/4 contentSize",
+			minChunkSize:   int64(float64(contentSize) * 0.75),
+			maxConcurrency: 2,
 		},
 		{
 			// This is an exceptional case where we only need a single additional chunk beyond the default "get content size"
 			// request.
-			name:         "minChunkSize is 1/2 contentSize",
-			minChunkSize: int64(float64(contentSize) * 0.5),
-			maxChunks:    2,
+			name:           "minChunkSize is 1/2 contentSize",
+			minChunkSize:   int64(float64(contentSize) * 0.5),
+			maxConcurrency: 2,
 		},
 		// These test cases cover a few scenarios of downloading where the maxChunks will force a re-calculation of
 		// the chunkSize to ensure that we don't exceed the maxChunks.
 		{
 			// remainder will result in 3 chunks, max-chunks is 2
-			name:         "minChunkSize is 1/4 contentSize",
-			minChunkSize: int64(float64(contentSize) * 0.25),
-			maxChunks:    2,
+			name:           "minChunkSize is 1/4 contentSize",
+			minChunkSize:   int64(float64(contentSize) * 0.25),
+			maxConcurrency: 2,
 		},
 		{
 			// humanize.KByte = 1024, remainder will result in 1024/10 = 102 chunks, max-chunks is set to 25
 			// resulting in a chunkSize of 41
-			name:         "many chunks, low maxChunks",
-			minChunkSize: 10,
-			maxChunks:    25,
+			name:           "many chunks, low maxChunks",
+			minChunkSize:   10,
+			maxConcurrency: 25,
 		},
 	}
 
 	for _, tc := range tc {
 		t.Run(tc.name, func(t *testing.T) {
-			opts.MaxChunks = tc.maxChunks
+			opts.MaxConcurrency = tc.maxConcurrency
 			opts.MinChunkSize = tc.minChunkSize
 			bufferMode := makeBufferMode(opts)
 			path, _ := url.JoinPath(server.URL, testFilePath)

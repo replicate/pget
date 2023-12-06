@@ -24,7 +24,7 @@ const (
 )
 
 // HTTPClient is a wrapper around http.Client that allows for limiting the number of concurrent connections per host
-// utilizing a client pool. If the MaxConnPerHost option is not set, the client pool will not be used.
+// utilizing a client pool. If the OptMaxConnPerHost option is not set, the client pool will not be used.
 type HTTPClient struct {
 	*http.Client
 }
@@ -42,7 +42,7 @@ type Options struct {
 }
 
 // NewHTTPClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
-// per host if the MaxConnPerHost option is set.
+// per host if the OptMaxConnPerHost option is set.
 func NewHTTPClient(opts Options) *HTTPClient {
 	disableKeepAlives := opts.ForceHTTP2
 

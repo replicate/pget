@@ -15,9 +15,9 @@ import (
 	pget "github.com/replicate/pget/pkg"
 	"github.com/replicate/pget/pkg/cli"
 	"github.com/replicate/pget/pkg/client"
+	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/logging"
-	"github.com/replicate/pget/pkg/optname"
 )
 
 const longDesc = `
@@ -80,7 +80,7 @@ func GetCommand() *cobra.Command {
 }
 
 func multifilePreRunE(cmd *cobra.Command, args []string) error {
-	if viper.GetBool(optname.Extract) {
+	if viper.GetBool(config.OptExtract) {
 		return fmt.Errorf("cannot use --extract with multifile mode")
 	}
 	return nil
@@ -105,19 +105,19 @@ func runMultifileCMD(cmd *cobra.Command, args []string) error {
 func multifileExecute(ctx context.Context, manifest manifest) error {
 	var errGroup *errgroup.Group
 
-	minChunkSize, err := humanize.ParseBytes(viper.GetString(optname.MinimumChunkSize))
+	minChunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
 	if err != nil {
 		return err
 	}
 
 	clientOpts := client.Options{
-		MaxConnPerHost: viper.GetInt(optname.MaxConnPerHost),
-		ForceHTTP2:     viper.GetBool(optname.ForceHTTP2),
-		MaxRetries:     viper.GetInt(optname.Retries),
-		ConnectTimeout: viper.GetDuration(optname.ConnTimeout),
+		MaxConnPerHost: viper.GetInt(config.OptMaxConnPerHost),
+		ForceHTTP2:     viper.GetBool(config.OptForceHTTP2),
+		MaxRetries:     viper.GetInt(config.OptRetries),
+		ConnectTimeout: viper.GetDuration(config.OptConnTimeout),
 	}
 	downloadOpts := download.Options{
-		MaxConcurrency: viper.GetInt(optname.Concurrency),
+		MaxConcurrency: viper.GetInt(config.OptConcurrency),
 		MinChunkSize:   int64(minChunkSize),
 		Client:         clientOpts,
 	}

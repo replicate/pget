@@ -12,7 +12,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/replicate/pget/pkg/optname"
+	"github.com/replicate/pget/pkg/config"
 )
 
 const UsageTemplate = `
@@ -43,7 +43,7 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.{{e
 
 func EnsureDestinationNotExist(dest string) error {
 	_, err := os.Stat(dest)
-	if !viper.GetBool(optname.Force) && !errors.Is(err, fs.ErrNotExist) {
+	if !viper.GetBool(config.OptForce) && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("destination %s already exists", dest)
 	}
 	return nil

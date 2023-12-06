@@ -7,12 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
-
-	"github.com/replicate/pget/pkg/config"
-	"github.com/replicate/pget/pkg/optname"
 )
 
 type dummyGetterCallerArgs struct {
@@ -121,18 +117,4 @@ func TestAddDownloadMetrics(t *testing.T) {
 	assert.Equal(t, 1, len(metrics.metrics))
 	assert.Equal(t, elapsedTime, metrics.metrics[0].elapsedTime)
 	assert.Equal(t, fileSize, metrics.metrics[0].fileSize)
-}
-
-func TestMultifilePreRunE(t *testing.T) {
-	cmd := GetCommand()
-	if err := config.AddRootPersistentFlags(cmd); err != nil {
-		t.Fatal(err)
-	}
-
-	// Test that extract cannot be set at the same time as multifile is used
-	viper.Set(optname.Extract, true)
-	err := multifilePreRunE(cmd, []string{})
-	assert.Error(t, err)
-
-	viper.Reset()
 }

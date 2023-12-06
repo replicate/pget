@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/rs/zerolog/log"
@@ -17,7 +19,6 @@ import (
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/consumer"
 	"github.com/replicate/pget/pkg/download"
-	"github.com/replicate/pget/pkg/optname"
 )
 
 const rootLongDesc = `
@@ -40,26 +41,73 @@ performance, especially when dealing with large tar files. This makes PGet not j
 efficient file extractor, providing a streamlined solution for fetching and unpacking files.
 `
 
+var concurrency int
+
 func GetCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pget [flags] <url> <dest>",
 		Short: "pget",
 		Long:  rootLongDesc,
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			return config.PersistentStartupProcessFlags()
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if err := config.PersistentStartupProcessFlags(); err != nil {
+				return err
+			}
+			return nil
 		},
 		RunE:    runRootCMD,
 		Args:    cobra.ExactArgs(2),
 		Example: `  pget https://example.com/file.tar.gz file.tar.gz`,
 	}
-	cmd.Flags().BoolP(optname.Extract, "x", false, "Extract archive after download")
+	cmd.Flags().BoolP(config.OptExtract, "x", false, "OptExtract archive after download")
 	cmd.SetUsageTemplate(cli.UsageTemplate)
-	err := config.AddRootPersistentFlags(cmd)
-	if err != nil {
+	config.ViperInit()
+	if err := PersistentFlags(cmd); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 	return cmd
+}
+
+func PersistentFlags(cmd *cobra.Command) error {
+	// Persistent Flags (applies to all commands/subcommands)
+	cmd.PersistentFlags().IntVarP(&concurrency, config.OptConcurrency, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
+	cmd.PersistentFlags().IntVar(&concurrency, config.OptMaxChunks, runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
+	cmd.PersistentFlags().Duration(config.OptConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
+	cmd.PersistentFlags().StringP(config.OptMinimumChunkSize, "m", "16M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
+	cmd.PersistentFlags().BoolP(config.OptForce, "f", false, "OptForce download, overwriting existing file")
+	cmd.PersistentFlags().StringSlice(config.OptResolve, []string{}, "OptResolve hostnames to specific IPs")
+	cmd.PersistentFlags().IntP(config.OptRetries, "r", 5, "Number of retries when attempting to retrieve a file")
+	cmd.PersistentFlags().BoolP(config.OptVerbose, "v", false, "OptVerbose mode (equivalent to --log-level debug)")
+	cmd.PersistentFlags().String(config.OptLoggingLevel, "info", "Log level (debug, info, warn, error)")
+	cmd.PersistentFlags().Bool(config.OptForceHTTP2, false, "OptForce HTTP/2")
+	cmd.PersistentFlags().Int(config.OptMaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host")
+
+	if err := config.AddFlagAlias(cmd, config.OptConcurrency, config.OptMaxChunks); err != nil {
+		return err
+	}
+
+	if err := hideAndDeprecateFlags(cmd); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func hideAndDeprecateFlags(cmd *cobra.Command) error {
+	// Hide flags from help, these are intended to be used for testing/internal benchmarking/debugging only
+	if err := config.HideFlags(cmd, config.OptForceHTTP2, config.OptMaxConnPerHost); err != nil {
+		return err
+	}
+
+	// DeprecatedFlag flags
+	err := config.DeprecateFlags(cmd,
+		config.DeprecatedFlag{Flag: config.OptConcurrency, Msg: "use --max-chunks instead"},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+
 }
 
 func runRootCMD(cmd *cobra.Command, args []string) error {
@@ -72,7 +120,7 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 
 	log.Info().Str("url", urlString).
 		Str("dest", dest).
-		Str("minimum_chunk_size", viper.GetString(optname.MinimumChunkSize)).
+		Str("minimum_chunk_size", viper.GetString(config.OptMinimumChunkSize)).
 		Msg("Initiating")
 
 	if err := cli.EnsureDestinationNotExist(dest); err != nil {
@@ -89,27 +137,27 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 // rootExecute is the main function of the program and encapsulates the general logic
 // returns any/all errors to the caller.
 func rootExecute(ctx context.Context, urlString, dest string) error {
-	minChunkSize, err := humanize.ParseBytes(viper.GetString(optname.MinimumChunkSize))
+	minChunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
 	if err != nil {
 		return err
 	}
 
 	clientOpts := client.Options{
-		ForceHTTP2:     viper.GetBool(optname.ForceHTTP2),
-		MaxRetries:     viper.GetInt(optname.Retries),
-		ConnectTimeout: viper.GetDuration(optname.ConnTimeout),
-		MaxConnPerHost: viper.GetInt(optname.MaxConnPerHost),
+		ForceHTTP2:     viper.GetBool(config.OptForceHTTP2),
+		MaxRetries:     viper.GetInt(config.OptRetries),
+		ConnectTimeout: viper.GetDuration(config.OptConnTimeout),
+		MaxConnPerHost: viper.GetInt(config.OptMaxConnPerHost),
 	}
 	downloadOpts := download.Options{
-		MaxConcurrency: viper.GetInt(optname.Concurrency),
+		MaxConcurrency: viper.GetInt(config.OptConcurrency),
 		MinChunkSize:   int64(minChunkSize),
 		Client:         clientOpts,
-		Semaphore:      semaphore.NewWeighted(int64(viper.GetInt(optname.Concurrency))),
+		Semaphore:      semaphore.NewWeighted(int64(viper.GetInt(config.OptConcurrency))),
 	}
 	getter := pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
 	}
-	if srvName := viper.GetString(optname.CacheNodesSRVName); srvName != "" {
+	if srvName := viper.GetString(config.OptCacheNodesSRVName); srvName != "" {
 		downloadOpts.SliceSize = 512 * humanize.MiByte
 		// FIXME: make this a config option
 		downloadOpts.DomainsToCache = []string{"weights.replicate.delivery"}
@@ -123,7 +171,7 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		}
 	}
 
-	if viper.GetBool(optname.Extract) {
+	if viper.GetBool(config.OptExtract) {
 		getter.Consumer = &consumer.TarExtractor{}
 	}
 

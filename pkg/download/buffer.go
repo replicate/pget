@@ -61,7 +61,6 @@ func (m *BufferMode) getFileSizeFromContentRange(contentRange string) (int64, er
 
 func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffer, int64, error) {
 	logger := logging.GetLogger()
-
 	firstChunkResp, err := m.doRequest(ctx, 0, m.minChunkSize()-1, url)
 	if err != nil {
 		return nil, -1, err
@@ -147,7 +146,6 @@ func (m *BufferMode) doRequest(ctx context.Context, start, end int64, trueURL st
 		return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
 	}
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
-
 	resp, err := m.Client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)

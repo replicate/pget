@@ -102,7 +102,7 @@ func hideAndDeprecateFlags(cmd *cobra.Command) error {
 
 	// DeprecatedFlag flags
 	err := config.DeprecateFlags(cmd,
-		config.DeprecatedFlag{Flag: config.OptConcurrency, Msg: "use --max-chunks instead"},
+		config.DeprecatedFlag{Flag: config.OptMaxChunks, Msg: "use --concurrency instead"},
 	)
 	if err != nil {
 		return err

@@ -68,7 +68,10 @@ func DeprecateFlags(cmd *cobra.Command, deprecations ...DeprecatedFlag) error {
 		}
 		err := cmd.Flags().MarkDeprecated(config.Flag, config.Msg)
 		if err != nil {
-			return fmt.Errorf("failed to mark flag as deprecated: %w", err)
+			err := cmd.PersistentFlags().MarkDeprecated(config.Flag, config.Msg)
+			if err != nil {
+				return fmt.Errorf("failed to mark flag as deprecated: %w", err)
+			}
 		}
 	}
 	return nil

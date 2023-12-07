@@ -259,6 +259,6 @@ func (m *ConsistentHashingMode) downloadChunk(resp *http.Response, dataSlice []b
 	if n != expectedBytes {
 		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, expectedBytes, resp.Request.URL.String())
 	}
-	logger.Debug().Int("size", len(dataSlice)).Int("downloaded", n).Bytes("bytes", dataSlice).Msg("downloaded chunk")
+	logger.Debug().Int("size", len(dataSlice)).Int("downloaded", n).Msg("downloaded chunk")
 	return nil
 }

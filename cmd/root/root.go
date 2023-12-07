@@ -61,14 +61,19 @@ func GetCommand() *cobra.Command {
 	cmd.Flags().BoolP(config.OptExtract, "x", false, "OptExtract archive after download")
 	cmd.SetUsageTemplate(cli.UsageTemplate)
 	config.ViperInit()
-	if err := PersistentFlags(cmd); err != nil {
+	if err := persistentFlags(cmd); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	err := viper.BindPFlags(cmd.PersistentFlags())
+	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 	return cmd
 }
 
-func PersistentFlags(cmd *cobra.Command) error {
+func persistentFlags(cmd *cobra.Command) error {
 	// Persistent Flags (applies to all commands/subcommands)
 	cmd.PersistentFlags().IntVarP(&concurrency, config.OptConcurrency, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
 	cmd.PersistentFlags().IntVar(&concurrency, config.OptMaxChunks, runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
@@ -133,7 +138,6 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 	if err := cli.EnsureDestinationNotExist(dest); err != nil {
 		return err
 	}
-
 	if err := rootExecute(cmd.Context(), urlString, dest); err != nil {
 		return err
 	}
@@ -146,7 +150,7 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 func rootExecute(ctx context.Context, urlString, dest string) error {
 	minChunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
 	if err != nil {
-		return err
+		return fmt.Errorf("error parsing minimum chunk size: %w", err)
 	}
 
 	clientOpts := client.Options{
@@ -155,12 +159,14 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		ConnectTimeout: viper.GetDuration(config.OptConnTimeout),
 		MaxConnPerHost: viper.GetInt(config.OptMaxConnPerHost),
 	}
+
 	downloadOpts := download.Options{
 		MaxConcurrency: viper.GetInt(config.OptConcurrency),
 		MinChunkSize:   int64(minChunkSize),
 		Client:         clientOpts,
 		Semaphore:      semaphore.NewWeighted(int64(viper.GetInt(config.OptConcurrency))),
 	}
+
 	getter := pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
 	}

@@ -221,7 +221,7 @@ func (m *ConsistentHashingMode) consistentHashIfNeeded(req *http.Request, start 
 	for _, host := range m.DomainsToCache {
 		if host == req.URL.Host {
 			if start/m.SliceSize != end/m.SliceSize {
-				return fmt.Errorf("Can't make a range request across a slice boundary: %d-%d straddles a slice boundary (slice size is %d)", start, end, m.SliceSize)
+				return fmt.Errorf("can't make a range request across a slice boundary: %d-%d straddles a slice boundary (slice size is %d)", start, end, m.SliceSize)
 			}
 			slice := start / m.SliceSize
 

@@ -11,6 +11,7 @@ const (
 	OptMaxChunks         = "max-chunks"
 	OptMaxConnPerHost    = "max-conn-per-host"
 	OptMinimumChunkSize  = "minimum-chunk-size"
+	OptOutputConsumer    = "output-consumer"
 	OptResolve           = "resolve"
 	OptRetries           = "retries"
 	OptVerbose           = "verbose"

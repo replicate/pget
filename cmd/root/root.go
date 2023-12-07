@@ -170,15 +170,16 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 	getter := pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
 	}
+
 	if srvName := viper.GetString(config.OptCacheNodesSRVName); srvName != "" {
 		downloadOpts.SliceSize = 512 * humanize.MiByte
 		// FIXME: make this a config option
 		downloadOpts.DomainsToCache = []string{"weights.replicate.delivery"}
-		getter.Downloader, err = download.GetConsistentHashingMode(downloadOpts)
+		downloadOpts.CacheHosts, err = cli.LookupCacheHosts(srvName)
 		if err != nil {
 			return err
 		}
-		downloadOpts.CacheHosts, err = cli.LookupCacheHosts(srvName)
+		getter.Downloader, err = download.GetConsistentHashingMode(downloadOpts)
 		if err != nil {
 			return err
 		}

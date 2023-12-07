@@ -25,10 +25,10 @@ type ConsistentHashingMode struct {
 
 func GetConsistentHashingMode(opts Options) (Strategy, error) {
 	if opts.SliceSize == 0 {
-		return nil, fmt.Errorf("Must specify slice size in consistent hashing mode")
+		return nil, fmt.Errorf("must specify slice size in consistent hashing mode")
 	}
 	if opts.Semaphore != nil && opts.MaxConcurrency == 0 {
-		return nil, fmt.Errorf("If you provide a semaphore you must specify MaxConcurrency")
+		return nil, fmt.Errorf("if you provide a semaphore you must specify MaxConcurrency")
 	}
 	client := client.NewHTTPClient(opts.Client)
 	return &ConsistentHashingMode{
@@ -231,6 +231,7 @@ func (m *ConsistentHashingMode) consistentHashIfNeeded(req *http.Request, start 
 			// jump is an implementation of Google's Jump Consistent Hash.
 			//
 			// See http://arxiv.org/abs/1406.2294 for details.
+			logger.Debug().Uint64("hash_sum", hasher.Sum64()).Int("len_cache_hosts", len(m.CacheHosts)).Msg("consistent hashing")
 			cachePodIndex := int(jump.Hash(hasher.Sum64(), len(m.CacheHosts)))
 			cacheHost := m.CacheHosts[cachePodIndex]
 			logger.Debug().Str("cache_key", key).Int64("start", start).Int64("end", end).Int64("slice_size", m.SliceSize).Int("bucket", cachePodIndex).Msg("consistent hashing")

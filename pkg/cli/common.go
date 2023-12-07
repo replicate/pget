@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/replicate/pget/pkg/config"
+	"github.com/replicate/pget/pkg/logging"
 )
 
 const UsageTemplate = `
@@ -61,9 +62,11 @@ var hostnameIndexRegexp = regexp.MustCompile(`^[a-z0-9-]*-([0-9]+)[.]`)
 
 func orderCacheHosts(srvs []*net.SRV) ([]string, error) {
 	// loop through to find highest index
+	logger := logging.GetLogger()
 	highestIndex := 0
 	for _, srv := range srvs {
 		cacheIndex, err := cacheIndexFor(srv.Target)
+		logger.Debug().Int("cache_index", cacheIndex).Str("target", srv.Target).Msg("orderCacheHosts")
 		if err != nil {
 			return nil, err
 		}
@@ -71,6 +74,7 @@ func orderCacheHosts(srvs []*net.SRV) ([]string, error) {
 			highestIndex = cacheIndex
 		}
 	}
+	logger.Debug().Int("highest_index", highestIndex).Msg("orderCacheHosts")
 	output := make([]string, highestIndex+1)
 	for _, srv := range srvs {
 		cacheIndex, err := cacheIndexFor(srv.Target)
@@ -81,8 +85,10 @@ func orderCacheHosts(srvs []*net.SRV) ([]string, error) {
 		if srv.Port != 80 {
 			hostname = fmt.Sprintf("%s:%d", hostname, srv.Port)
 		}
+		logger.Debug().Str("hostname", hostname).Int("cache_index", cacheIndex).Msg("orderCacheHosts")
 		output[cacheIndex] = hostname
 	}
+	logger.Debug().Str("output", fmt.Sprintf("%s", output)).Msg("orderCacheHosts")
 	return output, nil
 }
 

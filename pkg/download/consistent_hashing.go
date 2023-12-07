@@ -227,7 +227,9 @@ func (m *ConsistentHashingMode) consistentHashIfNeeded(req *http.Request, start 
 
 			key := fmt.Sprintf("%s#%d", req.URL, slice)
 			hasher := fnv.New64a()
-			hasher.Write([]byte(key))
+			if _, err := hasher.Write([]byte(key)); err != nil {
+				return fmt.Errorf("error calculating hash of key")
+			}
 			// jump is an implementation of Google's Jump Consistent Hash.
 			//
 			// See http://arxiv.org/abs/1406.2294 for details.

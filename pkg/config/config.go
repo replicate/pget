@@ -9,10 +9,17 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/replicate/pget/pkg/consumer"
 	"github.com/replicate/pget/pkg/logging"
 )
 
 const viperEnvPrefix = "PGET"
+
+const (
+	ConsumerFile         = "file"
+	ConsumerTarExtractor = "tar-extractor"
+	ConsumerNull         = "null"
+)
 
 type DeprecatedFlag struct {
 	Flag string
@@ -127,4 +134,21 @@ func convertResolveHostsToMap() error {
 		}
 	}
 	return nil
+}
+
+// GetConsumer returns the consumer specified by the user on the command line
+// or an error if the consumer is invalid. Note that this function explicitly
+// calls viper.GetString(OptExtract) internally.
+func GetConsumer() (consumer.Consumer, error) {
+	consumerName := viper.GetString(OptOutputConsumer)
+	switch consumerName {
+	case ConsumerFile:
+		return &consumer.FileWriter{}, nil
+	case ConsumerTarExtractor:
+		return &consumer.TarExtractor{}, nil
+	case ConsumerNull:
+		return &consumer.NullWriter{}, nil
+	default:
+		return nil, fmt.Errorf("invalid consumer specified: %s", consumerName)
+	}
 }

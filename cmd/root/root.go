@@ -17,7 +17,6 @@ import (
 	"github.com/replicate/pget/pkg/cli"
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
-	"github.com/replicate/pget/pkg/consumer"
 	"github.com/replicate/pget/pkg/download"
 )
 
@@ -54,6 +53,7 @@ func GetCommand() *cobra.Command {
 			}
 			return nil
 		},
+		PreRun:  rootCmdPreRun,
 		RunE:    runRootCMD,
 		Args:    cobra.ExactArgs(2),
 		Example: `  pget https://example.com/file.tar.gz file.tar.gz`,
@@ -81,6 +81,7 @@ func PersistentFlags(cmd *cobra.Command) error {
 	cmd.PersistentFlags().String(config.OptLoggingLevel, "info", "Log level (debug, info, warn, error)")
 	cmd.PersistentFlags().Bool(config.OptForceHTTP2, false, "OptForce HTTP/2")
 	cmd.PersistentFlags().Int(config.OptMaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host")
+	cmd.PersistentFlags().StringP(config.OptOutputConsumer, "o", "file", "Output Consumer (file, tar, null)")
 
 	if err := config.AddFlagAlias(cmd, config.OptConcurrency, config.OptMaxChunks); err != nil {
 		return err
@@ -95,7 +96,7 @@ func PersistentFlags(cmd *cobra.Command) error {
 
 func hideAndDeprecateFlags(cmd *cobra.Command) error {
 	// Hide flags from help, these are intended to be used for testing/internal benchmarking/debugging only
-	if err := config.HideFlags(cmd, config.OptForceHTTP2, config.OptMaxConnPerHost); err != nil {
+	if err := config.HideFlags(cmd, config.OptForceHTTP2, config.OptMaxConnPerHost, config.OptOutputConsumer); err != nil {
 		return err
 	}
 
@@ -108,6 +109,12 @@ func hideAndDeprecateFlags(cmd *cobra.Command) error {
 	}
 	return nil
 
+}
+
+func rootCmdPreRun(cmd *cobra.Command, args []string) {
+	if viper.GetBool(config.OptExtract) {
+		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
+	}
 }
 
 func runRootCMD(cmd *cobra.Command, args []string) error {
@@ -171,9 +178,12 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		}
 	}
 
-	if viper.GetBool(config.OptExtract) {
-		getter.Consumer = &consumer.TarExtractor{}
+	consumer, err := config.GetConsumer()
+	if err != nil {
+		return err
 	}
+
+	getter.Consumer = consumer
 
 	_, _, err = getter.DownloadFile(ctx, urlString, dest)
 	return err

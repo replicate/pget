@@ -18,6 +18,7 @@ const viperEnvPrefix = "PGET"
 const (
 	ConsumerFile         = "file"
 	ConsumerTarExtractor = "tar-extractor"
+	ConsumerNull         = "null"
 )
 
 type DeprecatedFlag struct {
@@ -145,6 +146,8 @@ func GetConsumer() (consumer.Consumer, error) {
 		return &consumer.FileWriter{}, nil
 	case ConsumerTarExtractor:
 		return &consumer.TarExtractor{}, nil
+	case ConsumerNull:
+		return &consumer.NullWriter{}, nil
 	default:
 		return nil, fmt.Errorf("invalid consumer specified: %s", consumerName)
 	}

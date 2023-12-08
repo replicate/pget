@@ -55,13 +55,13 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
-      - run: make
+      - run: "make checksum"
       - uses: ncipollo/release-action@v1
         if: github.ref_type=='tag' && !contains(github.ref_name, '-')
         with:
-          artifacts: "pget"
+          artifacts: "pget, sha256sum.txt"
       - uses: ncipollo/release-action@v1
         if: github.ref_type=='tag' && contains(github.ref_name, '-')
         with:
-          artifacts: "pget"
+          artifacts: "pget, sha256sum.txt"
           prerelease: true

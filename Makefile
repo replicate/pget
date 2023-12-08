@@ -7,6 +7,10 @@ BINDIR = $(PREFIX)/bin
 INSTALL := install -m 0755
 INSTALL_PROGRAM := $(INSTALL)
 
+
+CHECKSUM_CMD := shasum -a 256
+CHECKSUM_FILE := sha256sum.txt
+
 GO := go
 GOOS := $(shell $(GO) env GOOS)
 GOARCH := $(shell $(GO) env GOARCH)
@@ -41,6 +45,11 @@ pget:
 install: pget
 	$(INSTALL_PROGRAM) -d $(DESTDIR)$(BINDIR)
 	$(INSTALL_PROGRAM) pget $(DESTDIR)$(BINDIR)/pget
+
+.PHONY: checksum
+checksum: pget
+	$(CHECKSUM_CMD) pget | tee $(CHECKSUM_FILE)
+
 
 .PHONY: uninstall
 uninstall:

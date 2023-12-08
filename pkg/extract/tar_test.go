@@ -119,7 +119,7 @@ func assertSymlinkTarget(t *testing.T, oldName, newName string) {
 	// os.Stat follows symlinks
 	realTarget, err := os.Stat(newName)
 	if !assert.NoError(t, err) {
-		t.FailNow()
+		t.Fatalf("Test failed, could not stat link %s: %v", newName, err)
 	}
 	assert.Equal(t, fileStat.Sys().(*syscall.Stat_t).Ino,
 		realTarget.Sys().(*syscall.Stat_t).Ino)

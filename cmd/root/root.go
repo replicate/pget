@@ -70,6 +70,11 @@ func GetCommand() *cobra.Command {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+	err = viper.BindPFlags(cmd.Flags())
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 	return cmd
 }
 
@@ -169,6 +174,12 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 
 	getter := pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
+	}
+
+	if viper.GetBool(config.OptExtract) {
+		// TODO: decide what to do when --output is set *and* --extract is set
+		log.Debug().Msg("Tar Extract Enabled")
+		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
 	}
 
 	if srvName := config.GetCacheSRV(); srvName != "" {

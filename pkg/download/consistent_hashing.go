@@ -21,6 +21,8 @@ import (
 type ConsistentHashingMode struct {
 	Client *client.HTTPClient
 	Options
+	// TODO: allow this to be configured and not just "BufferMode"
+	FallbackStrategy Strategy
 }
 
 func GetConsistentHashingMode(opts Options) (Strategy, error) {
@@ -31,9 +33,13 @@ func GetConsistentHashingMode(opts Options) (Strategy, error) {
 		return nil, fmt.Errorf("if you provide a semaphore you must specify MaxConcurrency")
 	}
 	client := client.NewHTTPClient(opts.Client)
+	fallbackStrategy := GetBufferMode(opts)
+	fallbackStrategy.Client = client
+
 	return &ConsistentHashingMode{
-		Client:  client,
-		Options: opts,
+		Client:           client,
+		Options:          opts,
+		FallbackStrategy: fallbackStrategy,
 	}, nil
 }
 
@@ -78,8 +84,13 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 			break
 		}
 	}
+	// Use our fallback mode if we're not downloading from a consistent-hashing enabled domain
 	if !shouldContinue {
-		return nil, -1, fmt.Errorf("ConsistentHashingMode not implemented for domains outside DomainsToCache")
+		logger.Debug().
+			Str("url", urlString).
+			Str("reason", fmt.Sprintf("consistent hashing not enabled for %s", parsed.Host)).
+			Msg("fallback strategy")
+		return m.FallbackStrategy.Fetch(ctx, urlString)
 	}
 
 	firstChunkResp, err := m.doRequest(ctx, 0, m.minChunkSize()-1, urlString)

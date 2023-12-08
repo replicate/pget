@@ -63,3 +63,17 @@ clean:
 .PHONY: test
 test:
 	script/test $(ARGS)
+
+.PHONY: lint
+lint: CHECKONLY=1
+lint: format
+	script/lint
+
+.PHONY: format
+format: CHECKONLY=1
+format:
+	CHECKONLY=$(CHECKONLY) script/format
+
+.PHONY: tidy
+tidy:
+	go mod tidy

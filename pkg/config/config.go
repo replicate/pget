@@ -155,3 +155,26 @@ func GetConsumer() (consumer.Consumer, error) {
 		return nil, fmt.Errorf("invalid consumer specified: %s", consumerName)
 	}
 }
+
+// GetCacheSRV returns the SRV name of the cache to use, if set.
+func GetCacheSRV() string {
+	if srv := viper.GetString(OptCacheNodesSRVName); srv != "" {
+		return srv
+	}
+	hostIP := net.ParseIP(viper.GetString(OptHostIP))
+	srvNamesByCIDR := viper.GetStringMapString(OptCacheNodesSRVNameByHostCIDR)
+	if hostIP == nil {
+		// nothing configured, return zero value with no error
+		return ""
+	}
+	for cidr, cidrSRV := range srvNamesByCIDR {
+		_, net, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if net.Contains(hostIP) {
+			return cidrSRV
+		}
+	}
+	return ""
+}

@@ -1,6 +1,11 @@
 package config
 
 const (
+	// these two options are a massive hack. They're only availabe via
+	// envvar, not command line
+	OptCacheNodesSRVNameByHostCIDR = "cache-nodes-srv-name-by-host-cidr"
+	OptHostIP                      = "host-ip"
+
 	OptCacheNodesSRVName = "cache-nodes-srv-name"
 	OptConcurrency       = "concurrency"
 	OptConnTimeout       = "connect-timeout"

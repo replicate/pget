@@ -141,10 +141,10 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 			// this happens if we've already downloaded the whole first slice
 			continue
 		}
-		start := m.SliceSize * int64(slice)
+		startFrom := m.SliceSize * int64(slice)
 		sliceSize := m.SliceSize
 		if slice == 0 {
-			start = firstChunkResp.ContentLength
+			startFrom = firstChunkResp.ContentLength
 			sliceSize = sliceSize - firstChunkResp.ContentLength
 		}
 		if slice == int(totalSlices)-1 {
@@ -160,20 +160,23 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		}
 		chunkSizes := EqualSplit(sliceSize, numChunks)
 		for _, chunkSize := range chunkSizes {
-			end := start + chunkSize - 1
+			// startFrom changes each time round the loop
+			// we create chunkStart to be a stable variable for the goroutine to capture
+			chunkStart := startFrom
+			chunkEnd := startFrom + chunkSize - 1
 
-			logger.Debug().Int64("start", start).Int64("end", end).Msg("starting request")
-			resp, err := m.doRequest(ctx, start, end, urlString)
-			if err != nil {
-				return nil, -1, err
-			}
-
-			dataSlice := data[start : end+1]
+			dataSlice := data[chunkStart : chunkEnd+1]
 			errGroup.Go(func() error {
+				logger.Debug().Int64("start", chunkStart).Int64("end", chunkEnd).Msg("starting request")
+				resp, err := m.doRequest(ctx, chunkStart, chunkEnd, urlString)
+				if err != nil {
+					return err
+				}
+
 				return m.downloadChunk(resp, dataSlice)
 			})
 
-			start = start + chunkSize
+			startFrom = startFrom + chunkSize
 		}
 	}
 

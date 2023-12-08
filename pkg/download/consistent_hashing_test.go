@@ -30,8 +30,9 @@ var testFSes = []fstest.MapFS{
 
 func makeConsistentHashingMode(opts download.Options) *download.ConsistentHashingMode {
 	client := client.NewHTTPClient(opts.Client)
+	fallbackMode := download.BufferMode{Options: opts, Client: client}
 
-	return &download.ConsistentHashingMode{Client: client, Options: opts}
+	return &download.ConsistentHashingMode{Client: client, Options: opts, FallbackStrategy: &fallbackMode}
 }
 
 type chTestCase struct {
@@ -183,4 +184,33 @@ func TestConsistentHashing(t *testing.T) {
 
 		assert.Equal(t, tc.expectedOutput, string(bytes))
 	}
+}
+
+func TestConsistentHashingHasFallback(t *testing.T) {
+	server := httptest.NewServer(http.FileServer(http.FS(testFSes[0])))
+	defer server.Close()
+
+	opts := download.Options{
+		Client:         client.Options{},
+		MaxConcurrency: 8,
+		MinChunkSize:   2,
+		Semaphore:      semaphore.NewWeighted(8),
+		CacheHosts:     []string{},
+		DomainsToCache: []string{"fake.replicate.delivery"},
+		SliceSize:      3,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	strategy := makeConsistentHashingMode(opts)
+
+	urlString, err := url.JoinPath(server.URL, "hello.txt")
+	assert.NoError(t, err)
+	reader, _, err := strategy.Fetch(ctx, urlString)
+	assert.NoError(t, err)
+	bytes, err := io.ReadAll(reader)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "0000000000000000", string(bytes))
 }

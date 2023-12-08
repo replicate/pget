@@ -61,3 +61,51 @@ func TestConvertResolveHostsToMap(t *testing.T) {
 		})
 	}
 }
+
+func TestGetCacheSRV(t *testing.T) {
+	defer func() {
+		viper.Reset()
+	}()
+	testCases := []struct {
+		name            string
+		srvName         string
+		hostIP          string
+		srvNameByHostIP string
+		expected        string
+	}{
+		{"empty", "", "", ``, ""},
+		{"provided", "cache.srv.name.example", "", ``, "cache.srv.name.example"},
+		{"looked up", "", "192.0.2.37", `{"192.0.2.0/24":"cache.srv.name.example"}`, "cache.srv.name.example"},
+		{"both provided", "direct", "192.0.2.37", `{"192.0.2.0/24":"from-map"}`, "direct"},
+		{"chooses correct value from map",
+			"",
+			"192.0.2.37",
+			`{
+                          "192.0.2.0/27":  "cache-1",
+                          "192.0.2.32/27": "cache-2"
+                        }`,
+			"cache-2"},
+		{"missing from map", "", "192.0.2.37", `{"192.0.2.0/30":"cache.srv.name.example"}`, ""},
+		{"hostIP but no map", "", "192.0.2.37", ``, ""},
+		{"invalid map", "", "192.0.2.37", `{`, ""},
+		{"invalid CIDR", "", "192.0.2.37", `{"500.0.2.0/0":"cache.srv.name.example"}`, ""},
+		{"valid + invalid CIDRs",
+			"",
+			"192.0.2.37",
+			`{
+                           "192.0.2.0/24": "cache-valid",
+                           "500.0.2.0/30": "cache-invalid"
+                         }`,
+			"cache-valid"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			viper.Set(OptCacheNodesSRVName, tc.srvName)
+			viper.Set(OptHostIP, tc.hostIP)
+			viper.Set(OptCacheNodesSRVNameByHostCIDR, tc.srvNameByHostIP)
+			actual := GetCacheSRV()
+			assert.Equal(t, tc.expected, actual)
+			viper.Reset()
+		})
+	}
+}

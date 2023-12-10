@@ -105,7 +105,7 @@ func ResolveOverridesToMap(resolveOverrides []string) (map[string]string, error)
 	logger := logging.GetLogger()
 	resolveOverrideMap := make(map[string]string)
 
-	if resolveOverrides == nil || len(resolveOverrides) == 0 {
+	if len(resolveOverrides) == 0 {
 		return nil, nil
 	}
 

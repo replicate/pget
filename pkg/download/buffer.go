@@ -123,11 +123,11 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 		if i == numChunks-1 {
 			end = fileSize - 1
 		}
-		resp, err := m.doRequest(ctx, start, end, trueURL)
-		if err != nil {
-			return nil, -1, err
-		}
 		errGroup.Go(func() error {
+			resp, err := m.doRequest(ctx, start, end, trueURL)
+			if err != nil {
+				return err
+			}
 			return m.downloadChunk(resp, data[start:end+1])
 		})
 	}

@@ -158,11 +158,16 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		return fmt.Errorf("error parsing minimum chunk size: %w", err)
 	}
 
+	resolveOverrides, err := config.ResolveOverridesToMap(viper.GetStringSlice(config.OptResolve))
+	if err != nil {
+		return fmt.Errorf("error parsing resolve overrides: %w", err)
+	}
 	clientOpts := client.Options{
-		ForceHTTP2:     viper.GetBool(config.OptForceHTTP2),
-		MaxRetries:     viper.GetInt(config.OptRetries),
-		ConnectTimeout: viper.GetDuration(config.OptConnTimeout),
-		MaxConnPerHost: viper.GetInt(config.OptMaxConnPerHost),
+		ForceHTTP2:       viper.GetBool(config.OptForceHTTP2),
+		MaxRetries:       viper.GetInt(config.OptRetries),
+		ConnectTimeout:   viper.GetDuration(config.OptConnTimeout),
+		MaxConnPerHost:   viper.GetInt(config.OptMaxConnPerHost),
+		ResolveOverrides: resolveOverrides,
 	}
 
 	downloadOpts := download.Options{

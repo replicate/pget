@@ -110,11 +110,18 @@ func multifileExecute(ctx context.Context, manifest manifest) error {
 		return err
 	}
 
+	// Get the resolution overrides
+	resolveOverrides, err := config.ResolveOverridesToMap(viper.GetStringSlice(config.OptResolve))
+	if err != nil {
+		return fmt.Errorf("error parsing resolve overrides: %w", err)
+	}
+
 	clientOpts := client.Options{
-		MaxConnPerHost: viper.GetInt(config.OptMaxConnPerHost),
-		ForceHTTP2:     viper.GetBool(config.OptForceHTTP2),
-		MaxRetries:     viper.GetInt(config.OptRetries),
-		ConnectTimeout: viper.GetDuration(config.OptConnTimeout),
+		MaxConnPerHost:   viper.GetInt(config.OptMaxConnPerHost),
+		ForceHTTP2:       viper.GetBool(config.OptForceHTTP2),
+		MaxRetries:       viper.GetInt(config.OptRetries),
+		ConnectTimeout:   viper.GetDuration(config.OptConnTimeout),
+		ResolveOverrides: resolveOverrides,
 	}
 	downloadOpts := download.Options{
 		MaxConcurrency: viper.GetInt(config.OptConcurrency),

@@ -11,7 +11,6 @@ import (
 
 	"github.com/hashicorp/go-retryablehttp"
 
-	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/logging"
 	"github.com/replicate/pget/pkg/version"
 )
@@ -35,10 +34,11 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 type Options struct {
-	ForceHTTP2     bool
-	MaxConnPerHost int
-	MaxRetries     int
-	ConnectTimeout time.Duration
+	ForceHTTP2       bool
+	MaxConnPerHost   int
+	MaxRetries       int
+	ConnectTimeout   time.Duration
+	ResolveOverrides map[string]string
 }
 
 // NewHTTPClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
@@ -46,12 +46,17 @@ type Options struct {
 func NewHTTPClient(opts Options) *HTTPClient {
 	disableKeepAlives := opts.ForceHTTP2
 
-	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: transportDialContext(&net.Dialer{
+	dialer := &transportDialer{
+		DNSOverrideMap: opts.ResolveOverrides,
+		Dialer: &net.Dialer{
 			Timeout:   opts.ConnectTimeout,
 			KeepAlive: 30 * time.Second,
-		}),
+		},
+	}
+
+	transport := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           dialer.DialContext,
 		ForceAttemptHTTP2:     opts.ForceHTTP2,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
@@ -126,19 +131,21 @@ func checkRedirectFunc(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
-// transportDialContext is a wrapper around net.Dialer that allows for overriding DNS lookups via the values passed to
-// `--resolve` argument.
-func transportDialContext(dialer *net.Dialer) func(context.Context, string, string) (net.Conn, error) {
-	logger := logging.GetLogger()
+type transportDialer struct {
+	DNSOverrideMap map[string]string
+	Dialer         *net.Dialer
+}
 
-	// Allow for overriding DNS lookups in the dialer without impacting Host and SSL resolution
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		if addrOverride := config.HostToIPResolutionMap[addr]; addrOverride != "" {
-			logger.Debug().Str("addr", addr).Str("override", addrOverride).Msg("DNS Override")
-			addr = addrOverride
-		}
-		return dialer.DialContext(ctx, network, addr)
+func (d *transportDialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	logger := logging.GetLogger()
+	if d.DNSOverrideMap == nil {
+		return d.Dialer.DialContext(ctx, network, addr)
 	}
+	if addrOverride := d.DNSOverrideMap[addr]; addrOverride != "" {
+		logger.Debug().Str("addr", addr).Str("override", addrOverride).Msg("DNS Override")
+		addr = addrOverride
+	}
+	return d.Dialer.DialContext(ctx, network, addr)
 }
 
 func GetSchemeHostKey(urlString string) (string, error) {

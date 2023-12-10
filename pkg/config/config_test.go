@@ -1,7 +1,6 @@
 package config
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -29,35 +28,28 @@ func TestSetLogLevel(t *testing.T) {
 	}
 }
 
-func TestConvertResolveHostsToMap(t *testing.T) {
-	defer func() {
-		HostToIPResolutionMap = map[string]string{}
-		viper.Reset()
-	}()
-
+func TestResolveOverrides(t *testing.T) {
 	testCases := []struct {
 		name     string
 		resolve  []string
 		expected map[string]string
 		err      bool
 	}{
-		{"empty", []string{}, map[string]string{}, false},
+		{"empty", []string{}, nil, false},
 		{"single", []string{"example.com:80:127.0.0.1"}, map[string]string{"example.com:80": "127.0.0.1:80"}, false},
 		{"multiple", []string{"example.com:80:127.0.0.1", "example.com:443:127.0.0.1"}, map[string]string{"example.com:80": "127.0.0.1:80", "example.com:443": "127.0.0.1:443"}, false},
-		{"invalid ip", []string{"example.com:80:InvalidIPAddr"}, map[string]string{}, true},
-		{"duplicate host", []string{"example.com:80:127.0.0.1", "example.com:80:127.0.0.2"}, map[string]string{"example.com:80": "127.0.0.1:80"}, true},
-		{"invalid format", []string{"example.com:80"}, map[string]string{}, true},
-		{"invalid hostname format, is IP Addr", []string{"127.0.0.1:443:127.0.0.2"}, map[string]string{}, true},
+		{"invalid ip", []string{"example.com:80:InvalidIPAddr"}, nil, true},
+		{"duplicate host different target", []string{"example.com:80:127.0.0.1", "example.com:80:127.0.0.2"}, nil, true},
+		{"duplicate host same target", []string{"example.com:80:127.0.0.1", "example.com:80:127.0.0.1"}, map[string]string{"example.com:80": "127.0.0.1:80"}, false},
+		{"invalid format", []string{"example.com:80"}, nil, true},
+		{"invalid hostname format, is IP Addr", []string{"127.0.0.1:443:127.0.0.2"}, nil, true},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			HostToIPResolutionMap = map[string]string{}
-			viper.Set(OptResolve, strings.Join(tc.resolve, " "))
-			err := convertResolveHostsToMap()
+			resolveOverrides, err := ResolveOverridesToMap(tc.resolve)
 			assert.Equal(t, tc.err, err != nil)
-			assert.Equal(t, tc.expected, HostToIPResolutionMap)
-			viper.Reset()
+			assert.Equal(t, tc.expected, resolveOverrides)
 		})
 	}
 }

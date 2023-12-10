@@ -26,20 +26,12 @@ type DeprecatedFlag struct {
 	Msg  string
 }
 
-// HostToIPResolutionMap is a map of hostnames to IP addresses
-// TODO: Eliminate this global variable
-var HostToIPResolutionMap = make(map[string]string)
-
 func PersistentStartupProcessFlags() error {
 	if viper.GetBool(OptVerbose) {
 		viper.Set(OptLoggingLevel, "debug")
 	}
 	setLogLevel(viper.GetString(OptLoggingLevel))
-	if err := convertResolveHostsToMap(); err != nil {
-		return err
-	}
 	return nil
-
 }
 
 func HideFlags(cmd *cobra.Command, flags ...string) error {
@@ -109,34 +101,44 @@ func setLogLevel(logLevel string) {
 	}
 }
 
-func convertResolveHostsToMap() error {
+func ResolveOverridesToMap(resolveOverrides []string) (map[string]string, error) {
 	logger := logging.GetLogger()
-	for _, resolveHost := range viper.GetStringSlice(OptResolve) {
+	resolveOverrideMap := make(map[string]string)
+
+	if resolveOverrides == nil || len(resolveOverrides) == 0 {
+		return nil, nil
+	}
+
+	for _, resolveHost := range resolveOverrides {
 		split := strings.SplitN(resolveHost, ":", 3)
 		if len(split) != 3 {
-			return fmt.Errorf("invalid resolve host format, expected <hostname>:port:<ip>, got: %s", resolveHost)
+			return nil, fmt.Errorf("invalid resolve host format, expected <hostname>:port:<ip>, got: %s", resolveHost)
 		}
 		host, port, addr := split[0], split[1], split[2]
 		if net.ParseIP(host) != nil {
-			return fmt.Errorf("invalid hostname specified, looks like an IP address: %s", host)
+			return nil, fmt.Errorf("invalid hostname specified, looks like an IP address: %s", host)
 		}
 		hostPort := net.JoinHostPort(host, port)
-		if _, ok := HostToIPResolutionMap[hostPort]; ok {
-			return fmt.Errorf("duplicate host:port specified: %s", host)
+		if override, ok := resolveOverrideMap[hostPort]; ok {
+			if override == net.JoinHostPort(addr, port) {
+				// duplicate entry, ignore
+				continue
+			}
+			return nil, fmt.Errorf("duplicate host:port specified: %s", host)
 		}
 		if net.ParseIP(addr) == nil {
-			return fmt.Errorf("invalid IP address: %s", addr)
+			return nil, fmt.Errorf("invalid IP address: %s", addr)
 		}
-		HostToIPResolutionMap[hostPort] = net.JoinHostPort(addr, port)
+		resolveOverrideMap[hostPort] = net.JoinHostPort(addr, port)
 	}
 	if logger.GetLevel() == zerolog.DebugLevel {
 		logger := logging.GetLogger()
 
-		for key, elem := range HostToIPResolutionMap {
+		for key, elem := range resolveOverrideMap {
 			logger.Debug().Str("host_port", key).Str("resolve_target", elem).Msg("Config")
 		}
 	}
-	return nil
+	return resolveOverrideMap, nil
 }
 
 // GetConsumer returns the consumer specified by the user on the command line

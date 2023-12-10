@@ -47,7 +47,7 @@ func GetCommand() *cobra.Command {
 		Use:   "pget [flags] <url> <dest>",
 		Short: "pget",
 		Long:  rootLongDesc,
-		PreRunE: func(cmd *cobra.Command, args []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if err := config.PersistentStartupProcessFlags(); err != nil {
 				return err
 			}

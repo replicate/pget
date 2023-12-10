@@ -123,6 +123,21 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 		Consumer:   consumer,
 	}
 
+	// TODO DRY this
+	if srvName := config.GetCacheSRV(); srvName != "" {
+		downloadOpts.SliceSize = 512 * humanize.MiByte
+		// FIXME: make this a config option
+		downloadOpts.DomainsToCache = []string{"weights.replicate.delivery"}
+		downloadOpts.CacheHosts, err = cli.LookupCacheHosts(srvName)
+		if err != nil {
+			return err
+		}
+		getter.Downloader, err = download.GetConsistentHashingMode(downloadOpts)
+		if err != nil {
+			return err
+		}
+	}
+
 	totalFileSize, elapsedTime, err := getter.DownloadFiles(ctx, manifest)
 	if err != nil {
 		return err

@@ -83,6 +83,9 @@ func multifilePreRunE(cmd *cobra.Command, args []string) error {
 	if viper.GetBool(config.OptExtract) {
 		return fmt.Errorf("cannot use --extract with multifile mode")
 	}
+	if viper.GetString(config.OptOutputConsumer) == config.ConsumerTarExtractor {
+		return fmt.Errorf("cannot use --output-consumer tar-extractor with multifile mode")
+	}
 	return nil
 }
 
@@ -121,8 +124,15 @@ func multifileExecute(ctx context.Context, manifest manifest) error {
 		MinChunkSize:   int64(minChunkSize),
 		Client:         clientOpts,
 	}
+
+	consumer, err := config.GetConsumer()
+	if err != nil {
+		return fmt.Errorf("error getting consumer: %w", err)
+	}
+
 	getter := &pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
+		Consumer:   consumer,
 	}
 
 	metrics := &downloadMetrics{

@@ -172,8 +172,14 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		Semaphore:      semaphore.NewWeighted(int64(viper.GetInt(config.OptConcurrency))),
 	}
 
+	consumer, err := config.GetConsumer()
+	if err != nil {
+		return err
+	}
+
 	getter := pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
+		Consumer:   consumer,
 	}
 
 	if viper.GetBool(config.OptExtract) {
@@ -195,13 +201,6 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 			return err
 		}
 	}
-
-	consumer, err := config.GetConsumer()
-	if err != nil {
-		return err
-	}
-
-	getter.Consumer = consumer
 
 	_, _, err = getter.DownloadFile(ctx, urlString, dest)
 	return err

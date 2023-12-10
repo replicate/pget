@@ -193,6 +193,7 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
 	}
 
+	// TODO DRY this
 	if srvName := config.GetCacheSRV(); srvName != "" {
 		downloadOpts.SliceSize = 512 * humanize.MiByte
 		// FIXME: make this a config option

@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	pget "github.com/replicate/pget/pkg"
 	"github.com/replicate/pget/pkg/client"
 )
 
@@ -61,29 +62,29 @@ func TestCheckSeenDests(t *testing.T) {
 }
 
 func TestAddEntry(t *testing.T) {
-	entries := make(manifest)
+	entries := make(pget.Manifest)
 	schemeHostExample, _ := client.GetSchemeHostKey("https://example.com")
 	schemHostExample2, _ := client.GetSchemeHostKey("https://example2.com")
 
 	entries = addEntry(entries, schemeHostExample, "https://example.com/file1.txt", "/tmp/file1.txt")
 	assert.Len(t, entries, 1)
 	assert.Len(t, entries[schemeHostExample], 1)
-	assert.Equal(t, "https://example.com/file1.txt", entries[schemeHostExample][0].url)
-	assert.Equal(t, "/tmp/file1.txt", entries[schemeHostExample][0].dest)
+	assert.Equal(t, "https://example.com/file1.txt", entries[schemeHostExample][0].URL)
+	assert.Equal(t, "/tmp/file1.txt", entries[schemeHostExample][0].Dest)
 	_, ok := entries[schemeHostExample]
 	assert.True(t, ok)
 
 	entries = addEntry(entries, schemeHostExample, "https://example.com/file2.txt", "/tmp/file2.txt")
 	assert.Len(t, entries, 1)
 	assert.Len(t, entries[schemeHostExample], 2)
-	assert.Equal(t, "https://example.com/file2.txt", entries[schemeHostExample][1].url)
-	assert.Equal(t, "/tmp/file2.txt", entries[schemeHostExample][1].dest)
+	assert.Equal(t, "https://example.com/file2.txt", entries[schemeHostExample][1].URL)
+	assert.Equal(t, "/tmp/file2.txt", entries[schemeHostExample][1].Dest)
 
 	entries = addEntry(entries, schemHostExample2, "https://example2.com/file3.txt", "/tmp/file3.txt")
 	assert.Len(t, entries, 2)
 	assert.Len(t, entries[schemHostExample2], 1)
-	assert.Equal(t, "https://example2.com/file3.txt", entries[schemHostExample2][0].url)
-	assert.Equal(t, "/tmp/file3.txt", entries[schemHostExample2][0].dest)
+	assert.Equal(t, "https://example2.com/file3.txt", entries[schemHostExample2][0].URL)
+	assert.Equal(t, "/tmp/file3.txt", entries[schemHostExample2][0].Dest)
 	_, ok = entries[schemHostExample2]
 	assert.True(t, ok)
 

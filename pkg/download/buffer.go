@@ -143,7 +143,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 func (m *BufferMode) doRequest(ctx context.Context, start, end int64, trueURL string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", trueURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
+		return nil, fmt.Errorf("failed to download %s: %w", trueURL, err)
 	}
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 	resp, err := m.Client.Do(req)

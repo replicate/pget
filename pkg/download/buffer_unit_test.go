@@ -2,6 +2,7 @@ package download
 
 import (
 	"context"
+	"io"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -110,11 +111,13 @@ func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
 			opts.MinChunkSize = tc.minChunkSize
 			bufferMode := makeBufferMode(opts)
 			path, _ := url.JoinPath(server.URL, testFilePath)
-			download, size, err := bufferMode.fileToBuffer(context.Background(), path)
+			download, size, err := bufferMode.Fetch(context.Background(), path)
+			assert.NoError(t, err)
+			data, err := io.ReadAll(download)
 			assert.NoError(t, err)
 			assert.Equal(t, contentSize, size)
-			assert.Equal(t, len(content), download.Len())
-			assert.Equal(t, content, download.Bytes())
+			assert.Equal(t, len(content), len(data))
+			assert.Equal(t, content, data)
 		})
 	}
 }

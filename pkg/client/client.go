@@ -138,9 +138,6 @@ type transportDialer struct {
 
 func (d *transportDialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	logger := logging.GetLogger()
-	if d.DNSOverrideMap == nil {
-		return d.Dialer.DialContext(ctx, network, addr)
-	}
 	if addrOverride := d.DNSOverrideMap[addr]; addrOverride != "" {
 		logger.Debug().Str("addr", addr).Str("override", addrOverride).Msg("DNS Override")
 		addr = addrOverride

@@ -125,8 +125,10 @@ func testDownloadSingleFile(opts download.Options, size int64, t *testing.T) {
 	dest := tempFilename()
 	defer os.Remove(dest)
 
-	_, _, err = getter.DownloadFile(context.Background(), ts.URL+"/random-bytes", dest)
+	actualSize, _, err := getter.DownloadFile(context.Background(), ts.URL+"/random-bytes", dest)
 	assert.NoError(t, err)
+
+	assert.Equal(t, size, actualSize)
 
 	cmd := exec.Command("diff", "-q", srcFilename, dest)
 	err = cmd.Run()
@@ -147,10 +149,12 @@ func testDownloadMultipleFiles(opts download.Options, sizes []int64, t *testing.
 	defer os.RemoveAll(outputDir)
 
 	srcFilenames := make([]string, len(sizes))
+	var expectedTotalSize int64
 	for i, size := range sizes {
 		srcFilenames[i] = fmt.Sprintf("random-bytes.%d", i)
 
 		writeRandomFile(t, filepath.Join(inputDir, srcFilenames[i]), size)
+		expectedTotalSize += size
 	}
 
 	ts := httptest.NewServer(http.FileServer(http.Dir(inputDir)))
@@ -170,8 +174,10 @@ func testDownloadMultipleFiles(opts download.Options, sizes []int64, t *testing.
 		"ignored-value": entries,
 	}
 
-	_, _, err = getter.DownloadFiles(context.Background(), manifest)
+	actualTotalSize, _, err := getter.DownloadFiles(context.Background(), manifest)
 	assert.NoError(t, err)
+
+	assert.Equal(t, expectedTotalSize, actualTotalSize)
 
 	cmd := exec.Command("diff", "-q", inputDir, outputDir)
 	err = cmd.Run()

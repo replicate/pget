@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	pget "github.com/replicate/pget/pkg"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 )
@@ -62,7 +63,7 @@ func getDummyGetter(returnErr bool) *dummyGetter {
 func TestDownloadFilesFromHost(t *testing.T) {
 	getter := getDummyGetter(false)
 
-	entries := []manifestEntry{
+	entries := []pget.ManifestEntry{
 		{"https://example.com/file1.txt", "/tmp/file1.txt"},
 		{"https://example.com/file2.txt", "/tmp/file2.txt"},
 	}
@@ -76,8 +77,8 @@ func TestDownloadFilesFromHost(t *testing.T) {
 	err := errGroup.Wait()
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(getter.Args()))
-	assert.Contains(t, getter.Args(), dummyGetterCallerArgs{entries[0].url, entries[0].dest})
-	assert.Contains(t, getter.Args(), dummyGetterCallerArgs{entries[1].url, entries[1].dest})
+	assert.Contains(t, getter.Args(), dummyGetterCallerArgs{entries[0].URL, entries[0].Dest})
+	assert.Contains(t, getter.Args(), dummyGetterCallerArgs{entries[1].URL, entries[1].Dest})
 
 	failsGetter := getDummyGetter(true)
 

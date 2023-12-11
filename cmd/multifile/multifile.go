@@ -39,11 +39,6 @@ const multifileExamples = `
   cat multifile.txt | pget multifile -
 `
 
-type manifestEntry struct {
-	url  string
-	dest string
-}
-
 type multifileDownloadMetric struct {
 	elapsedTime time.Duration
 	fileSize    int64
@@ -105,7 +100,7 @@ func runMultifileCMD(cmd *cobra.Command, args []string) error {
 	return multifileExecute(cmd.Context(), manifest)
 }
 
-func multifileExecute(ctx context.Context, manifest manifest) error {
+func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 	var errGroup *errgroup.Group
 
 	minChunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
@@ -188,13 +183,13 @@ func aggregateAndPrintMetrics(elapsedTime time.Duration, metrics *downloadMetric
 		Msg("Metrics")
 }
 
-func downloadFilesFromHost(ctx context.Context, getter Getter, eg *errgroup.Group, entries []manifestEntry, metrics *downloadMetrics) error {
+func downloadFilesFromHost(ctx context.Context, getter Getter, eg *errgroup.Group, entries []pget.ManifestEntry, metrics *downloadMetrics) error {
 	logger := logging.GetLogger()
 
 	for _, entry := range entries {
 		// Avoid the `entry` loop variable being captured by the
 		// goroutine by creating new variables
-		url, dest := entry.url, entry.dest
+		url, dest := entry.URL, entry.Dest
 		logger.Debug().Str("url", url).Str("dest", dest).Msg("Queueing Download")
 
 		eg.Go(func() error {

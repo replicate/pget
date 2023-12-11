@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	pget "github.com/replicate/pget/pkg"
 	"github.com/replicate/pget/pkg/cli"
 	"github.com/replicate/pget/pkg/client"
 )
@@ -23,11 +24,6 @@ import (
 //
 // When we parse a manifest, we group by URL base (ie scheme://hostname) so that
 // all URLs that may share a connection are grouped.
-
-// A manifest is a mapping from a base URI (consisting of scheme://authority) to
-// a list of manifest entries under that base URI.  That is, the manifest
-// entries are grouped by remote server that we might connect to.
-type manifest map[string][]manifestEntry
 
 func manifestFile(manifestPath string) (*os.File, error) {
 	if manifestPath == "-" {
@@ -62,21 +58,21 @@ func checkSeenDests(seenDests map[string]string, dest string, urlString string) 
 	return nil
 }
 
-func addEntry(manifestMap manifest, schemeHost string, urlString string, dest string) manifest {
+func addEntry(manifestMap pget.Manifest, schemeHost string, urlString string, dest string) pget.Manifest {
 	entries, ok := manifestMap[schemeHost]
 
 	if !ok {
-		manifestMap[schemeHost] = []manifestEntry{{urlString, dest}}
+		manifestMap[schemeHost] = []pget.ManifestEntry{{urlString, dest}}
 	} else {
-		manifestMap[schemeHost] = append(entries, manifestEntry{urlString, dest})
+		manifestMap[schemeHost] = append(entries, pget.ManifestEntry{urlString, dest})
 	}
 
 	return manifestMap
 }
 
-func parseManifest(file io.Reader) (manifest, error) {
+func parseManifest(file io.Reader) (pget.Manifest, error) {
 	seenDests := make(map[string]string)
-	manifestMap := make(manifest)
+	manifestMap := make(pget.Manifest)
 
 	scanner := bufio.NewScanner(file)
 

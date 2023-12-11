@@ -17,6 +17,16 @@ type Getter struct {
 	Consumer   consumer.Consumer
 }
 
+type ManifestEntry struct {
+	URL  string
+	Dest string
+}
+
+// A Manifest is a mapping from a base URI (consisting of scheme://authority) to
+// a list of Manifest entries under that base URI.  That is, the Manifest
+// entries are grouped by remote server that we might connect to.
+type Manifest map[string][]ManifestEntry
+
 func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {
 	if g.Consumer == nil {
 		g.Consumer = &consumer.FileWriter{}
@@ -50,5 +60,4 @@ func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int
 		Str("total_elapsed", fmt.Sprintf("%.3fs", totalElapsed.Seconds())).
 		Msg("Complete")
 	return fileSize, totalElapsed, nil
-
 }

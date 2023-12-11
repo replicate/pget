@@ -62,9 +62,9 @@ func addEntry(manifestMap pget.Manifest, schemeHost string, urlString string, de
 	entries, ok := manifestMap[schemeHost]
 
 	if !ok {
-		manifestMap[schemeHost] = []pget.ManifestEntry{{urlString, dest}}
+		manifestMap[schemeHost] = []pget.ManifestEntry{{URL: urlString, Dest: dest}}
 	} else {
-		manifestMap[schemeHost] = append(entries, pget.ManifestEntry{urlString, dest})
+		manifestMap[schemeHost] = append(entries, pget.ManifestEntry{URL: urlString, Dest: dest})
 	}
 
 	return manifestMap

@@ -114,6 +114,7 @@ func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
 			download, size, err := bufferMode.Fetch(context.Background(), path)
 			assert.NoError(t, err)
 			data, err := io.ReadAll(download)
+			assert.NoError(t, err)
 			assert.Equal(t, contentSize, size)
 			assert.Equal(t, len(content), len(data))
 			assert.Equal(t, content, data)

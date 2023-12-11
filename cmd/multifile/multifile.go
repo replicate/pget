@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -37,16 +36,6 @@ const multifileExamples = `
 
   cat multifile.txt | pget multifile -
 `
-
-type multifileDownloadMetric struct {
-	elapsedTime time.Duration
-	fileSize    int64
-}
-
-type downloadMetrics struct {
-	metrics []multifileDownloadMetric
-	mut     sync.Mutex
-}
 
 // test seam
 type Getter interface {
@@ -134,21 +123,26 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 		Consumer:   consumer,
 	}
 
-	metrics := &downloadMetrics{
-		metrics: make([]multifileDownloadMetric, 0),
-		mut:     sync.Mutex{},
-	}
-
 	totalFileSize, elapsedTime, err := getter.DownloadFiles(ctx, manifest)
+	if err != nil {
+		return err
+	}
 
 	throughput := float64(totalFileSize) / elapsedTime.Seconds()
 	logger := logging.GetLogger()
 	logger.Info().
-		Int("file_count", len(metrics.metrics)).
+		Int("file_count", numEntries(manifest)).
 		Str("total_bytes_downloaded", humanize.Bytes(uint64(totalFileSize))).
 		Str("throughput", fmt.Sprintf("%s/s", humanize.Bytes(uint64(throughput)))).
 		Str("elapsed_time", fmt.Sprintf("%.3fs", elapsedTime.Seconds())).
 		Msg("Metrics")
 
 	return nil
+}
+
+func numEntries(manifest pget.Manifest) (totalEntries int) {
+	for _, entries := range manifest {
+		totalEntries += len(entries)
+	}
+	return
 }

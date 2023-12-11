@@ -3,9 +3,11 @@ package pget
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/consumer"
 	"github.com/replicate/pget/pkg/download"
@@ -60,4 +62,53 @@ func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int
 		Str("total_elapsed", fmt.Sprintf("%.3fs", totalElapsed.Seconds())).
 		Msg("Complete")
 	return fileSize, totalElapsed, nil
+}
+
+func (g *Getter) DownloadFiles(ctx context.Context, manifest Manifest) (int64, time.Duration, error) {
+	if g.Consumer == nil {
+		g.Consumer = &consumer.FileWriter{}
+	}
+
+	errGroup, ctx := errgroup.WithContext(ctx)
+
+	totalSize := new(atomic.Int64)
+	multifileDownloadStart := time.Now()
+
+	for host, entries := range manifest {
+		err := g.downloadFilesFromHost(ctx, errGroup, entries, totalSize)
+		if err != nil {
+			return 0, 0, fmt.Errorf("error initiating download of files from host %s: %w", host, err)
+		}
+	}
+	err := errGroup.Wait()
+	if err != nil {
+		return 0, 0, fmt.Errorf("error downloading files: %w", err)
+	}
+	elapsedTime := time.Since(multifileDownloadStart)
+	return totalSize.Load(), elapsedTime, nil
+}
+
+func (g *Getter) downloadFilesFromHost(ctx context.Context, eg *errgroup.Group, entries []ManifestEntry, totalSize *atomic.Int64) error {
+	logger := logging.GetLogger()
+
+	for _, entry := range entries {
+		// Avoid the `entry` loop variable being captured by the
+		// goroutine by creating new variables
+		url, dest := entry.URL, entry.Dest
+		logger.Debug().Str("url", url).Str("dest", dest).Msg("Queueing Download")
+
+		eg.Go(func() error {
+			return g.downloadAndMeasure(ctx, url, dest, totalSize)
+		})
+	}
+	return nil
+}
+
+func (g *Getter) downloadAndMeasure(ctx context.Context, url, dest string, totalSize *atomic.Int64) error {
+	fileSize, _, err := g.DownloadFile(ctx, url, dest)
+	if err != nil {
+		return err
+	}
+	totalSize.Add(fileSize)
+	return nil
 }

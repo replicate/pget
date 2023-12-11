@@ -10,7 +10,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"golang.org/x/sync/errgroup"
 
 	pget "github.com/replicate/pget/pkg"
 	"github.com/replicate/pget/pkg/cli"
@@ -101,8 +100,6 @@ func runMultifileCMD(cmd *cobra.Command, args []string) error {
 }
 
 func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
-	var errGroup *errgroup.Group
-
 	minChunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
 	if err != nil {
 		return err
@@ -142,78 +139,16 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 		mut:     sync.Mutex{},
 	}
 
-	// download each host's files in parallel
-	errGroup, ctx = errgroup.WithContext(ctx)
+	totalFileSize, elapsedTime, err := getter.DownloadFiles(ctx, manifest)
 
-	multifileDownloadStart := time.Now()
-
-	for host, entries := range manifest {
-		err := downloadFilesFromHost(ctx, getter, errGroup, entries, metrics)
-		if err != nil {
-			return fmt.Errorf("error initiating download of files from host %s: %w", host, err)
-		}
-	}
-	err = errGroup.Wait()
-	if err != nil {
-		return fmt.Errorf("error downloading files: %w", err)
-	}
-
-	aggregateAndPrintMetrics(time.Since(multifileDownloadStart), metrics)
-	return nil
-}
-
-func aggregateAndPrintMetrics(elapsedTime time.Duration, metrics *downloadMetrics) {
-	logger := logging.GetLogger()
-
-	var totalFileSize int64
-
-	metrics.mut.Lock()
-	defer metrics.mut.Unlock()
-
-	for _, metric := range metrics.metrics {
-		totalFileSize += metric.fileSize
-
-	}
 	throughput := float64(totalFileSize) / elapsedTime.Seconds()
+	logger := logging.GetLogger()
 	logger.Info().
 		Int("file_count", len(metrics.metrics)).
 		Str("total_bytes_downloaded", humanize.Bytes(uint64(totalFileSize))).
 		Str("throughput", fmt.Sprintf("%s/s", humanize.Bytes(uint64(throughput)))).
 		Str("elapsed_time", fmt.Sprintf("%.3fs", elapsedTime.Seconds())).
 		Msg("Metrics")
-}
 
-func downloadFilesFromHost(ctx context.Context, getter Getter, eg *errgroup.Group, entries []pget.ManifestEntry, metrics *downloadMetrics) error {
-	logger := logging.GetLogger()
-
-	for _, entry := range entries {
-		// Avoid the `entry` loop variable being captured by the
-		// goroutine by creating new variables
-		url, dest := entry.URL, entry.Dest
-		logger.Debug().Str("url", url).Str("dest", dest).Msg("Queueing Download")
-
-		eg.Go(func() error {
-			return downloadAndMeasure(ctx, getter, url, dest, metrics)
-		})
-	}
 	return nil
-}
-
-func downloadAndMeasure(ctx context.Context, getter Getter, url, dest string, metrics *downloadMetrics) error {
-	fileSize, elapsedTime, err := getter.DownloadFile(ctx, url, dest)
-	if err != nil {
-		return err
-	}
-	addDownloadMetrics(elapsedTime, fileSize, metrics)
-	return nil
-}
-
-func addDownloadMetrics(elapsedTime time.Duration, fileSize int64, metrics *downloadMetrics) {
-	result := multifileDownloadMetric{
-		elapsedTime: elapsedTime,
-		fileSize:    fileSize,
-	}
-	metrics.mut.Lock()
-	defer metrics.mut.Unlock()
-	metrics.metrics = append(metrics.metrics, result)
 }

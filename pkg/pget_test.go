@@ -2,6 +2,7 @@ package pget_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
@@ -136,3 +137,63 @@ func TestDownload10MH1(t *testing.T)  { testDownloadSingleFile(defaultOpts, 10*h
 func TestDownload100MH1(t *testing.T) { testDownloadSingleFile(defaultOpts, 100*humanize.MiByte, t) }
 func TestDownload10MH2(t *testing.T)  { testDownloadSingleFile(http2Opts, 10*humanize.MiByte, t) }
 func TestDownload100MH2(t *testing.T) { testDownloadSingleFile(http2Opts, 100*humanize.MiByte, t) }
+
+func testDownloadMultipleFiles(opts download.Options, sizes []int64, t *testing.T) {
+	inputDir, err := os.MkdirTemp("", "pget-buffer-test-in")
+	require.NoError(t, err)
+	defer os.RemoveAll(inputDir)
+	outputDir, err := os.MkdirTemp("", "pget-buffer-test-out")
+	require.NoError(t, err)
+	defer os.RemoveAll(outputDir)
+
+	srcFilenames := make([]string, len(sizes))
+	for i, size := range sizes {
+		srcFilenames[i] = fmt.Sprintf("random-bytes.%d", i)
+
+		writeRandomFile(t, filepath.Join(inputDir, srcFilenames[i]), size)
+	}
+
+	ts := httptest.NewServer(http.FileServer(http.Dir(inputDir)))
+	defer ts.Close()
+
+	entries := make([]pget.ManifestEntry, len(sizes))
+	for i, srcFilename := range srcFilenames {
+		entries[i] = pget.ManifestEntry{
+			URL:  ts.URL + "/" + srcFilename,
+			Dest: outputDir + "/" + srcFilename,
+		}
+	}
+
+	getter := makeGetter(opts)
+
+	manifest := pget.Manifest{
+		"ignored-value": entries,
+	}
+
+	_, _, err = getter.DownloadFiles(context.Background(), manifest)
+	assert.NoError(t, err)
+
+	cmd := exec.Command("diff", "-q", inputDir, outputDir)
+	err = cmd.Run()
+	assert.NoError(t, err, "source file and dest file should be identical")
+}
+
+func TestDownloadFiveFiles(t *testing.T) {
+	testDownloadMultipleFiles(defaultOpts, []int64{
+		10 * humanize.KiByte,
+		20 * humanize.KiByte,
+		30 * humanize.KiByte,
+		40 * humanize.KiByte,
+		50 * humanize.KiByte,
+	}, t)
+}
+
+func TestDownloadFive10MFiles(t *testing.T) {
+	testDownloadMultipleFiles(defaultOpts, []int64{
+		10 * humanize.MiByte,
+		10 * humanize.MiByte,
+		10 * humanize.MiByte,
+		10 * humanize.MiByte,
+		10 * humanize.MiByte,
+	}, t)
+}

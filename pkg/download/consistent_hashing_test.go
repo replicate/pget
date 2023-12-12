@@ -30,13 +30,6 @@ var testFSes = []fstest.MapFS{
 	{"hello.txt": {Data: []byte("7777777777777777")}},
 }
 
-func makeConsistentHashingMode(opts download.Options) *download.ConsistentHashingMode {
-	client := client.NewHTTPClient(opts.Client)
-	fallbackMode := download.BufferMode{Options: opts, Client: client}
-
-	return &download.ConsistentHashingMode{Client: client, Options: opts, FallbackStrategy: &fallbackMode}
-}
-
 type chTestCase struct {
 	name           string
 	concurrency    int
@@ -194,7 +187,8 @@ func TestConsistentHashing(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			strategy := makeConsistentHashingMode(opts)
+			strategy, err := download.GetConsistentHashingMode(opts)
+			assert.NoError(t, err)
 
 			reader, _, err := strategy.Fetch(ctx, "http://test.replicate.delivery/hello.txt")
 			assert.NoError(t, err)
@@ -223,7 +217,8 @@ func TestConsistentHashingHasFallback(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	strategy := makeConsistentHashingMode(opts)
+	strategy, err := download.GetConsistentHashingMode(opts)
+	assert.NoError(t, err)
 
 	urlString, err := url.JoinPath(server.URL, "hello.txt")
 	assert.NoError(t, err)
@@ -311,12 +306,14 @@ func TestConsistentHashingFileFallback(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			strategy := makeConsistentHashingMode(opts)
+			strategy, err := download.GetConsistentHashingMode(opts)
+			assert.NoError(t, err)
+
 			fallbackStrategy := &testStrategy{}
-			strategy.FallbackStrategy = fallbackStrategy
+			strategy.(*download.ConsistentHashingMode).FallbackStrategy = fallbackStrategy
 
 			urlString := "http://fake.replicate.delivery/hello.txt"
-			_, _, err := strategy.Fetch(ctx, urlString)
+			_, _, err = strategy.Fetch(ctx, urlString)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
 			}
@@ -372,12 +369,14 @@ func TestConsistentHashingChunkFallback(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			strategy := makeConsistentHashingMode(opts)
+			strategy, err := download.GetConsistentHashingMode(opts)
+			assert.NoError(t, err)
+
 			fallbackStrategy := &testStrategy{}
-			strategy.FallbackStrategy = fallbackStrategy
+			strategy.(*download.ConsistentHashingMode).FallbackStrategy = fallbackStrategy
 
 			urlString := "http://fake.replicate.delivery/hello.txt"
-			_, _, err := strategy.Fetch(ctx, urlString)
+			_, _, err = strategy.Fetch(ctx, urlString)
 			assert.ErrorIs(t, err, tc.expectedError)
 			assert.Equal(t, tc.fetchCalledCount, fallbackStrategy.fetchCalledCount)
 			assert.Equal(t, tc.doRequestCalledCount, fallbackStrategy.doRequestCalledCount)

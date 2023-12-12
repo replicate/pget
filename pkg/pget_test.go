@@ -36,10 +36,8 @@ var defaultOpts = download.Options{Client: client.Options{}}
 var http2Opts = download.Options{Client: client.Options{ForceHTTP2: true}}
 
 func makeGetter(opts download.Options) *pget.Getter {
-	client := client.NewHTTPClient(opts.Client)
-
 	return &pget.Getter{
-		Downloader: &download.BufferMode{Client: client, Options: opts},
+		Downloader: download.GetBufferMode(opts),
 	}
 }
 

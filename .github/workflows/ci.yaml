@@ -33,7 +33,7 @@ jobs:
   lint:
     name: "Lint"
     if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest-8-cores
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -46,29 +46,36 @@ jobs:
         run: CHECKONLY=1 script/format
 
   build:
-    name: "Build"
-    runs-on: ubuntu-latest-8-cores
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        name: "Checkout"
         with:
           fetch-depth: 0
       - uses: actions/setup-go@v5
+        name: "Set up Go"
         with:
           go-version-file: go.mod
-      - run: make
+      - uses: goreleaser/goreleaser-action@v5
+        name: "Build Snapshot"
+        with:
+          version: latest
+          args: build --clean --snapshot
 
   release:
    runs-on: ubuntu-latest
    steps:
      - uses: actions/checkout@v4
+       name: "Checkout"
        with:
          fetch-depth: 0
-     - uses: actions/setup-go@v4
+     - uses: actions/setup-go@v5
+       name: "Set up Go"
        with:
          go-version-file: go.mod
-     - name: Build
-       run: make pget
-     - uses: goreleaser/goreleaser-action@v4
+     - uses: goreleaser/goreleaser-action@v5
+       name: "Release"
+       if: startsWith(github.ref, 'refs/tags/')
        with:
          version: latest
          args: release --clean

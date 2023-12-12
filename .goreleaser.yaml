@@ -14,7 +14,7 @@ builds:
       - arm64
     main: ./main.go
     ldflags:
-      - "-s -w -X github.com/replicate/pget/pkg/version.Version={{.Version}} -X github.com/replicate/pget/pkg/version.CommitHash={{.Commit}} -X github.com/replicate/pget/pkg/version.BuildTime={{.Date}}"
+      - "-s -w -X github.com/replicate/pget/pkg/version.Version={{.Version}} -X github.com/replicate/pget/pkg/version.CommitHash={{.ShortCommit}} -X github.com/replicate/pget/pkg/version.BuildTime={{.Date}}"
 archives:
   - format: binary
     name_template: >-

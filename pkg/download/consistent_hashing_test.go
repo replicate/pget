@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 
@@ -213,4 +215,154 @@ func TestConsistentHashingHasFallback(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, "0000000000000000", string(bytes))
+}
+
+type fallbackFailingHandler struct {
+	responseStatus int
+	responseFunc   func(w http.ResponseWriter, r *http.Request)
+}
+
+func (h fallbackFailingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.responseFunc != nil {
+		h.responseFunc(w, r)
+	} else {
+		w.WriteHeader(h.responseStatus)
+	}
+}
+
+type testStrategy struct {
+	fetchCalledCount     int
+	doRequestCalledCount int
+	mut                  sync.Mutex
+}
+
+func (s *testStrategy) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
+	s.fetchCalledCount++
+	return io.NopCloser(strings.NewReader("00")), -1, nil
+}
+
+func (s *testStrategy) DoRequest(ctx context.Context, start, end int64, url string) (*http.Response, error) {
+	s.mut.Lock()
+	s.doRequestCalledCount++
+	s.mut.Unlock()
+	resp := &http.Response{Body: io.NopCloser(strings.NewReader("00"))}
+	return resp, nil
+}
+
+func TestConsistentHashingFileFallback(t *testing.T) {
+	tc := []struct {
+		name                 string
+		responseStatus       int
+		failureFunc          func(w http.ResponseWriter, r *http.Request)
+		fetchCalledCount     int
+		doRequestCalledCount int
+		expectedError        error
+	}{
+		{
+			name:                 "BadGateway",
+			responseStatus:       http.StatusBadGateway,
+			fetchCalledCount:     1,
+			doRequestCalledCount: 0,
+		},
+		// "NotFound" should not trigger fall-back
+		{
+			name:                 "NotFound",
+			responseStatus:       http.StatusNotFound,
+			fetchCalledCount:     0,
+			doRequestCalledCount: 0,
+			expectedError:        download.ErrUnexpectedHTTPStatus,
+		},
+	}
+
+	for _, tc := range tc {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(fallbackFailingHandler{responseStatus: tc.responseStatus, responseFunc: tc.failureFunc})
+			defer server.Close()
+
+			url, _ := url.Parse(server.URL)
+			opts := download.Options{
+				Client:         client.Options{},
+				MaxConcurrency: 8,
+				MinChunkSize:   2,
+				Semaphore:      semaphore.NewWeighted(8),
+				CacheHosts:     []string{url.Host},
+				DomainsToCache: []string{"fake.replicate.delivery"},
+				SliceSize:      3,
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			strategy := makeConsistentHashingMode(opts)
+			fallbackStrategy := &testStrategy{}
+			strategy.FallbackStrategy = fallbackStrategy
+
+			urlString := "http://fake.replicate.delivery/hello.txt"
+			_, _, err := strategy.Fetch(ctx, urlString)
+			if tc.expectedError != nil {
+				assert.ErrorIs(t, err, tc.expectedError)
+			}
+			assert.Equal(t, tc.fetchCalledCount, fallbackStrategy.fetchCalledCount)
+			assert.Equal(t, tc.doRequestCalledCount, fallbackStrategy.doRequestCalledCount)
+		})
+	}
+}
+
+func TestConsistentHashingChunkFallback(t *testing.T) {
+	handlerFunc := func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Range") != "bytes=0-2" {
+			w.WriteHeader(http.StatusBadGateway)
+		} else {
+			w.Header().Set("Content-Range", "bytes 0-2/4")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("000"))
+		}
+	}
+
+	tc := []struct {
+		name                 string
+		responseStatus       int
+		handlerFunc          func(w http.ResponseWriter, r *http.Request)
+		fetchCalledCount     int
+		doRequestCalledCount int
+		expectedError        error
+	}{
+		{
+			name:                 "fail-on-second-chunk",
+			handlerFunc:          handlerFunc,
+			fetchCalledCount:     0,
+			doRequestCalledCount: 1,
+		},
+	}
+
+	for _, tc := range tc {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(fallbackFailingHandler{responseStatus: tc.responseStatus, responseFunc: tc.handlerFunc})
+			defer server.Close()
+
+			url, _ := url.Parse(server.URL)
+			opts := download.Options{
+				Client:         client.Options{},
+				MaxConcurrency: 8,
+				MinChunkSize:   3,
+				Semaphore:      semaphore.NewWeighted(8),
+				CacheHosts:     []string{url.Host},
+				DomainsToCache: []string{"fake.replicate.delivery"},
+				SliceSize:      3,
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			strategy := makeConsistentHashingMode(opts)
+			fallbackStrategy := &testStrategy{}
+			strategy.FallbackStrategy = fallbackStrategy
+
+			urlString := "http://fake.replicate.delivery/hello.txt"
+			_, _, err := strategy.Fetch(ctx, urlString)
+			assert.ErrorIs(t, err, tc.expectedError)
+			assert.Equal(t, tc.fetchCalledCount, fallbackStrategy.fetchCalledCount)
+			assert.Equal(t, tc.doRequestCalledCount, fallbackStrategy.doRequestCalledCount)
+		})
+	}
 }

@@ -61,7 +61,7 @@ func (m *BufferMode) getFileSizeFromContentRange(contentRange string) (int64, er
 
 func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffer, int64, error) {
 	logger := logging.GetLogger()
-	firstChunkResp, err := m.doRequest(ctx, 0, m.minChunkSize()-1, url)
+	firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, url)
 	if err != nil {
 		return nil, -1, err
 	}
@@ -124,7 +124,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 			end = fileSize - 1
 		}
 		errGroup.Go(func() error {
-			resp, err := m.doRequest(ctx, start, end, trueURL)
+			resp, err := m.DoRequest(ctx, start, end, trueURL)
 			if err != nil {
 				return err
 			}
@@ -140,7 +140,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 	return buffer, fileSize, nil
 }
 
-func (m *BufferMode) doRequest(ctx context.Context, start, end int64, trueURL string) (*http.Response, error) {
+func (m *BufferMode) DoRequest(ctx context.Context, start, end int64, trueURL string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", trueURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download %s: %w", trueURL, err)
@@ -151,7 +151,7 @@ func (m *BufferMode) doRequest(ctx context.Context, start, end int64, trueURL st
 		return nil, fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
 	}
 	if resp.StatusCode == 0 || resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("unexpected http status downloading %s: %s", req.URL.String(), resp.Status)
+		return nil, fmt.Errorf("%w %s: %s", ErrUnexpectedHTTPStatus, req.URL.String(), resp.Status)
 	}
 
 	return resp, nil

@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/hashicorp/go-retryablehttp"
 
+	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/logging"
 	"github.com/replicate/pget/pkg/version"
 )
@@ -21,6 +23,8 @@ const (
 	retryMinWait = 850 * time.Millisecond
 	retryMaxWait = 1250 * time.Millisecond
 )
+
+var ErrStrategyFallback = errors.New("fallback to next strategy")
 
 // HTTPClient is a wrapper around http.Client that allows for limiting the number of concurrent connections per host
 // utilizing a client pool. If the OptMaxConnPerHost option is not set, the client pool will not be used.
@@ -76,12 +80,69 @@ func NewHTTPClient(opts Options) *HTTPClient {
 		RetryWaitMin: retryMinWait,
 		RetryWaitMax: retryMaxWait,
 		RetryMax:     opts.MaxRetries,
-		CheckRetry:   retryablehttp.DefaultRetryPolicy,
+		CheckRetry:   RetryPolicy,
 		Backoff:      linearJitterRetryAfterBackoff,
 	}
 
 	client := retryClient.StandardClient()
 	return &HTTPClient{Client: client}
+}
+
+// RetryPolicy wraps retryablehttp.DefaultRetryPolicy and included additional logic:
+// - checks for specific errors that indicate a fall-back to the next download strategy
+// - checks for http.StatusBadGateway and http.StatusServiceUnavailable which also indicate a fall-back
+func RetryPolicy(ctx context.Context, resp *http.Response, err error) (bool, error) {
+	// do not retry on context.Canceled or context.DeadlineExceeded, this is a fast-fail even though
+	// the retryablehttp.ErrorPropagatedRetryPolicy will also return false for these errors. We can avoid
+	// extra processing logic in these cases every time
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+
+	// While type assertions are not ideal, alternatives are limited to adding custom data in the request
+	// or in the context. The context clearly isolates this data.
+	consistentHashing, ok := ctx.Value(config.ConsistentHashingStrategyKey).(bool)
+	if ok && consistentHashing {
+		if err != nil && fallbackError(err) {
+			return false, ErrStrategyFallback
+		}
+		if err == nil && (resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusServiceUnavailable) {
+			return false, ErrStrategyFallback
+		}
+	}
+
+	// Wrap the standard retry policy
+	return retryablehttp.DefaultRetryPolicy(ctx, resp, err)
+}
+
+// fallbackError returns true if the error is an error we should fall back to the next strategy.
+// fallback errors are not retryable errors that indicate fundamental problems with the cache-server
+// or networking to the cache server. These errors include connection timeouts, connection refused, dns
+// lookup errors, etc.
+func fallbackError(err error) bool {
+	if err != nil {
+		var netErr net.Error
+		ok := errors.As(err, &netErr)
+		if ok && netErr.Timeout() {
+			return true
+		}
+
+		var opErr *net.OpError
+		if errors.As(err, &opErr) {
+			if opErr.Op == "dial" || opErr.Op == "read" {
+				return true
+			}
+		}
+
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) {
+			return dnsErr.IsTimeout || dnsErr.IsTemporary
+		}
+		if errors.Is(err, net.ErrClosed) {
+			return true
+		}
+	}
+	return false
 }
 
 // linearJitterRetryAfterBackoff wraps retryablehttp.LinearJitterBackoff but also will adhere to Retry-After responses

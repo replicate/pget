@@ -34,7 +34,7 @@ LD_FLAGS := -ldflags "-extldflags '-static' -X github.com/replicate/pget/pkg/ver
 default: all
 
 .PHONY: all
-all: clean pget
+all: clean pget checksum
 
 pget:
 	CGO_ENABLED=0 $(GO) build -o $@ \

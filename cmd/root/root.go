@@ -56,7 +56,7 @@ func GetCommand() *cobra.Command {
 		PreRun:  rootCmdPreRun,
 		RunE:    runRootCMD,
 		Args:    cobra.ExactArgs(2),
-		Example: `  pget https://example.com/file.tar.gz file.tar.gz`,
+		Example: `  pget https://example.com/file.tar ./target-dir`,
 	}
 	cmd.Flags().BoolP(config.OptExtract, "x", false, "OptExtract archive after download")
 	cmd.SetUsageTemplate(cli.UsageTemplate)

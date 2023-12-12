@@ -1,6 +1,8 @@
 package download
 
 import (
+	"runtime"
+
 	"golang.org/x/sync/semaphore"
 
 	"github.com/replicate/pget/pkg/client"
@@ -33,4 +35,12 @@ type Options struct {
 	// Semaphore is used to manage maximum concurrency. If nil, concurrency
 	// is unlimited.
 	Semaphore *semaphore.Weighted
+}
+
+func (o *Options) maxConcurrency() int {
+	maxChunks := o.MaxConcurrency
+	if maxChunks == 0 {
+		return runtime.NumCPU() * 4
+	}
+	return maxChunks
 }

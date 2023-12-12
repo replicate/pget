@@ -218,12 +218,12 @@ func TestConsistentHashingHasFallback(t *testing.T) {
 	defer cancel()
 
 	strategy, err := download.GetConsistentHashingMode(opts)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	urlString, err := url.JoinPath(server.URL, "hello.txt")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	reader, _, err := strategy.Fetch(ctx, urlString)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
 	assert.NoError(t, err)
 

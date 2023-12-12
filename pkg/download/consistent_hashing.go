@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"runtime"
 	"strconv"
 
 	jump "github.com/dgryski/go-jump"
@@ -48,14 +47,6 @@ func GetConsistentHashingMode(opts Options) (Strategy, error) {
 		Options:          opts,
 		FallbackStrategy: fallbackStrategy,
 	}, nil
-}
-
-func (m *ConsistentHashingMode) maxConcurrency() int {
-	maxChunks := m.MaxConcurrency
-	if maxChunks == 0 {
-		return runtime.NumCPU() * 4
-	}
-	return maxChunks
 }
 
 func (m *ConsistentHashingMode) minChunkSize() int64 {

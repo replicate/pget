@@ -13,6 +13,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/replicate/pget/pkg/client"
 )
@@ -112,7 +113,7 @@ func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
 			bufferMode := GetBufferMode(opts)
 			path, _ := url.JoinPath(server.URL, testFilePath)
 			download, size, err := bufferMode.Fetch(context.Background(), path)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			data, err := io.ReadAll(download)
 			assert.NoError(t, err)
 			assert.Equal(t, contentSize, size)

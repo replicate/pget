@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"runtime"
 	"strconv"
 
 	"golang.org/x/sync/errgroup"
@@ -25,22 +24,18 @@ var contentRangeRegexp = regexp.MustCompile(`^bytes .*/([0-9]+)$`)
 type BufferMode struct {
 	Client *client.HTTPClient
 	Options
+	eg *errgroup.Group
 }
 
 func GetBufferMode(opts Options) *BufferMode {
+	eg := new(errgroup.Group)
 	client := client.NewHTTPClient(opts.Client)
+	eg.SetLimit(opts.maxConcurrency())
 	return &BufferMode{
 		Client:  client,
 		Options: opts,
+		eg:      eg,
 	}
-}
-
-func (m *BufferMode) maxChunks() int {
-	maxChunks := m.MaxConcurrency
-	if maxChunks == 0 {
-		return runtime.NumCPU() * 4
-	}
-	return maxChunks
 }
 
 func (m *BufferMode) minChunkSize() int64 {
@@ -59,7 +54,7 @@ func (m *BufferMode) getFileSizeFromContentRange(contentRange string) (int64, er
 	return strconv.ParseInt(groups[1], 10, 64)
 }
 
-func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffer, int64, error) {
+func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
 	logger := logging.GetLogger()
 	firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, url)
 	if err != nil {
@@ -84,7 +79,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 		if err != nil {
 			return nil, -1, err
 		}
-		return bytes.NewBuffer(data), fileSize, nil
+		return bytes.NewReader(data), fileSize, nil
 	}
 
 	remainingBytes := fileSize - m.minChunkSize()
@@ -93,9 +88,11 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 	if numChunks <= 0 {
 		numChunks = 1
 	}
-	if numChunks > m.maxChunks() {
-		numChunks = m.maxChunks()
+	if numChunks > m.maxConcurrency() {
+		numChunks = m.maxConcurrency()
 	}
+
+	chunkReaders := make([]io.Reader, numChunks+1)
 
 	chunkSize := remainingBytes / int64(numChunks)
 	if chunkSize < 0 {
@@ -110,8 +107,9 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 		Msg("Downloading")
 
 	errGroup, ctx := errgroup.WithContext(ctx)
-	errGroup.Go(func() error {
-		return m.downloadChunk(firstChunkResp, data[0:m.minChunkSize()])
+	errGroup.Go(func() (err error) {
+		chunkReaders[0], err = m.downloadChunkAsReader(firstChunkResp)
+		return
 	})
 
 	startOffset := m.minChunkSize()
@@ -123,12 +121,14 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 		if i == numChunks-1 {
 			end = fileSize - 1
 		}
+		chunkIndex := i
 		errGroup.Go(func() error {
 			resp, err := m.DoRequest(ctx, start, end, trueURL)
 			if err != nil {
 				return err
 			}
-			return m.downloadChunk(resp, data[start:end+1])
+			chunkReaders[chunkIndex+1], err = m.downloadChunkAsReader(resp)
+			return err
 		})
 	}
 
@@ -136,8 +136,7 @@ func (m *BufferMode) fileToBuffer(ctx context.Context, url string) (*bytes.Buffe
 		return nil, -1, err // return the first error we encounter
 	}
 
-	buffer := bytes.NewBuffer(data)
-	return buffer, fileSize, nil
+	return io.MultiReader(chunkReaders...), fileSize, nil
 }
 
 func (m *BufferMode) DoRequest(ctx context.Context, start, end int64, trueURL string) (*http.Response, error) {
@@ -170,10 +169,15 @@ func (m *BufferMode) downloadChunk(resp *http.Response, dataSlice []byte) error 
 	return nil
 }
 
-func (m *BufferMode) Fetch(ctx context.Context, url string) (result io.Reader, fileSize int64, err error) {
-	buffer, fileSize, err := m.fileToBuffer(ctx, url)
-	if err != nil {
-		return nil, 0, err
+func (m *BufferMode) downloadChunkAsReader(resp *http.Response) (io.Reader, error) {
+	defer resp.Body.Close()
+	expectedBytes := resp.ContentLength
+	chunk, err := io.ReadAll(resp.Body)
+	if err != nil && err != io.EOF {
+		return nil, fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)
 	}
-	return buffer, fileSize, nil
+	if len(chunk) != int(expectedBytes) {
+		return nil, fmt.Errorf("downloaded %d bytes instead of %d for %s", len(chunk), expectedBytes, resp.Request.URL.String())
+	}
+	return bytes.NewReader(chunk), nil
 }

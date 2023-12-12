@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"io"
 	"net/http"
 	"net/url"
@@ -13,6 +12,7 @@ import (
 	"strconv"
 
 	jump "github.com/dgryski/go-jump"
+	"github.com/mitchellh/hashstructure/v2"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/client"
@@ -25,6 +25,11 @@ type ConsistentHashingMode struct {
 	Options
 	// TODO: allow this to be configured and not just "BufferMode"
 	FallbackStrategy Strategy
+}
+
+type CacheKey struct {
+	URL   *url.URL `hash:"string"`
+	Slice int64
 }
 
 func GetConsistentHashingMode(opts Options) (Strategy, error) {
@@ -256,18 +261,24 @@ func (m *ConsistentHashingMode) consistentHashIfNeeded(req *http.Request, start 
 			}
 			slice := start / m.SliceSize
 
-			key := fmt.Sprintf("%s#%d", req.URL, slice)
-			hasher := fnv.New64a()
-			if _, err := hasher.Write([]byte(key)); err != nil {
+			key := CacheKey{URL: req.URL, Slice: slice}
+			// we set IgnoreZeroValue so that we can add fields to the hash key
+			// later without breaking things.
+			// note that it's not safe to share a HashOptions so we create a fresh one each time.
+			hashopts := &hashstructure.HashOptions{IgnoreZeroValue: true}
+			hash, err := hashstructure.Hash(key, hashstructure.FormatV2, hashopts)
+			if err != nil {
 				return fmt.Errorf("error calculating hash of key")
 			}
+
+			logger.Debug().Uint64("hash_sum", hash).Int("len_cache_hosts", len(m.CacheHosts)).Msg("consistent hashing")
+
 			// jump is an implementation of Google's Jump Consistent Hash.
 			//
 			// See http://arxiv.org/abs/1406.2294 for details.
-			logger.Debug().Uint64("hash_sum", hasher.Sum64()).Int("len_cache_hosts", len(m.CacheHosts)).Msg("consistent hashing")
-			cachePodIndex := int(jump.Hash(hasher.Sum64(), len(m.CacheHosts)))
+			cachePodIndex := int(jump.Hash(hash, len(m.CacheHosts)))
 			cacheHost := m.CacheHosts[cachePodIndex]
-			logger.Debug().Str("cache_key", key).Int64("start", start).Int64("end", end).Int64("slice_size", m.SliceSize).Int("bucket", cachePodIndex).Msg("consistent hashing")
+			logger.Debug().Str("cache_key", fmt.Sprintf("%+v", key)).Int64("start", start).Int64("end", end).Int64("slice_size", m.SliceSize).Int("bucket", cachePodIndex).Msg("consistent hashing")
 			if cacheHost != "" {
 				req.URL.Scheme = "http"
 				req.URL.Host = cacheHost

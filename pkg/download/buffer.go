@@ -56,30 +56,40 @@ func (m *BufferMode) getFileSizeFromContentRange(contentRange string) (int64, er
 
 func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
 	logger := logging.GetLogger()
-	firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, url)
-	if err != nil {
-		return nil, -1, err
-	}
 
-	trueURL := firstChunkResp.Request.URL.String()
-	if trueURL != url {
-		logger.Info().Str("url", url).Str("redirect_url", trueURL).Msg("Redirect")
-	}
+	br := newBufferedReader(bytes.NewBuffer(make([]byte, 0, m.minChunkSize())))
 
-	fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
-	if err != nil {
-		firstChunkResp.Body.Close()
-		return nil, -1, err
-	}
+	fileSizeCh := make(chan int64)
+	trueURLCh := make(chan string)
+	m.eg.Go(func() error {
+		defer close(fileSizeCh)
+		defer close(trueURLCh)
+		firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, url)
+		if err != nil {
+			return err
+		}
 
-	data := make([]byte, fileSize)
+		trueURL := firstChunkResp.Request.URL.String()
+		if trueURL != url {
+			logger.Info().Str("url", url).Str("redirect_url", trueURL).Msg("Redirect")
+		}
+
+		fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
+		if err != nil {
+			firstChunkResp.Body.Close()
+			return err
+		}
+		fileSizeCh <- fileSize
+		trueURLCh <- trueURL
+
+		return m.downloadBodyToBuffer(firstChunkResp, br)
+	})
+
+	fileSize := <-fileSizeCh
+	trueURL := <-trueURLCh
 	if fileSize <= m.minChunkSize() {
 		// we only need a single chunk: just download it and finish
-		err = m.downloadChunk(firstChunkResp, data[0:fileSize])
-		if err != nil {
-			return nil, -1, err
-		}
-		return bytes.NewReader(data), fileSize, nil
+		return br, fileSize, nil
 	}
 
 	remainingBytes := fileSize - m.minChunkSize()
@@ -94,9 +104,12 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 
 	chunkReaders := make([]io.Reader, numChunks+1)
 
+	chunkReaders[0] = br
+
+	startOffset := m.minChunkSize()
+
 	chunkSize := remainingBytes / int64(numChunks)
 	if chunkSize < 0 {
-		firstChunkResp.Body.Close()
 		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
 	}
 
@@ -106,19 +119,6 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		Int64("chunkSize", chunkSize).
 		Msg("Downloading")
 
-	errGroup, ctx := errgroup.WithContext(ctx)
-	readerCh := make(chan io.Reader)
-	errGroup.Go(func() error {
-		br := newBufferedReader(bytes.NewBuffer(make([]byte, 0, firstChunkResp.ContentLength)))
-		readerCh <- br
-		err = m.downloadBodyToBuffer(firstChunkResp, br)
-
-		return err
-	})
-	chunkReaders[0] = <-readerCh
-
-	startOffset := m.minChunkSize()
-
 	for i := 0; i < numChunks; i++ {
 		start := startOffset + chunkSize*int64(i)
 		end := start + chunkSize - 1
@@ -126,19 +126,17 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		if i == numChunks-1 {
 			end = fileSize - 1
 		}
-		chunkIndex := i
-		readerCh := make(chan io.Reader)
-		errGroup.Go(func() error {
+
+		br := newBufferedReader(bytes.NewBuffer(make([]byte, 0, end-start+1)))
+		chunkReaders[i+1] = br
+
+		m.eg.Go(func() error {
 			resp, err := m.DoRequest(ctx, start, end, trueURL)
 			if err != nil {
 				return err
 			}
-			br := newBufferedReader(bytes.NewBuffer(make([]byte, 0, resp.ContentLength)))
-			readerCh <- br
-			err = m.downloadBodyToBuffer(resp, br)
-			return err
+			return m.downloadBodyToBuffer(resp, br)
 		})
-		chunkReaders[chunkIndex+1] = <-readerCh
 	}
 
 	return io.MultiReader(chunkReaders...), fileSize, nil

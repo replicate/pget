@@ -103,7 +103,7 @@ func RetryPolicy(ctx context.Context, resp *http.Response, err error) (bool, err
 	// or in the context. The context clearly isolates this data.
 	consistentHashing, ok := ctx.Value(config.ConsistentHashingStrategyKey).(bool)
 	if ok && consistentHashing {
-		if err != nil && fallbackError(err) {
+		if fallbackError(err) {
 			return false, ErrStrategyFallback
 		}
 		if err == nil && (resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusServiceUnavailable) {
@@ -120,28 +120,30 @@ func RetryPolicy(ctx context.Context, resp *http.Response, err error) (bool, err
 // or networking to the cache server. These errors include connection timeouts, connection refused, dns
 // lookup errors, etc.
 func fallbackError(err error) bool {
-	if err != nil {
-		var netErr net.Error
-		ok := errors.As(err, &netErr)
-		if ok && netErr.Timeout() {
-			return true
-		}
+	if err == nil {
+		return false
+	}
+	var netErr net.Error
+	ok := errors.As(err, &netErr)
+	if ok && netErr.Timeout() {
+		return true
+	}
 
-		var opErr *net.OpError
-		if errors.As(err, &opErr) {
-			if opErr.Op == "dial" || opErr.Op == "read" {
-				return true
-			}
-		}
-
-		var dnsErr *net.DNSError
-		if errors.As(err, &dnsErr) {
-			return dnsErr.IsTimeout || dnsErr.IsTemporary
-		}
-		if errors.Is(err, net.ErrClosed) {
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		if opErr.Op == "dial" || opErr.Op == "read" {
 			return true
 		}
 	}
+
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return dnsErr.IsTimeout || dnsErr.IsNotFound
+	}
+	if errors.Is(err, net.ErrClosed) {
+		return true
+	}
+
 	return false
 }
 

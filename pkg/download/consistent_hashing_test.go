@@ -38,6 +38,7 @@ func makeConsistentHashingMode(opts download.Options) *download.ConsistentHashin
 }
 
 type chTestCase struct {
+	name           string
 	concurrency    int
 	sliceSize      int64
 	minChunkSize   int64
@@ -47,6 +48,7 @@ type chTestCase struct {
 
 var chTestCases = []chTestCase{
 	{ // pre-computed demo that only some slices change as we add a new cache host
+		name:           "1 host",
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  1,
@@ -54,102 +56,116 @@ var chTestCases = []chTestCase{
 		expectedOutput: "0000000000000000",
 	},
 	{
+		name:           "2 hosts",
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  2,
 		minChunkSize:   1,
-		expectedOutput: "1110000001111111",
+		expectedOutput: "0001110000001110",
 	},
 	{
+		name:           "3 hosts",
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  3,
 		minChunkSize:   1,
-		expectedOutput: "1110000002222222",
+		expectedOutput: "0001110002221110",
 	},
 	{
+		name:           "4 hosts",
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  4,
 		minChunkSize:   1,
-		expectedOutput: "1113330002222222",
+		expectedOutput: "0001113333331110",
 	},
 	{
+		name:           "5 hosts",
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  5,
 		minChunkSize:   1,
-		expectedOutput: "1114440002222224",
+		expectedOutput: "0001114443331110",
 	},
 	{
+		name:           "6 hosts",
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  6,
 		minChunkSize:   1,
-		expectedOutput: "1114440002222224",
+		expectedOutput: "0001114443331115",
 	},
 	{
+		name:           "7 hosts",
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  7,
 		minChunkSize:   1,
-		expectedOutput: "1114440002226664",
+		expectedOutput: "0006664443336665",
 	},
 	{
+		name:           "8 hosts",
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  8,
 		minChunkSize:   1,
-		expectedOutput: "1117770002226667",
+		expectedOutput: "0006664443336667",
 	},
-	{ // test when fileSize % sliceSize == 0
+	{
+		name:           "test when fileSize % sliceSize == 0",
 		concurrency:    8,
 		sliceSize:      4,
 		numCacheHosts:  8,
 		minChunkSize:   1,
-		expectedOutput: "1111777700002222",
+		expectedOutput: "0000666644443333",
 	},
-	{ // test when minChunkSize == sliceSize
+	{
+		name:           "when minChunkSize == sliceSize",
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  8,
 		minChunkSize:   3,
-		expectedOutput: "1117770002226667",
+		expectedOutput: "0006664443336667",
 	},
-	{ // test when concurrency > file size
+	{
+		name:           "test when concurrency > file size",
 		concurrency:    24,
 		sliceSize:      3,
 		numCacheHosts:  8,
 		minChunkSize:   3,
-		expectedOutput: "1117770002226667",
+		expectedOutput: "0006664443336667",
 	},
-	{ // test when concurrency < number of slices
+	{
+		name:           "test when concurrency < number of slices",
 		concurrency:    3,
 		sliceSize:      3,
 		numCacheHosts:  8,
 		minChunkSize:   3,
-		expectedOutput: "1117770002226667",
+		expectedOutput: "0006664443336667",
 	},
-	{ // test when minChunkSize == file size
+	{
+		name:           "test when minChunkSize == file size",
 		concurrency:    4,
 		sliceSize:      16,
 		numCacheHosts:  8,
 		minChunkSize:   16,
-		expectedOutput: "1111111111111111",
+		expectedOutput: "0000000000000000",
 	},
-	{ // test when minChunkSize > file size
+	{
+		name:           "test when minChunkSize > file size",
 		concurrency:    4,
 		sliceSize:      24,
 		numCacheHosts:  8,
 		minChunkSize:   24,
-		expectedOutput: "1111111111111111",
+		expectedOutput: "0000000000000000",
 	},
-	{ // if minChunkSize > sliceSize, sliceSize overrides it
+	{
+		name:           "if minChunkSize > sliceSize, sliceSize overrides it",
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  8,
 		minChunkSize:   24,
-		expectedOutput: "1117770002226667",
+		expectedOutput: "0006664443336667",
 	},
 }
 
@@ -164,27 +180,29 @@ func TestConsistentHashing(t *testing.T) {
 	}
 
 	for _, tc := range chTestCases {
-		opts := download.Options{
-			Client:         client.Options{},
-			MaxConcurrency: tc.concurrency,
-			MinChunkSize:   tc.minChunkSize,
-			Semaphore:      semaphore.NewWeighted(int64(tc.concurrency)),
-			CacheHosts:     hostnames[0:tc.numCacheHosts],
-			DomainsToCache: []string{"fake.replicate.delivery"},
-			SliceSize:      tc.sliceSize,
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			opts := download.Options{
+				Client:         client.Options{},
+				MaxConcurrency: tc.concurrency,
+				MinChunkSize:   tc.minChunkSize,
+				Semaphore:      semaphore.NewWeighted(int64(tc.concurrency)),
+				CacheHosts:     hostnames[0:tc.numCacheHosts],
+				DomainsToCache: []string{"test.replicate.delivery"},
+				SliceSize:      tc.sliceSize,
+			}
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 
-		strategy := makeConsistentHashingMode(opts)
+			strategy := makeConsistentHashingMode(opts)
 
-		reader, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
-		assert.NoError(t, err)
-		bytes, err := io.ReadAll(reader)
-		assert.NoError(t, err)
+			reader, _, err := strategy.Fetch(ctx, "http://test.replicate.delivery/hello.txt")
+			assert.NoError(t, err)
+			bytes, err := io.ReadAll(reader)
+			assert.NoError(t, err)
 
-		assert.Equal(t, tc.expectedOutput, string(bytes))
+			assert.Equal(t, tc.expectedOutput, string(bytes))
+		})
 	}
 }
 

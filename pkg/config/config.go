@@ -21,6 +21,10 @@ const (
 	ConsumerNull         = "null"
 )
 
+type ConsistentHashingStrategy struct{}
+
+var ConsistentHashingStrategyKey ConsistentHashingStrategy
+
 type DeprecatedFlag struct {
 	Flag string
 	Msg  string

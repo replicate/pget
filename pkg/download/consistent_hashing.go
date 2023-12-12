@@ -3,6 +3,7 @@ package download
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/client"
+	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/logging"
 )
 
@@ -93,8 +95,14 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		return m.FallbackStrategy.Fetch(ctx, urlString)
 	}
 
-	firstChunkResp, err := m.doRequest(ctx, 0, m.minChunkSize()-1, urlString)
+	firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, urlString)
 	if err != nil {
+		// In the case that an error indicating an issue with the cache server, networking, etc is returned,
+		// this will use the fallback strategy. This is a case where the whole file will use the fallback
+		// strategy.
+		if errors.Is(err, client.ErrStrategyFallback) {
+			return m.FallbackStrategy.Fetch(ctx, urlString)
+		}
 		return nil, -1, err
 	}
 
@@ -179,9 +187,17 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 			dataSlice := data[chunkStart : chunkEnd+1]
 			errGroup.Go(func() error {
 				logger.Debug().Int64("start", chunkStart).Int64("end", chunkEnd).Msg("starting request")
-				resp, err := m.doRequest(ctx, chunkStart, chunkEnd, urlString)
+				resp, err := m.DoRequest(ctx, chunkStart, chunkEnd, urlString)
 				if err != nil {
-					return err
+					// In the case that an error indicating an issue with the cache server, networking, etc is returned,
+					// this will use the fallback strategy. This is a case where the whole file will perform the fall-back
+					// for the specified chunk instead of the whole file.
+					if errors.Is(err, client.ErrStrategyFallback) {
+						resp, err = m.FallbackStrategy.DoRequest(ctx, chunkStart, chunkEnd, urlString)
+					}
+					if err != nil {
+						return err
+					}
 				}
 
 				return m.downloadChunk(resp, dataSlice)
@@ -199,7 +215,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 	return buffer, fileSize, nil
 }
 
-func (m *ConsistentHashingMode) doRequest(ctx context.Context, start, end int64, urlString string) (*http.Response, error) {
+func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64, urlString string) (*http.Response, error) {
 	logger := logging.GetLogger()
 	if m.Semaphore != nil {
 		err := m.Semaphore.Acquire(ctx, 1)
@@ -207,7 +223,8 @@ func (m *ConsistentHashingMode) doRequest(ctx context.Context, start, end int64,
 			return nil, err
 		}
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", urlString, nil)
+	chContext := context.WithValue(ctx, config.ConsistentHashingStrategyKey, true)
+	req, err := http.NewRequestWithContext(chContext, "GET", urlString, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
 	}
@@ -224,7 +241,7 @@ func (m *ConsistentHashingMode) doRequest(ctx context.Context, start, end int64,
 		return nil, fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
 	}
 	if resp.StatusCode == 0 || resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("unexpected http status downloading %s: %s", req.URL.String(), resp.Status)
+		return nil, fmt.Errorf("%w %s: %s", ErrUnexpectedHTTPStatus, req.URL.String(), resp.Status)
 	}
 
 	return resp, nil

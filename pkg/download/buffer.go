@@ -107,10 +107,15 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		Msg("Downloading")
 
 	errGroup, ctx := errgroup.WithContext(ctx)
-	errGroup.Go(func() (err error) {
-		chunkReaders[0], err = m.downloadChunkAsReader(firstChunkResp)
-		return
+	readerCh := make(chan io.Reader)
+	errGroup.Go(func() error {
+		br := newBufferedReader(bytes.NewBuffer(make([]byte, 0, firstChunkResp.ContentLength)))
+		readerCh <- br
+		err = m.downloadBodyToBuffer(firstChunkResp, br)
+
+		return err
 	})
+	chunkReaders[0] = <-readerCh
 
 	startOffset := m.minChunkSize()
 
@@ -122,18 +127,18 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 			end = fileSize - 1
 		}
 		chunkIndex := i
+		readerCh := make(chan io.Reader)
 		errGroup.Go(func() error {
 			resp, err := m.DoRequest(ctx, start, end, trueURL)
 			if err != nil {
 				return err
 			}
-			chunkReaders[chunkIndex+1], err = m.downloadChunkAsReader(resp)
+			br := newBufferedReader(bytes.NewBuffer(make([]byte, 0, resp.ContentLength)))
+			readerCh <- br
+			err = m.downloadBodyToBuffer(resp, br)
 			return err
 		})
-	}
-
-	if err := errGroup.Wait(); err != nil {
-		return nil, -1, err // return the first error we encounter
+		chunkReaders[chunkIndex+1] = <-readerCh
 	}
 
 	return io.MultiReader(chunkReaders...), fileSize, nil
@@ -169,15 +174,16 @@ func (m *BufferMode) downloadChunk(resp *http.Response, dataSlice []byte) error 
 	return nil
 }
 
-func (m *BufferMode) downloadChunkAsReader(resp *http.Response) (io.Reader, error) {
+func (m *BufferMode) downloadBodyToBuffer(resp *http.Response, br *bufferedReader) error {
 	defer resp.Body.Close()
+	defer br.Done()
 	expectedBytes := resp.ContentLength
-	chunk, err := io.ReadAll(resp.Body)
+	n, err := io.Copy(br, resp.Body)
 	if err != nil && err != io.EOF {
-		return nil, fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)
+		return fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)
 	}
-	if len(chunk) != int(expectedBytes) {
-		return nil, fmt.Errorf("downloaded %d bytes instead of %d for %s", len(chunk), expectedBytes, resp.Request.URL.String())
+	if n != expectedBytes {
+		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, expectedBytes, resp.Request.URL.String())
 	}
-	return bytes.NewReader(chunk), nil
+	return nil
 }

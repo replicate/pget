@@ -32,7 +32,7 @@ type CacheKey struct {
 	Slice int64
 }
 
-func GetConsistentHashingMode(opts Options) (Strategy, error) {
+func GetConsistentHashingMode(opts Options) (*ConsistentHashingMode, error) {
 	if opts.SliceSize == 0 {
 		return nil, fmt.Errorf("must specify slice size in consistent hashing mode")
 	}

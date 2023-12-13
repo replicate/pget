@@ -313,7 +313,7 @@ func TestConsistentHashingFileFallback(t *testing.T) {
 			assert.NoError(t, err)
 
 			fallbackStrategy := &testStrategy{}
-			strategy.(*download.ConsistentHashingMode).FallbackStrategy = fallbackStrategy
+			strategy.FallbackStrategy = fallbackStrategy
 
 			urlString := "http://fake.replicate.delivery/hello.txt"
 			_, _, err = strategy.Fetch(ctx, urlString)
@@ -375,7 +375,7 @@ func TestConsistentHashingChunkFallback(t *testing.T) {
 			assert.NoError(t, err)
 
 			fallbackStrategy := &testStrategy{}
-			strategy.(*download.ConsistentHashingMode).FallbackStrategy = fallbackStrategy
+			strategy.FallbackStrategy = fallbackStrategy
 
 			urlString := "http://fake.replicate.delivery/hello.txt"
 			out, _, err := strategy.Fetch(ctx, urlString)

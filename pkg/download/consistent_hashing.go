@@ -102,7 +102,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 
 	br := newBufferedReader(m.minChunkSize())
 	firstReqResultCh := make(chan firstReqResult)
-	m.q.submit(func(ctx context.Context) {
+	m.q.submit(func() {
 		m.eg.Go(func() error {
 			defer close(firstReqResultCh)
 			defer br.done()
@@ -176,7 +176,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		Ints64("chunks_per_slice", chunksPerSlice).
 		Msg("Downloading")
 
-	m.q.submit(func(ctx context.Context) {
+	m.q.submit(func() {
 		defer close(readersCh)
 		for slice, numChunks := range chunksPerSlice {
 			if numChunks == 0 {

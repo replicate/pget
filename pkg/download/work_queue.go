@@ -1,13 +1,11 @@
 package download
 
-import "context"
-
 // workQueue takes work items and executes them serially, in strict FIFO order
 type workQueue struct {
 	queue chan work
 }
 
-type work func(ctx context.Context)
+type work func()
 
 func newWorkQueue(depth int) *workQueue {
 	return &workQueue{queue: make(chan work, depth)}
@@ -23,6 +21,6 @@ func (q *workQueue) start() {
 
 func (q *workQueue) run() {
 	for item := range q.queue {
-		item(context.Background())
+		item()
 	}
 }

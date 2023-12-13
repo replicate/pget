@@ -69,7 +69,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 	br := newBufferedReader(m.minChunkSize())
 
 	firstReqResultCh := make(chan firstReqResult)
-	m.q.submit(func(ctx context.Context) {
+	m.q.submit(func() {
 		m.eg.Go(func() error {
 			defer close(firstReqResultCh)
 			defer br.done()
@@ -134,7 +134,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
 	}
 
-	m.q.submit(func(ctx context.Context) {
+	m.q.submit(func() {
 		defer close(readersCh)
 		logger.Debug().Str("url", url).
 			Int64("size", fileSize).

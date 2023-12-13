@@ -54,18 +54,23 @@ func (m *BufferMode) getFileSizeFromContentRange(contentRange string) (int64, er
 	return strconv.ParseInt(groups[1], 10, 64)
 }
 
+type firstReqResult struct {
+	fileSize int64
+	trueURL  string
+	err      error
+}
+
 func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
 	logger := logging.GetLogger()
 
 	br := newBufferedReader(bytes.NewBuffer(make([]byte, 0, m.minChunkSize())))
 
-	fileSizeCh := make(chan int64)
-	trueURLCh := make(chan string)
+	firstReqResultChan := make(chan firstReqResult)
 	m.eg.Go(func() error {
-		defer close(fileSizeCh)
-		defer close(trueURLCh)
+		defer close(firstReqResultChan)
 		firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, url)
 		if err != nil {
+			firstReqResultChan <- firstReqResult{err: err}
 			return err
 		}
 
@@ -76,17 +81,27 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 
 		fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
 		if err != nil {
+			firstReqResultChan <- firstReqResult{err: err}
 			firstChunkResp.Body.Close()
 			return err
 		}
-		fileSizeCh <- fileSize
-		trueURLCh <- trueURL
+		firstReqResultChan <- firstReqResult{fileSize: fileSize, trueURL: trueURL}
 
 		return m.downloadBodyToBuffer(firstChunkResp, br)
 	})
 
-	fileSize := <-fileSizeCh
-	trueURL := <-trueURLCh
+	firstReqResult, ok := <-firstReqResultChan
+	if !ok {
+		return nil, -1, fmt.Errorf("Logic error: channel closed but no result received")
+	}
+
+	if firstReqResult.err != nil {
+		return nil, -1, firstReqResult.err
+	}
+
+	fileSize := firstReqResult.fileSize
+	trueURL := firstReqResult.trueURL
+
 	if fileSize <= m.minChunkSize() {
 		// we only need a single chunk: just download it and finish
 		return br, fileSize, nil

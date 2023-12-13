@@ -52,7 +52,6 @@ func (b *bufferedReader) done() {
 }
 
 func (b *bufferedReader) downloadBody(resp *http.Response) error {
-	defer b.done()
 	expectedBytes := resp.ContentLength
 	n, err := b.buf.ReadFrom(resp.Body)
 	if err != nil && err != io.EOF {

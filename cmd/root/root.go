@@ -11,7 +11,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"golang.org/x/sync/semaphore"
 
 	pget "github.com/replicate/pget/pkg"
 	"github.com/replicate/pget/pkg/cli"
@@ -174,7 +173,6 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		MaxConcurrency: viper.GetInt(config.OptConcurrency),
 		MinChunkSize:   int64(minChunkSize),
 		Client:         clientOpts,
-		Semaphore:      semaphore.NewWeighted(int64(viper.GetInt(config.OptConcurrency))),
 	}
 
 	consumer, err := config.GetConsumer()

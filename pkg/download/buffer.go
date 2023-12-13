@@ -71,8 +71,8 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 	firstReqResultCh := make(chan firstReqResult)
 	m.q.submit(func(ctx context.Context) {
 		m.eg.Go(func() error {
-			logger := logging.GetLogger()
 			defer close(firstReqResultCh)
+			defer br.done()
 			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, url)
 			if err != nil {
 				firstReqResultCh <- firstReqResult{err: err}
@@ -154,6 +154,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 			readersCh <- br
 
 			m.eg.Go(func() error {
+				defer br.done()
 				resp, err := m.DoRequest(ctx, start, end, trueURL)
 				if err != nil {
 					return err
@@ -182,17 +183,4 @@ func (m *BufferMode) DoRequest(ctx context.Context, start, end int64, trueURL st
 	}
 
 	return resp, nil
-}
-
-func (m *BufferMode) downloadChunk(resp *http.Response, dataSlice []byte) error {
-	defer resp.Body.Close()
-	expectedBytes := len(dataSlice)
-	n, err := io.ReadFull(resp.Body, dataSlice)
-	if err != nil && err != io.EOF {
-		return fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)
-	}
-	if n != expectedBytes {
-		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, expectedBytes, resp.Request.URL.String())
-	}
-	return nil
 }

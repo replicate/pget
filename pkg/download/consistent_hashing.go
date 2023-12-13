@@ -1,7 +1,6 @@
 package download
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -24,6 +23,8 @@ type ConsistentHashingMode struct {
 	Options
 	// TODO: allow this to be configured and not just "BufferMode"
 	FallbackStrategy Strategy
+	eg               *errgroup.Group
+	q                *workQueue
 }
 
 type CacheKey struct {
@@ -35,17 +36,25 @@ func GetConsistentHashingMode(opts Options) (Strategy, error) {
 	if opts.SliceSize == 0 {
 		return nil, fmt.Errorf("must specify slice size in consistent hashing mode")
 	}
-	if opts.Semaphore != nil && opts.MaxConcurrency == 0 {
-		return nil, fmt.Errorf("if you provide a semaphore you must specify MaxConcurrency")
-	}
 	client := client.NewHTTPClient(opts.Client)
-	fallbackStrategy := GetBufferMode(opts)
-	fallbackStrategy.Client = client
+	eg := new(errgroup.Group)
+	eg.SetLimit(opts.maxConcurrency())
+	q := newWorkQueue(opts.maxConcurrency())
+	q.start()
+
+	fallbackStrategy := &BufferMode{
+		Client:  client,
+		Options: opts,
+		eg:      eg,
+		q:       q,
+	}
 
 	return &ConsistentHashingMode{
 		Client:           client,
 		Options:          opts,
 		FallbackStrategy: fallbackStrategy,
+		eg:               eg,
+		q:                q,
 	}, nil
 }
 
@@ -91,45 +100,58 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		return m.FallbackStrategy.Fetch(ctx, urlString)
 	}
 
-	firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, urlString)
-	if err != nil {
+	br := newBufferedReader(m.minChunkSize())
+	firstReqResultCh := make(chan firstReqResult)
+	m.q.submit(func(ctx context.Context) {
+		m.eg.Go(func() error {
+			defer close(firstReqResultCh)
+			defer br.done()
+			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, urlString)
+			if err != nil {
+				firstReqResultCh <- firstReqResult{err: err}
+				return err
+			}
+			defer firstChunkResp.Body.Close()
+
+			trueURL := firstChunkResp.Request.URL.String()
+			if trueURL != urlString {
+				logger.Info().Str("url", urlString).Str("redirect_url", trueURL).Msg("Redirect")
+			}
+
+			fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
+			if err != nil {
+				firstReqResultCh <- firstReqResult{err: err}
+				return err
+			}
+			firstReqResultCh <- firstReqResult{fileSize: fileSize, trueURL: trueURL}
+
+			return br.downloadBody(firstChunkResp)
+		})
+	})
+	firstReqResult, ok := <-firstReqResultCh
+	if !ok {
+		panic("shouldn't happen")
+	}
+	if firstReqResult.err != nil {
 		// In the case that an error indicating an issue with the cache server, networking, etc is returned,
 		// this will use the fallback strategy. This is a case where the whole file will use the fallback
 		// strategy.
-		if errors.Is(err, client.ErrStrategyFallback) {
+		if errors.Is(firstReqResult.err, client.ErrStrategyFallback) {
 			return m.FallbackStrategy.Fetch(ctx, urlString)
 		}
-		return nil, -1, err
+		return nil, -1, firstReqResult.err
 	}
+	fileSize := firstReqResult.fileSize
 
-	fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
-	if err != nil {
-		firstChunkResp.Body.Close()
-		return nil, -1, err
-	}
-
-	data := make([]byte, fileSize)
 	if fileSize <= m.minChunkSize() {
 		// we only need a single chunk: just download it and finish
-		err = m.downloadChunk(firstChunkResp, data)
-		if err != nil {
-			return nil, -1, err
-		}
-		// TODO: rather than eagerly downloading here, we could return
-		// an io.ReadCloser that downloads the file and releases the
-		// semaphore when closed
-		return bytes.NewBuffer(data), fileSize, nil
+		return br, fileSize, nil
 	}
 
 	totalSlices := fileSize / m.SliceSize
 	if fileSize%m.SliceSize != 0 {
 		totalSlices++
 	}
-
-	errGroup, ctx := errgroup.WithContext(ctx)
-	errGroup.Go(func() error {
-		return m.downloadChunk(firstChunkResp, data[0:m.minChunkSize()])
-	})
 
 	// we subtract one because we've already got firstChunkResp in flight
 	concurrency := m.maxConcurrency() - 1
@@ -145,80 +167,77 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		chunksPerSlice = append([]int64{0}, EqualSplit(int64(concurrency), totalSlices-1)...)
 	}
 
+	readersCh := make(chan io.Reader, m.maxConcurrency()+1)
+	readersCh <- br
+
 	logger.Debug().Str("url", urlString).
 		Int64("size", fileSize).
 		Int("concurrency", m.maxConcurrency()).
 		Ints64("chunks_per_slice", chunksPerSlice).
 		Msg("Downloading")
 
-	for slice, numChunks := range chunksPerSlice {
-		if numChunks == 0 {
-			// this happens if we've already downloaded the whole first slice
-			continue
-		}
-		startFrom := m.SliceSize * int64(slice)
-		sliceSize := m.SliceSize
-		if slice == 0 {
-			startFrom = firstChunkResp.ContentLength
-			sliceSize = sliceSize - firstChunkResp.ContentLength
-		}
-		if slice == int(totalSlices)-1 {
-			sliceSize = (fileSize-1)%m.SliceSize + 1
-		}
-		if sliceSize/numChunks < m.minChunkSize() {
-			// reset numChunks to respect minChunkSize
-			numChunks = sliceSize / m.minChunkSize()
-			// although we must always have at least one chunk
+	m.q.submit(func(ctx context.Context) {
+		defer close(readersCh)
+		for slice, numChunks := range chunksPerSlice {
 			if numChunks == 0 {
-				numChunks = 1
+				// this happens if we've already downloaded the whole first slice
+				continue
+			}
+			startFrom := m.SliceSize * int64(slice)
+			sliceSize := m.SliceSize
+			if slice == 0 {
+				startFrom = m.minChunkSize()
+				sliceSize = sliceSize - m.minChunkSize()
+			}
+			if slice == int(totalSlices)-1 {
+				sliceSize = (fileSize-1)%m.SliceSize + 1
+			}
+			if sliceSize/numChunks < m.minChunkSize() {
+				// reset numChunks to respect minChunkSize
+				numChunks = sliceSize / m.minChunkSize()
+				// although we must always have at least one chunk
+				if numChunks == 0 {
+					numChunks = 1
+				}
+			}
+			chunkSizes := EqualSplit(sliceSize, numChunks)
+			for _, chunkSize := range chunkSizes {
+				// startFrom changes each time round the loop
+				// we create chunkStart to be a stable variable for the goroutine to capture
+				chunkStart := startFrom
+				chunkEnd := startFrom + chunkSize - 1
+
+				br := newBufferedReader(m.minChunkSize())
+				readersCh <- br
+				m.eg.Go(func() error {
+					defer br.done()
+					logger.Debug().Int64("start", chunkStart).Int64("end", chunkEnd).Msg("starting request")
+					resp, err := m.DoRequest(ctx, chunkStart, chunkEnd, urlString)
+					if err != nil {
+						// in the case that an error indicating an issue with the cache server, networking, etc is returned,
+						// this will use the fallback strategy. This is a case where the whole file will perform the fall-back
+						// for the specified chunk instead of the whole file.
+						if errors.Is(err, client.ErrStrategyFallback) {
+							resp, err = m.FallbackStrategy.DoRequest(ctx, chunkStart, chunkEnd, urlString)
+						}
+						if err != nil {
+							return err
+						}
+					}
+					defer resp.Body.Close()
+					return br.downloadBody(resp)
+				})
+
+				startFrom = startFrom + chunkSize
 			}
 		}
-		chunkSizes := EqualSplit(sliceSize, numChunks)
-		for _, chunkSize := range chunkSizes {
-			// startFrom changes each time round the loop
-			// we create chunkStart to be a stable variable for the goroutine to capture
-			chunkStart := startFrom
-			chunkEnd := startFrom + chunkSize - 1
+	})
 
-			dataSlice := data[chunkStart : chunkEnd+1]
-			errGroup.Go(func() error {
-				logger.Debug().Int64("start", chunkStart).Int64("end", chunkEnd).Msg("starting request")
-				resp, err := m.DoRequest(ctx, chunkStart, chunkEnd, urlString)
-				if err != nil {
-					// In the case that an error indicating an issue with the cache server, networking, etc is returned,
-					// this will use the fallback strategy. This is a case where the whole file will perform the fall-back
-					// for the specified chunk instead of the whole file.
-					if errors.Is(err, client.ErrStrategyFallback) {
-						resp, err = m.FallbackStrategy.DoRequest(ctx, chunkStart, chunkEnd, urlString)
-					}
-					if err != nil {
-						return err
-					}
-				}
-
-				return m.downloadChunk(resp, dataSlice)
-			})
-
-			startFrom = startFrom + chunkSize
-		}
-	}
-
-	if err := errGroup.Wait(); err != nil {
-		return nil, -1, err // return the first error we encounter
-	}
-
-	buffer := bytes.NewBuffer(data)
-	return buffer, fileSize, nil
+	return newChanMultiReader(readersCh), fileSize, nil
 }
 
 func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64, urlString string) (*http.Response, error) {
 	logger := logging.GetLogger()
-	if m.Semaphore != nil {
-		err := m.Semaphore.Acquire(ctx, 1)
-		if err != nil {
-			return nil, err
-		}
-	}
 	chContext := context.WithValue(ctx, config.ConsistentHashingStrategyKey, true)
 	req, err := http.NewRequestWithContext(chContext, "GET", urlString, nil)
 	if err != nil {
@@ -277,23 +296,5 @@ func (m *ConsistentHashingMode) consistentHashIfNeeded(req *http.Request, start 
 			return nil
 		}
 	}
-	return nil
-}
-
-func (m *ConsistentHashingMode) downloadChunk(resp *http.Response, dataSlice []byte) error {
-	logger := logging.GetLogger()
-	defer resp.Body.Close()
-	if m.Semaphore != nil {
-		defer m.Semaphore.Release(1)
-	}
-	expectedBytes := len(dataSlice)
-	n, err := io.ReadFull(resp.Body, dataSlice)
-	if err != nil && err != io.EOF {
-		return fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)
-	}
-	if n != expectedBytes {
-		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, expectedBytes, resp.Request.URL.String())
-	}
-	logger.Debug().Int("size", len(dataSlice)).Int("downloaded", n).Msg("downloaded chunk")
 	return nil
 }

@@ -21,9 +21,8 @@ func (q *workQueue) start() {
 	go q.run()
 }
 
-func (q *workQueue) run() error {
+func (q *workQueue) run() {
 	for item := range q.queue {
 		item(context.Background())
 	}
-	return nil
 }

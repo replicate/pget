@@ -39,26 +39,27 @@ func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int
 	if err != nil {
 		return fileSize, 0, err
 	}
-	downloadElapsed := time.Since(downloadStartTime)
-	writeStartTime := time.Now()
+	// downloadElapsed := time.Since(downloadStartTime)
+	// writeStartTime := time.Now()
 
 	err = g.Consumer.Consume(buffer, dest)
 	if err != nil {
 		return fileSize, 0, fmt.Errorf("error writing file: %w", err)
 	}
-	writeElapsed := time.Since(writeStartTime)
+	// writeElapsed := time.Since(writeStartTime)
 	totalElapsed := time.Since(downloadStartTime)
 
 	size := humanize.Bytes(uint64(fileSize))
-	downloadThroughput := humanize.Bytes(uint64(float64(fileSize) / downloadElapsed.Seconds()))
-	writeThroughput := humanize.Bytes(uint64(float64(fileSize) / writeElapsed.Seconds()))
+	// downloadThroughput := humanize.Bytes(uint64(float64(fileSize) / downloadElapsed.Seconds()))
+	// writeThroughput := humanize.Bytes(uint64(float64(fileSize) / writeElapsed.Seconds()))
 	logger.Info().
 		Str("dest", dest).
+		Str("url", url).
 		Str("size", size).
-		Str("download_throughput", fmt.Sprintf("%s/s", downloadThroughput)).
-		Str("download_elapsed", fmt.Sprintf("%.3fs", downloadElapsed.Seconds())).
-		Str("write_throughput", fmt.Sprintf("%s/s", writeThroughput)).
-		Str("write_elapsed", fmt.Sprintf("%.3fs", writeElapsed.Seconds())).
+		// Str("download_throughput", fmt.Sprintf("%s/s", downloadThroughput)).
+		// Str("download_elapsed", fmt.Sprintf("%.3fs", downloadElapsed.Seconds())).
+		// Str("write_throughput", fmt.Sprintf("%s/s", writeThroughput)).
+		// Str("write_elapsed", fmt.Sprintf("%.3fs", writeElapsed.Seconds())).
 		Str("total_elapsed", fmt.Sprintf("%.3fs", totalElapsed.Seconds())).
 		Msg("Complete")
 	return fileSize, totalElapsed, nil

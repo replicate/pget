@@ -23,8 +23,10 @@ type ConsistentHashingMode struct {
 	Options
 	// TODO: allow this to be configured and not just "BufferMode"
 	FallbackStrategy Strategy
-	eg               *errgroup.Group
-	q                *workQueue
+
+	// we use this errgroup as a semaphore (via sem.SetLimit())
+	sem   *errgroup.Group
+	queue *workQueue
 }
 
 type CacheKey struct {
@@ -37,24 +39,24 @@ func GetConsistentHashingMode(opts Options) (*ConsistentHashingMode, error) {
 		return nil, fmt.Errorf("must specify slice size in consistent hashing mode")
 	}
 	client := client.NewHTTPClient(opts.Client)
-	eg := new(errgroup.Group)
-	eg.SetLimit(opts.maxConcurrency())
-	q := newWorkQueue(opts.maxConcurrency())
-	q.start()
+	sem := new(errgroup.Group)
+	sem.SetLimit(opts.maxConcurrency())
+	queue := newWorkQueue(opts.maxConcurrency())
+	queue.start()
 
 	fallbackStrategy := &BufferMode{
 		Client:  client,
 		Options: opts,
-		eg:      eg,
-		q:       q,
+		sem:     sem,
+		queue:   queue,
 	}
 
 	return &ConsistentHashingMode{
 		Client:           client,
 		Options:          opts,
 		FallbackStrategy: fallbackStrategy,
-		eg:               eg,
-		q:                q,
+		sem:              sem,
+		queue:            queue,
 	}, nil
 }
 
@@ -102,8 +104,8 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 
 	br := newBufferedReader(m.minChunkSize())
 	firstReqResultCh := make(chan firstReqResult)
-	m.q.submit(func() {
-		m.eg.Go(func() error {
+	m.queue.submit(func() {
+		m.sem.Go(func() error {
 			defer close(firstReqResultCh)
 			defer br.done()
 			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, urlString)
@@ -176,7 +178,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		Ints64("chunks_per_slice", chunksPerSlice).
 		Msg("Downloading")
 
-	m.q.submit(func() {
+	m.queue.submit(func() {
 		defer close(readersCh)
 		for slice, numChunks := range chunksPerSlice {
 			if numChunks == 0 {
@@ -209,7 +211,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 
 				br := newBufferedReader(m.minChunkSize())
 				readersCh <- br
-				m.eg.Go(func() error {
+				m.sem.Go(func() error {
 					defer br.done()
 					logger.Debug().Int64("start", chunkStart).Int64("end", chunkEnd).Msg("starting request")
 					resp, err := m.DoRequest(ctx, chunkStart, chunkEnd, urlString)

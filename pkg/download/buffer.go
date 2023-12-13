@@ -23,21 +23,23 @@ var contentRangeRegexp = regexp.MustCompile(`^bytes .*/([0-9]+)$`)
 type BufferMode struct {
 	Client *client.HTTPClient
 	Options
-	eg *errgroup.Group
-	q  *workQueue
+
+	// we use this errgroup as a semaphore (via sem.SetLimit())
+	sem   *errgroup.Group
+	queue *workQueue
 }
 
 func GetBufferMode(opts Options) *BufferMode {
-	eg := new(errgroup.Group)
 	client := client.NewHTTPClient(opts.Client)
-	eg.SetLimit(opts.maxConcurrency())
-	q := newWorkQueue(opts.maxConcurrency())
-	q.start()
+	sem := new(errgroup.Group)
+	sem.SetLimit(opts.maxConcurrency())
+	queue := newWorkQueue(opts.maxConcurrency())
+	queue.start()
 	return &BufferMode{
 		Client:  client,
 		Options: opts,
-		eg:      eg,
-		q:       q,
+		sem:     sem,
+		queue:   queue,
 	}
 }
 
@@ -69,8 +71,8 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 	br := newBufferedReader(m.minChunkSize())
 
 	firstReqResultCh := make(chan firstReqResult)
-	m.q.submit(func() {
-		m.eg.Go(func() error {
+	m.queue.submit(func() {
+		m.sem.Go(func() error {
 			defer close(firstReqResultCh)
 			defer br.done()
 			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, url)
@@ -134,7 +136,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
 	}
 
-	m.q.submit(func() {
+	m.queue.submit(func() {
 		defer close(readersCh)
 		logger.Debug().Str("url", url).
 			Int64("size", fileSize).
@@ -153,7 +155,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 			br := newBufferedReader(end - start + 1)
 			readersCh <- br
 
-			m.eg.Go(func() error {
+			m.sem.Go(func() error {
 				defer br.done()
 				resp, err := m.DoRequest(ctx, start, end, trueURL)
 				if err != nil {

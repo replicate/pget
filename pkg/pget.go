@@ -35,14 +35,14 @@ func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int
 	}
 	logger := logging.GetLogger()
 	downloadStartTime := time.Now()
-	reader, fileSize, err := g.Downloader.Fetch(ctx, url)
+	buffer, fileSize, err := g.Downloader.Fetch(ctx, url)
 	if err != nil {
 		return fileSize, 0, err
 	}
 	// downloadElapsed := time.Since(downloadStartTime)
 	// writeStartTime := time.Now()
 
-	err = g.Consumer.Consume(reader, dest)
+	err = g.Consumer.Consume(buffer, dest)
 	if err != nil {
 		return fileSize, 0, fmt.Errorf("error writing file: %w", err)
 	}
@@ -97,15 +97,19 @@ func (g *Getter) downloadFilesFromHost(ctx context.Context, eg *errgroup.Group, 
 		// goroutine by creating new variables
 		url, dest := entry.URL, entry.Dest
 		logger.Debug().Str("url", url).Str("dest", dest).Msg("Queueing Download")
-		reader, fileSize, err := g.Downloader.Fetch(ctx, url)
-		if err != nil {
-			return err
-		}
-		totalSize.Add(fileSize)
 
 		eg.Go(func() error {
-			return g.Consumer.Consume(reader, dest)
+			return g.downloadAndMeasure(ctx, url, dest, totalSize)
 		})
 	}
+	return nil
+}
+
+func (g *Getter) downloadAndMeasure(ctx context.Context, url, dest string, totalSize *atomic.Int64) error {
+	fileSize, _, err := g.DownloadFile(ctx, url, dest)
+	if err != nil {
+		return err
+	}
+	totalSize.Add(fileSize)
 	return nil
 }

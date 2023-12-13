@@ -9,7 +9,7 @@ import (
 
 // A bufferedReader wraps an http.Response.Body so that it can be eagerly
 // downloaded to a buffer before the actual io.Reader consumer can read it.
-// It implements io.Reader and io.WriterTo (for zero-copy reads).
+// It implements io.Reader.
 type bufferedReader struct {
 	// ready channel is closed when we're ready to read
 	ready chan struct{}
@@ -18,7 +18,6 @@ type bufferedReader struct {
 }
 
 var _ io.Reader = &bufferedReader{}
-var _ io.WriterTo = &bufferedReader{}
 
 func newBufferedReader(capacity int64) *bufferedReader {
 	return &bufferedReader{
@@ -35,16 +34,6 @@ func (b *bufferedReader) Read(buf []byte) (int, error) {
 		return 0, b.err
 	}
 	return b.buf.Read(buf)
-}
-
-// WriteTo implements io.WriterTo. It will block until the full body is
-// available for writing to the given io.Writer.
-func (b *bufferedReader) WriteTo(w io.Writer) (int64, error) {
-	<-b.ready
-	if b.err != nil {
-		return 0, b.err
-	}
-	return b.buf.WriteTo(w)
 }
 
 func (b *bufferedReader) done() {

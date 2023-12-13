@@ -1,7 +1,6 @@
 package download
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -63,7 +62,7 @@ type firstReqResult struct {
 func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
 	logger := logging.GetLogger()
 
-	br := newBufferedReader(bytes.NewBuffer(make([]byte, 0, m.minChunkSize())))
+	br := newBufferedReader(m.minChunkSize())
 
 	firstReqResultChan := make(chan firstReqResult)
 	m.eg.Go(func() error {
@@ -143,7 +142,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 			end = fileSize - 1
 		}
 
-		br := newBufferedReader(bytes.NewBuffer(make([]byte, 0, end-start+1)))
+		br := newBufferedReader(end - start + 1)
 		chunkReaders[i+1] = br
 
 		m.eg.Go(func() error {

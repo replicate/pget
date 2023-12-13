@@ -7,6 +7,9 @@ import (
 	"net/http"
 )
 
+// A bufferedReader wraps an http.Response.Body so that it can be eagerly
+// downloaded to a buffer before the actual io.Reader consumer can read it.
+// It implements io.Reader and io.WriterTo (for zero-copy reads).
 type bufferedReader struct {
 	// ready channel is closed when we're ready to read
 	ready chan struct{}
@@ -15,35 +18,43 @@ type bufferedReader struct {
 }
 
 var _ io.Reader = &bufferedReader{}
-var _ io.Writer = &bufferedReader{}
+var _ io.WriterTo = &bufferedReader{}
 
-func newBufferedReader(b *bytes.Buffer) *bufferedReader {
+func newBufferedReader(capacity int64) *bufferedReader {
 	return &bufferedReader{
 		ready: make(chan struct{}),
-		buf:   b,
+		buf:   bytes.NewBuffer(make([]byte, 0, capacity)),
 	}
 }
 
-func (b *bufferedReader) Write(buf []byte) (int, error) {
-	return b.buf.Write(buf)
-}
-
-func (b *bufferedReader) Done() {
-	close(b.ready)
-}
-
+// Read implements io.Reader. It will block until the full body is available for
+// reading.
 func (b *bufferedReader) Read(buf []byte) (int, error) {
 	<-b.ready
 	if b.err != nil {
-		return -1, b.err
+		return 0, b.err
 	}
 	return b.buf.Read(buf)
 }
 
+// WriteTo implements io.WriterTo. It will block until the full body is
+// available for writing to the given io.Writer.
+func (b *bufferedReader) WriteTo(w io.Writer) (int64, error) {
+	<-b.ready
+	if b.err != nil {
+		return 0, b.err
+	}
+	return b.buf.WriteTo(w)
+}
+
+func (b *bufferedReader) done() {
+	close(b.ready)
+}
+
 func (b *bufferedReader) downloadBody(resp *http.Response) error {
-	defer b.Done()
+	defer b.done()
 	expectedBytes := resp.ContentLength
-	n, err := io.Copy(b, resp.Body)
+	n, err := b.buf.ReadFrom(resp.Body)
 	if err != nil && err != io.EOF {
 		b.err = fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)
 		return b.err

@@ -74,6 +74,8 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 			return err
 		}
 
+		defer firstChunkResp.Body.Close()
+
 		trueURL := firstChunkResp.Request.URL.String()
 		if trueURL != url {
 			logger.Info().Str("url", url).Str("redirect_url", trueURL).Msg("Redirect")
@@ -82,12 +84,11 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
 		if err != nil {
 			firstReqResultChan <- firstReqResult{err: err}
-			firstChunkResp.Body.Close()
 			return err
 		}
 		firstReqResultChan <- firstReqResult{fileSize: fileSize, trueURL: trueURL}
 
-		return m.downloadBodyToBuffer(firstChunkResp, br)
+		return br.downloadBody(firstChunkResp)
 	})
 
 	firstReqResult, ok := <-firstReqResultChan
@@ -150,7 +151,8 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 			if err != nil {
 				return err
 			}
-			return m.downloadBodyToBuffer(resp, br)
+			defer resp.Body.Close()
+			return br.downloadBody(resp)
 		})
 	}
 
@@ -178,20 +180,6 @@ func (m *BufferMode) downloadChunk(resp *http.Response, dataSlice []byte) error 
 	defer resp.Body.Close()
 	expectedBytes := len(dataSlice)
 	n, err := io.ReadFull(resp.Body, dataSlice)
-	if err != nil && err != io.EOF {
-		return fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)
-	}
-	if n != expectedBytes {
-		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, expectedBytes, resp.Request.URL.String())
-	}
-	return nil
-}
-
-func (m *BufferMode) downloadBodyToBuffer(resp *http.Response, br *bufferedReader) error {
-	defer resp.Body.Close()
-	defer br.Done()
-	expectedBytes := resp.ContentLength
-	n, err := io.Copy(br, resp.Body)
 	if err != nil && err != io.EOF {
 		return fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)
 	}

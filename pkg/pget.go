@@ -71,6 +71,8 @@ func (g *Getter) DownloadFiles(ctx context.Context, manifest Manifest) (int64, t
 	}
 
 	errGroup, ctx := errgroup.WithContext(ctx)
+	// TODO: un-hardcode this
+	errGroup.SetLimit(20)
 
 	totalSize := new(atomic.Int64)
 	multifileDownloadStart := time.Now()

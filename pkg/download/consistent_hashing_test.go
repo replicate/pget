@@ -198,6 +198,75 @@ func TestConsistentHashing(t *testing.T) {
 	}
 }
 
+func TestConsistentHashRetries(t *testing.T) {
+	hostnames := make([]string, len(testFSes))
+	for i, fs := range testFSes {
+		ts := httptest.NewServer(http.FileServer(http.FS(fs)))
+		defer ts.Close()
+		url, err := url.Parse(ts.URL)
+		require.NoError(t, err)
+		hostnames[i] = url.Host
+	}
+	hostnames[6] = "localhost:1"
+
+	opts := download.Options{
+		Client:         client.Options{},
+		MaxConcurrency: 8,
+		MinChunkSize:   1,
+		CacheHosts:     hostnames,
+		DomainsToCache: []string{"test.replicate.delivery"},
+		SliceSize:      1,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	strategy, err := download.GetConsistentHashingMode(opts)
+	assert.NoError(t, err)
+
+	reader, _, err := strategy.Fetch(ctx, "http://test.replicate.delivery/hello.txt")
+	assert.NoError(t, err)
+	bytes, err := io.ReadAll(reader)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "0543775133034231", string(bytes))
+}
+
+// with only two hosts, we should *always* fall back to the other host
+func TestConsistentHashRetriesTwoHosts(t *testing.T) {
+	hostnames := make([]string, 2)
+	for i, fs := range testFSes[0:1] {
+		ts := httptest.NewServer(http.FileServer(http.FS(fs)))
+		defer ts.Close()
+		url, err := url.Parse(ts.URL)
+		require.NoError(t, err)
+		hostnames[i] = url.Host
+	}
+	hostnames[1] = "localhost:1"
+
+	opts := download.Options{
+		Client:         client.Options{},
+		MaxConcurrency: 8,
+		MinChunkSize:   1,
+		CacheHosts:     hostnames,
+		DomainsToCache: []string{"test.replicate.delivery"},
+		SliceSize:      1,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	strategy, err := download.GetConsistentHashingMode(opts)
+	assert.NoError(t, err)
+
+	reader, _, err := strategy.Fetch(ctx, "http://test.replicate.delivery/hello.txt")
+	assert.NoError(t, err)
+	bytes, err := io.ReadAll(reader)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "0000000000000000", string(bytes))
+}
+
 func TestConsistentHashingHasFallback(t *testing.T) {
 	server := httptest.NewServer(http.FileServer(http.FS(testFSes[0])))
 	defer server.Close()

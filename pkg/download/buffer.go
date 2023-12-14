@@ -101,7 +101,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 
 	firstReqResult, ok := <-firstReqResultCh
 	if !ok {
-		return nil, -1, fmt.Errorf("Logic error: channel closed but no result received")
+		panic("logic error in BufferMode: first request didn't return any output")
 	}
 
 	if firstReqResult.err != nil {

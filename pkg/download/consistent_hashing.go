@@ -127,7 +127,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 	})
 	firstReqResult, ok := <-firstReqResultCh
 	if !ok {
-		panic("shouldn't happen")
+		panic("logic error in ConsistentHashingMode: first request didn't return any output")
 	}
 	if firstReqResult.err != nil {
 		// In the case that an error indicating an issue with the cache server, networking, etc is returned,

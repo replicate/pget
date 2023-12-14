@@ -7,6 +7,8 @@ type chanMultiReader struct {
 	cur io.Reader
 }
 
+var _ io.Reader = &chanMultiReader{}
+
 func newChanMultiReader(ch <-chan io.Reader) *chanMultiReader {
 	return &chanMultiReader{ch: ch}
 }

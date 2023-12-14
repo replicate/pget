@@ -134,6 +134,12 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		// this will use the fallback strategy. This is a case where the whole file will use the fallback
 		// strategy.
 		if errors.Is(firstReqResult.err, client.ErrStrategyFallback) {
+			// TODO(morgan): we should indicate the fallback strategy we're using in the logs
+			logger.Info().
+				Str("url", urlString).
+				Str("type", "file").
+				Err(err).
+				Msg("consistent hash fallback")
 			return m.FallbackStrategy.Fetch(ctx, urlString)
 		}
 		return nil, -1, firstReqResult.err
@@ -215,6 +221,12 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 						// this will use the fallback strategy. This is a case where the whole file will perform the fall-back
 						// for the specified chunk instead of the whole file.
 						if errors.Is(err, client.ErrStrategyFallback) {
+							// TODO(morgan): we should indicate the fallback strategy we're using in the logs
+							logger.Info().
+								Str("url", urlString).
+								Str("type", "chunk").
+								Err(err).
+								Msg("consistent hash fallback")
 							resp, err = m.FallbackStrategy.DoRequest(ctx, chunkStart, chunkEnd, urlString)
 						}
 						if err != nil {

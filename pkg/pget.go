@@ -17,6 +17,11 @@ import (
 type Getter struct {
 	Downloader download.Strategy
 	Consumer   consumer.Consumer
+	Options    Options
+}
+
+type Options struct {
+	MaxConcurrentFiles int
 }
 
 type ManifestEntry struct {
@@ -71,8 +76,10 @@ func (g *Getter) DownloadFiles(ctx context.Context, manifest Manifest) (int64, t
 	}
 
 	errGroup, ctx := errgroup.WithContext(ctx)
-	// TODO: un-hardcode this
-	errGroup.SetLimit(20)
+
+	if g.Options.MaxConcurrentFiles != 0 {
+		errGroup.SetLimit(g.Options.MaxConcurrentFiles)
+	}
 
 	totalSize := new(atomic.Int64)
 	multifileDownloadStart := time.Now()

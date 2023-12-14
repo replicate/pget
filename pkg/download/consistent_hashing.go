@@ -115,17 +115,12 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 			}
 			defer firstChunkResp.Body.Close()
 
-			trueURL := firstChunkResp.Request.URL.String()
-			if trueURL != urlString {
-				logger.Info().Str("url", urlString).Str("redirect_url", trueURL).Msg("Redirect")
-			}
-
 			fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
 			if err != nil {
 				firstReqResultCh <- firstReqResult{err: err}
 				return err
 			}
-			firstReqResultCh <- firstReqResult{fileSize: fileSize, trueURL: trueURL}
+			firstReqResultCh <- firstReqResult{fileSize: fileSize}
 
 			return br.downloadBody(firstChunkResp)
 		})

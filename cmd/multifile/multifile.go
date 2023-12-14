@@ -88,6 +88,14 @@ func runMultifileCMD(cmd *cobra.Command, args []string) error {
 	return multifileExecute(cmd.Context(), manifest)
 }
 
+func maxConcurrentFiles() int {
+	maxConcurrentFiles := viper.GetInt(config.OptMaxConcurrentFiles)
+	if maxConcurrentFiles == 0 {
+		maxConcurrentFiles = 20
+	}
+	return maxConcurrentFiles
+}
+
 func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 	minChunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
 	if err != nil {
@@ -112,6 +120,9 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 		MinChunkSize:   int64(minChunkSize),
 		Client:         clientOpts,
 	}
+	pgetOpts := pget.Options{
+		MaxConcurrentFiles: maxConcurrentFiles(),
+	}
 
 	consumer, err := config.GetConsumer()
 	if err != nil {
@@ -121,6 +132,7 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 	getter := &pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
 		Consumer:   consumer,
+		Options:    pgetOpts,
 	}
 
 	// TODO DRY this

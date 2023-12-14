@@ -1,7 +1,7 @@
 package download
 
 import (
-	"golang.org/x/sync/semaphore"
+	"runtime"
 
 	"github.com/replicate/pget/pkg/client"
 )
@@ -29,8 +29,12 @@ type Options struct {
 	// hashing algorithm.  The slice may contain empty entries which
 	// correspond to a cache host which is currently unavailable.
 	CacheHosts []string
+}
 
-	// Semaphore is used to manage maximum concurrency. If nil, concurrency
-	// is unlimited.
-	Semaphore *semaphore.Weighted
+func (o *Options) maxConcurrency() int {
+	maxChunks := o.MaxConcurrency
+	if maxChunks == 0 {
+		return runtime.NumCPU() * 4
+	}
+	return maxChunks
 }

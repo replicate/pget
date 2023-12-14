@@ -18,13 +18,8 @@ func init() {
 var defaultOpts = download.Options{Client: client.Options{}}
 var http2Opts = download.Options{Client: client.Options{ForceHTTP2: true}}
 
-func makeBufferMode(opts download.Options) *download.BufferMode {
-	client := client.NewHTTPClient(opts.Client)
-
-	return &download.BufferMode{Client: client, Options: opts}
-}
 func benchmarkDownloadURL(opts download.Options, url string, b *testing.B) {
-	bufferMode := makeBufferMode(opts)
+	bufferMode := download.GetBufferMode(opts)
 
 	for n := 0; n < b.N; n++ {
 		ctx, cancel := context.WithCancel(context.Background())

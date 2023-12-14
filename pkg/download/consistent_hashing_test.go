@@ -13,7 +13,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/sync/semaphore"
 
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/download"
@@ -28,13 +27,6 @@ var testFSes = []fstest.MapFS{
 	{"hello.txt": {Data: []byte("5555555555555555")}},
 	{"hello.txt": {Data: []byte("6666666666666666")}},
 	{"hello.txt": {Data: []byte("7777777777777777")}},
-}
-
-func makeConsistentHashingMode(opts download.Options) *download.ConsistentHashingMode {
-	client := client.NewHTTPClient(opts.Client)
-	fallbackMode := download.BufferMode{Options: opts, Client: client}
-
-	return &download.ConsistentHashingMode{Client: client, Options: opts, FallbackStrategy: &fallbackMode}
 }
 
 type chTestCase struct {
@@ -185,7 +177,6 @@ func TestConsistentHashing(t *testing.T) {
 				Client:         client.Options{},
 				MaxConcurrency: tc.concurrency,
 				MinChunkSize:   tc.minChunkSize,
-				Semaphore:      semaphore.NewWeighted(int64(tc.concurrency)),
 				CacheHosts:     hostnames[0:tc.numCacheHosts],
 				DomainsToCache: []string{"test.replicate.delivery"},
 				SliceSize:      tc.sliceSize,
@@ -194,7 +185,8 @@ func TestConsistentHashing(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			strategy := makeConsistentHashingMode(opts)
+			strategy, err := download.GetConsistentHashingMode(opts)
+			assert.NoError(t, err)
 
 			reader, _, err := strategy.Fetch(ctx, "http://test.replicate.delivery/hello.txt")
 			assert.NoError(t, err)
@@ -214,7 +206,6 @@ func TestConsistentHashingHasFallback(t *testing.T) {
 		Client:         client.Options{},
 		MaxConcurrency: 8,
 		MinChunkSize:   2,
-		Semaphore:      semaphore.NewWeighted(8),
 		CacheHosts:     []string{},
 		DomainsToCache: []string{"fake.replicate.delivery"},
 		SliceSize:      3,
@@ -223,12 +214,13 @@ func TestConsistentHashingHasFallback(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	strategy := makeConsistentHashingMode(opts)
+	strategy, err := download.GetConsistentHashingMode(opts)
+	require.NoError(t, err)
 
 	urlString, err := url.JoinPath(server.URL, "hello.txt")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	reader, _, err := strategy.Fetch(ctx, urlString)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
 	assert.NoError(t, err)
 
@@ -263,7 +255,14 @@ func (s *testStrategy) DoRequest(ctx context.Context, start, end int64, url stri
 	s.mut.Lock()
 	s.doRequestCalledCount++
 	s.mut.Unlock()
-	resp := &http.Response{Body: io.NopCloser(strings.NewReader("00"))}
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp := &http.Response{
+		Request: req,
+		Body:    io.NopCloser(strings.NewReader("00")),
+	}
 	return resp, nil
 }
 
@@ -302,7 +301,6 @@ func TestConsistentHashingFileFallback(t *testing.T) {
 				Client:         client.Options{},
 				MaxConcurrency: 8,
 				MinChunkSize:   2,
-				Semaphore:      semaphore.NewWeighted(8),
 				CacheHosts:     []string{url.Host},
 				DomainsToCache: []string{"fake.replicate.delivery"},
 				SliceSize:      3,
@@ -311,12 +309,14 @@ func TestConsistentHashingFileFallback(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			strategy := makeConsistentHashingMode(opts)
+			strategy, err := download.GetConsistentHashingMode(opts)
+			assert.NoError(t, err)
+
 			fallbackStrategy := &testStrategy{}
 			strategy.FallbackStrategy = fallbackStrategy
 
 			urlString := "http://fake.replicate.delivery/hello.txt"
-			_, _, err := strategy.Fetch(ctx, urlString)
+			_, _, err = strategy.Fetch(ctx, urlString)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
 			}
@@ -363,7 +363,6 @@ func TestConsistentHashingChunkFallback(t *testing.T) {
 				Client:         client.Options{},
 				MaxConcurrency: 8,
 				MinChunkSize:   3,
-				Semaphore:      semaphore.NewWeighted(8),
 				CacheHosts:     []string{url.Host},
 				DomainsToCache: []string{"fake.replicate.delivery"},
 				SliceSize:      3,
@@ -372,13 +371,20 @@ func TestConsistentHashingChunkFallback(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			strategy := makeConsistentHashingMode(opts)
+			strategy, err := download.GetConsistentHashingMode(opts)
+			assert.NoError(t, err)
+
 			fallbackStrategy := &testStrategy{}
 			strategy.FallbackStrategy = fallbackStrategy
 
 			urlString := "http://fake.replicate.delivery/hello.txt"
-			_, _, err := strategy.Fetch(ctx, urlString)
+			out, _, err := strategy.Fetch(ctx, urlString)
 			assert.ErrorIs(t, err, tc.expectedError)
+			if err == nil {
+				// eagerly read the whole output reader to force all the
+				// requests to be completed
+				_, _ = io.Copy(io.Discard, out)
+			}
 			assert.Equal(t, tc.fetchCalledCount, fallbackStrategy.fetchCalledCount)
 			assert.Equal(t, tc.doRequestCalledCount, fallbackStrategy.doRequestCalledCount)
 		})

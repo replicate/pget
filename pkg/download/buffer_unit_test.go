@@ -13,6 +13,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/replicate/pget/pkg/client"
 )
@@ -109,10 +110,10 @@ func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts.MaxConcurrency = tc.maxConcurrency
 			opts.MinChunkSize = tc.minChunkSize
-			bufferMode := makeBufferMode(opts)
+			bufferMode := GetBufferMode(opts)
 			path, _ := url.JoinPath(server.URL, testFilePath)
 			download, size, err := bufferMode.Fetch(context.Background(), path)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			data, err := io.ReadAll(download)
 			assert.NoError(t, err)
 			assert.Equal(t, contentSize, size)
@@ -120,10 +121,4 @@ func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
 			assert.Equal(t, content, data)
 		})
 	}
-}
-
-func makeBufferMode(opts Options) *BufferMode {
-	client := client.NewHTTPClient(opts.Client)
-
-	return &BufferMode{Client: client, Options: opts}
 }

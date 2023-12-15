@@ -64,7 +64,9 @@ func GetCommand() *cobra.Command {
 			return nil
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-			pidFile := cmd.Context().Value(config.OptPIDFile).(*cli.PIDFile)
+			// This is absolutely not idiomatic go and somewhat breaks the context of context being
+			// immutable. TODO: Fix this.
+			pidFile := cmd.Context().Value(config.PIDFileContextKey).(*cli.PIDFile)
 			err := pidFile.Release()
 			if err != nil {
 				return err

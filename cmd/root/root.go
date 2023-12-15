@@ -92,7 +92,7 @@ func GetCommand() *cobra.Command {
 }
 
 // defaultPidFilePath returns the default path for the PID file. Notably modern OS X variants
-// do not have /var/run or /run
+// have permissioning difficulties in /var/run etc.
 func defaultPidFilePath() string {
 	// If we're on OS X or Windows, use the user's home directory
 	// Otherwise, use /run

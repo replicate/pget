@@ -39,7 +39,7 @@ func (p *PIDFile) Release() error {
 
 func (p *PIDFile) writePID() error {
 	pid := os.Getpid()
-	_, err := p.file.Write([]byte(fmt.Sprintf("%d", pid)))
+	_, err := p.file.WriteString(fmt.Sprintf("%d", pid))
 	return err
 }
 

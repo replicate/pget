@@ -60,7 +60,7 @@ func Test_makeVersionString(t *testing.T) {
 				commitHash: "abc123",
 				os:         "darwin",
 				arch:       "amd64",
-				branch:     "Main",
+				branch:     "main",
 			},
 			expected: "1.0.0(abc123)/darwin-amd64",
 		},

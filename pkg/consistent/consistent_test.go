@@ -4,9 +4,10 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/replicate/pget/pkg/consistent"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/replicate/pget/pkg/consistent"
 )
 
 func TestHashingDoesNotChangeWhenZeroValueFieldsAreAdded(t *testing.T) {

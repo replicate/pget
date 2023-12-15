@@ -267,7 +267,7 @@ func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64,
 			if err != nil {
 				return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
 			}
-			cachePodIndex, err = m.rewriteRequestToCacheHost(req, start, end, cachePodIndex)
+			_, err = m.rewriteRequestToCacheHost(req, start, end, cachePodIndex)
 			if err != nil {
 				// return origErr so that we can use our regular fallback strategy
 				return nil, origErr

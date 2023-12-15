@@ -53,7 +53,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      3,
 		numCacheHosts:  2,
 		minChunkSize:   1,
-		expectedOutput: "0001110000001110",
+		expectedOutput: "1111110000000000",
 	},
 	{
 		name:           "3 hosts",
@@ -61,7 +61,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      3,
 		numCacheHosts:  3,
 		minChunkSize:   1,
-		expectedOutput: "0001110002221110",
+		expectedOutput: "2221110000002222",
 	},
 	{
 		name:           "4 hosts",
@@ -69,7 +69,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      3,
 		numCacheHosts:  4,
 		minChunkSize:   1,
-		expectedOutput: "0001113333331110",
+		expectedOutput: "3331113333332222",
 	},
 	{
 		name:           "5 hosts",
@@ -77,7 +77,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      3,
 		numCacheHosts:  5,
 		minChunkSize:   1,
-		expectedOutput: "0001114443331110",
+		expectedOutput: "3334443333332224",
 	},
 	{
 		name:           "6 hosts",
@@ -85,7 +85,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      3,
 		numCacheHosts:  6,
 		minChunkSize:   1,
-		expectedOutput: "0001114443331115",
+		expectedOutput: "3334443333335554",
 	},
 	{
 		name:           "7 hosts",
@@ -93,7 +93,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      3,
 		numCacheHosts:  7,
 		minChunkSize:   1,
-		expectedOutput: "0006664443336665",
+		expectedOutput: "3334446666665556",
 	},
 	{
 		name:           "8 hosts",
@@ -101,7 +101,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      3,
 		numCacheHosts:  8,
 		minChunkSize:   1,
-		expectedOutput: "0006664443336667",
+		expectedOutput: "3334446666667776",
 	},
 	{
 		name:           "test when fileSize % sliceSize == 0",
@@ -109,7 +109,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      4,
 		numCacheHosts:  8,
 		minChunkSize:   1,
-		expectedOutput: "0000666644443333",
+		expectedOutput: "3333444466666666",
 	},
 	{
 		name:           "when minChunkSize == sliceSize",
@@ -117,7 +117,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      3,
 		numCacheHosts:  8,
 		minChunkSize:   3,
-		expectedOutput: "0006664443336667",
+		expectedOutput: "3334446666667776",
 	},
 	{
 		name:           "test when concurrency > file size",
@@ -125,7 +125,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      3,
 		numCacheHosts:  8,
 		minChunkSize:   3,
-		expectedOutput: "0006664443336667",
+		expectedOutput: "3334446666667776",
 	},
 	{
 		name:           "test when concurrency < number of slices",
@@ -133,7 +133,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      3,
 		numCacheHosts:  8,
 		minChunkSize:   3,
-		expectedOutput: "0006664443336667",
+		expectedOutput: "3334446666667776",
 	},
 	{
 		name:           "test when minChunkSize == file size",
@@ -141,7 +141,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      16,
 		numCacheHosts:  8,
 		minChunkSize:   16,
-		expectedOutput: "0000000000000000",
+		expectedOutput: "3333333333333333",
 	},
 	{
 		name:           "test when minChunkSize > file size",
@@ -149,7 +149,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      24,
 		numCacheHosts:  8,
 		minChunkSize:   24,
-		expectedOutput: "0000000000000000",
+		expectedOutput: "3333333333333333",
 	},
 	{
 		name:           "if minChunkSize > sliceSize, sliceSize overrides it",
@@ -157,7 +157,7 @@ var chTestCases = []chTestCase{
 		sliceSize:      3,
 		numCacheHosts:  8,
 		minChunkSize:   24,
-		expectedOutput: "0006664443336667",
+		expectedOutput: "3334446666667776",
 	},
 }
 
@@ -178,7 +178,7 @@ func TestConsistentHashing(t *testing.T) {
 				MaxConcurrency: tc.concurrency,
 				MinChunkSize:   tc.minChunkSize,
 				CacheHosts:     hostnames[0:tc.numCacheHosts],
-				DomainsToCache: []string{"test.replicate.delivery"},
+				DomainsToCache: []string{"test.replicate.com"},
 				SliceSize:      tc.sliceSize,
 			}
 
@@ -188,7 +188,8 @@ func TestConsistentHashing(t *testing.T) {
 			strategy, err := download.GetConsistentHashingMode(opts)
 			assert.NoError(t, err)
 
-			reader, _, err := strategy.Fetch(ctx, "http://test.replicate.delivery/hello.txt")
+			assert.Equal(t, tc.numCacheHosts, len(strategy.Options.CacheHosts))
+			reader, _, err := strategy.Fetch(ctx, "http://test.replicate.com/hello.txt")
 			assert.NoError(t, err)
 			bytes, err := io.ReadAll(reader)
 			assert.NoError(t, err)
@@ -207,14 +208,15 @@ func TestConsistentHashRetries(t *testing.T) {
 		require.NoError(t, err)
 		hostnames[i] = url.Host
 	}
-	hostnames[6] = "localhost:1"
+	// deliberately "break" one cache host
+	hostnames[0] = "localhost:1"
 
 	opts := download.Options{
 		Client:         client.Options{},
 		MaxConcurrency: 8,
 		MinChunkSize:   1,
 		CacheHosts:     hostnames,
-		DomainsToCache: []string{"test.replicate.delivery"},
+		DomainsToCache: []string{"fake.replicate.delivery"},
 		SliceSize:      1,
 	}
 
@@ -224,12 +226,16 @@ func TestConsistentHashRetries(t *testing.T) {
 	strategy, err := download.GetConsistentHashingMode(opts)
 	assert.NoError(t, err)
 
-	reader, _, err := strategy.Fetch(ctx, "http://test.replicate.delivery/hello.txt")
+	reader, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
 	assert.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
 	assert.NoError(t, err)
 
-	assert.Equal(t, "0543775133034231", string(bytes))
+	// with a functional hostnames[0], we'd see 0344760706165500, but instead we
+	// should fall back to this. Note that each 0 value has been changed to a
+	// different index; we don't want every request that previously hit 0 to hit
+	// the same new host.
+	assert.Equal(t, "3344761726165516", string(bytes))
 }
 
 // with only two hosts, we should *always* fall back to the other host
@@ -249,7 +255,7 @@ func TestConsistentHashRetriesTwoHosts(t *testing.T) {
 		MaxConcurrency: 8,
 		MinChunkSize:   1,
 		CacheHosts:     hostnames,
-		DomainsToCache: []string{"test.replicate.delivery"},
+		DomainsToCache: []string{"testing.replicate.delivery"},
 		SliceSize:      1,
 	}
 
@@ -259,7 +265,7 @@ func TestConsistentHashRetriesTwoHosts(t *testing.T) {
 	strategy, err := download.GetConsistentHashingMode(opts)
 	assert.NoError(t, err)
 
-	reader, _, err := strategy.Fetch(ctx, "http://test.replicate.delivery/hello.txt")
+	reader, _, err := strategy.Fetch(ctx, "http://testing.replicate.delivery/hello.txt")
 	assert.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
 	assert.NoError(t, err)

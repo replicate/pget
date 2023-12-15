@@ -50,6 +50,25 @@ func GetCommand() *cobra.Command {
 			if err := config.PersistentStartupProcessFlags(); err != nil {
 				return err
 			}
+			pidFilePath := viper.GetString(config.OptPIDFile)
+			pidFile, err := cli.NewPIDFile(pidFilePath)
+			if err != nil {
+				return err
+			}
+			err = pidFile.Acquire()
+			if err != nil {
+				return err
+			}
+			ctx := context.WithValue(cmd.Context(), config.OptPIDFile, pidFile)
+			cmd.SetContext(ctx)
+			return nil
+		},
+		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+			pidFile := cmd.Context().Value(config.OptPIDFile).(*cli.PIDFile)
+			err := pidFile.Release()
+			if err != nil {
+				return err
+			}
 			return nil
 		},
 		PreRun:  rootCmdPreRun,
@@ -77,6 +96,18 @@ func GetCommand() *cobra.Command {
 	return cmd
 }
 
+// defaultPidFilePath returns the default path for the PID file. Notably modern OS X variants
+// do not have /var/run/
+func defaultPidFilePath() string {
+	// If we're on OS X or Windows, use the user's home directory
+	// Otherwise, use /run
+	path := "/run/pget.pid"
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		path = os.Getenv("HOME") + "/.pget.pid"
+	}
+	return path
+}
+
 func persistentFlags(cmd *cobra.Command) error {
 	// Persistent Flags (applies to all commands/subcommands)
 	cmd.PersistentFlags().IntVarP(&concurrency, config.OptConcurrency, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
@@ -91,6 +122,7 @@ func persistentFlags(cmd *cobra.Command) error {
 	cmd.PersistentFlags().Bool(config.OptForceHTTP2, false, "OptForce HTTP/2")
 	cmd.PersistentFlags().Int(config.OptMaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host")
 	cmd.PersistentFlags().StringP(config.OptOutputConsumer, "o", "file", "Output Consumer (file, tar, null)")
+	cmd.PersistentFlags().String(config.OptPIDFile, defaultPidFilePath(), "PID file path")
 
 	if err := config.AddFlagAlias(cmd, config.OptConcurrency, config.OptMaxChunks); err != nil {
 		return err
@@ -105,7 +137,7 @@ func persistentFlags(cmd *cobra.Command) error {
 
 func hideAndDeprecateFlags(cmd *cobra.Command) error {
 	// Hide flags from help, these are intended to be used for testing/internal benchmarking/debugging only
-	if err := config.HideFlags(cmd, config.OptForceHTTP2, config.OptMaxConnPerHost, config.OptOutputConsumer); err != nil {
+	if err := config.HideFlags(cmd, config.OptForceHTTP2, config.OptMaxConnPerHost, config.OptOutputConsumer, config.OptPIDFile); err != nil {
 		return err
 	}
 

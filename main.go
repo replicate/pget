@@ -21,3 +21,11 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// Flock on PidFile to ensure only one pget process is running at a time.
+// if pid file exists but does not have a Flock on it, check to see if the process is still running
+// and is in-fact a pget process. If it is, then still acquire the Flock and block until the process
+// ends.
+func accquireFlock() {
+
+}

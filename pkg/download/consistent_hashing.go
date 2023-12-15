@@ -251,7 +251,7 @@ func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64,
 	if err != nil {
 		return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
 	}
-	cachePodIndex, err := m.consistentHashIfNeeded(req, start, end)
+	cachePodIndex, err := m.rewriteRequestToCacheHost(req, start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +267,7 @@ func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64,
 			if err != nil {
 				return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
 			}
-			cachePodIndex, err = m.consistentHashIfNeeded(req, start, end, cachePodIndex)
+			cachePodIndex, err = m.rewriteRequestToCacheHost(req, start, end, cachePodIndex)
 			if err != nil {
 				// return origErr so that we can use our regular fallback strategy
 				return nil, origErr
@@ -291,29 +291,24 @@ func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64,
 	return resp, nil
 }
 
-func (m *ConsistentHashingMode) consistentHashIfNeeded(req *http.Request, start int64, end int64, previousPodIndexes ...int) (cachePodIndex int, err error) {
+func (m *ConsistentHashingMode) rewriteRequestToCacheHost(req *http.Request, start int64, end int64, previousPodIndexes ...int) (int, error) {
 	logger := logging.GetLogger()
-	for _, host := range m.DomainsToCache {
-		if host == req.URL.Host {
-			if start/m.SliceSize != end/m.SliceSize {
-				return 0, fmt.Errorf("can't make a range request across a slice boundary: %d-%d straddles a slice boundary (slice size is %d)", start, end, m.SliceSize)
-			}
-			slice := start / m.SliceSize
-
-			key := CacheKey{URL: req.URL, Slice: slice}
-
-			cachePodIndex, err = consistent.HashBucket(key, len(m.CacheHosts), previousPodIndexes...)
-			if err != nil {
-				return
-			}
-			cacheHost := m.CacheHosts[cachePodIndex]
-			logger.Debug().Str("cache_key", fmt.Sprintf("%+v", key)).Int64("start", start).Int64("end", end).Int64("slice_size", m.SliceSize).Int("bucket", cachePodIndex).Msg("consistent hashing")
-			if cacheHost != "" {
-				req.URL.Scheme = "http"
-				req.URL.Host = cacheHost
-			}
-			return
-		}
+	if start/m.SliceSize != end/m.SliceSize {
+		return 0, fmt.Errorf("can't make a range request across a slice boundary: %d-%d straddles a slice boundary (slice size is %d)", start, end, m.SliceSize)
 	}
-	return
+	slice := start / m.SliceSize
+
+	key := CacheKey{URL: req.URL, Slice: slice}
+
+	cachePodIndex, err := consistent.HashBucket(key, len(m.CacheHosts), previousPodIndexes...)
+	if err != nil {
+		return -1, err
+	}
+	cacheHost := m.CacheHosts[cachePodIndex]
+	logger.Debug().Str("cache_key", fmt.Sprintf("%+v", key)).Int64("start", start).Int64("end", end).Int64("slice_size", m.SliceSize).Int("bucket", cachePodIndex).Msg("consistent hashing")
+	if cacheHost != "" {
+		req.URL.Scheme = "http"
+		req.URL.Host = cacheHost
+	}
+	return cachePodIndex, nil
 }

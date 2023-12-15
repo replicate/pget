@@ -28,11 +28,11 @@ func makeVersionString(version, commitHash, buildtime, prerelease, snapshot, os,
 	versionString = fmt.Sprintf("%s(%s)", version, commitHash)
 	if prerelease != "" {
 		versionString = fmt.Sprintf("%s-%s", versionString, prerelease)
-	} else if snapshot != "" {
+	} else if snapshot == "true" {
 		versionString = fmt.Sprintf("%s-%s", versionString, snapshotString)
 	}
 
-	if branch != "" && branch != "Main" && branch != "HEAD" {
+	if branch != "" && branch != "main" && branch != "HEAD" {
 		versionString = fmt.Sprintf("%s[%s]", versionString, branch)
 	}
 

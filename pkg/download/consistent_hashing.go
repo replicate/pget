@@ -9,12 +9,11 @@ import (
 	"net/url"
 	"strconv"
 
-	jump "github.com/dgryski/go-jump"
-	"github.com/mitchellh/hashstructure/v2"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
+	"github.com/replicate/pget/pkg/consistent"
 	"github.com/replicate/pget/pkg/logging"
 )
 
@@ -252,7 +251,7 @@ func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64,
 	if err != nil {
 		return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
 	}
-	err = m.consistentHashIfNeeded(req, start, end)
+	cachePodIndex, err := m.rewriteRequestToCacheHost(req, start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +261,28 @@ func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64,
 
 	resp, err := m.Client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
+		if errors.Is(err, client.ErrStrategyFallback) {
+			origErr := err
+			req, err := http.NewRequestWithContext(chContext, "GET", urlString, nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
+			}
+			_, err = m.rewriteRequestToCacheHost(req, start, end, cachePodIndex)
+			if err != nil {
+				// return origErr so that we can use our regular fallback strategy
+				return nil, origErr
+			}
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+			logger.Debug().Str("url", urlString).Str("munged_url", req.URL.String()).Str("host", req.Host).Int64("start", start).Int64("end", end).Msg("retry request")
+
+			resp, err = m.Client.Do(req)
+			if err != nil {
+				// return origErr so that we can use our regular fallback strategy
+				return nil, origErr
+			}
+		} else {
+			return nil, fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
+		}
 	}
 	if resp.StatusCode == 0 || resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("%w %s: %s", ErrUnexpectedHTTPStatus, req.URL.String(), resp.Status)
@@ -271,39 +291,24 @@ func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64,
 	return resp, nil
 }
 
-func (m *ConsistentHashingMode) consistentHashIfNeeded(req *http.Request, start int64, end int64) error {
+func (m *ConsistentHashingMode) rewriteRequestToCacheHost(req *http.Request, start int64, end int64, previousPodIndexes ...int) (int, error) {
 	logger := logging.GetLogger()
-	for _, host := range m.DomainsToCache {
-		if host == req.URL.Host {
-			if start/m.SliceSize != end/m.SliceSize {
-				return fmt.Errorf("can't make a range request across a slice boundary: %d-%d straddles a slice boundary (slice size is %d)", start, end, m.SliceSize)
-			}
-			slice := start / m.SliceSize
-
-			key := CacheKey{URL: req.URL, Slice: slice}
-			// we set IgnoreZeroValue so that we can add fields to the hash key
-			// later without breaking things.
-			// note that it's not safe to share a HashOptions so we create a fresh one each time.
-			hashopts := &hashstructure.HashOptions{IgnoreZeroValue: true}
-			hash, err := hashstructure.Hash(key, hashstructure.FormatV2, hashopts)
-			if err != nil {
-				return fmt.Errorf("error calculating hash of key")
-			}
-
-			logger.Debug().Uint64("hash_sum", hash).Int("len_cache_hosts", len(m.CacheHosts)).Msg("consistent hashing")
-
-			// jump is an implementation of Google's Jump Consistent Hash.
-			//
-			// See http://arxiv.org/abs/1406.2294 for details.
-			cachePodIndex := int(jump.Hash(hash, len(m.CacheHosts)))
-			cacheHost := m.CacheHosts[cachePodIndex]
-			logger.Debug().Str("cache_key", fmt.Sprintf("%+v", key)).Int64("start", start).Int64("end", end).Int64("slice_size", m.SliceSize).Int("bucket", cachePodIndex).Msg("consistent hashing")
-			if cacheHost != "" {
-				req.URL.Scheme = "http"
-				req.URL.Host = cacheHost
-			}
-			return nil
-		}
+	if start/m.SliceSize != end/m.SliceSize {
+		return 0, fmt.Errorf("can't make a range request across a slice boundary: %d-%d straddles a slice boundary (slice size is %d)", start, end, m.SliceSize)
 	}
-	return nil
+	slice := start / m.SliceSize
+
+	key := CacheKey{URL: req.URL, Slice: slice}
+
+	cachePodIndex, err := consistent.HashBucket(key, len(m.CacheHosts), previousPodIndexes...)
+	if err != nil {
+		return -1, err
+	}
+	cacheHost := m.CacheHosts[cachePodIndex]
+	logger.Debug().Str("cache_key", fmt.Sprintf("%+v", key)).Int64("start", start).Int64("end", end).Int64("slice_size", m.SliceSize).Int("bucket", cachePodIndex).Msg("consistent hashing")
+	if cacheHost != "" {
+		req.URL.Scheme = "http"
+		req.URL.Host = cacheHost
+	}
+	return cachePodIndex, nil
 }

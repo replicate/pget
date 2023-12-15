@@ -13,7 +13,8 @@ CHECKSUM_FILE := sha256sum.txt
 GO := go
 GOOS := $(shell $(GO) env GOOS)
 GOARCH := $(shell $(GO) env GOARCH)
-GORELEASER := goreleaser
+GOENV := $(shell $(GO) env GOPATH)
+GORELEASER := $(GOENV)/bin/goreleaser
 
 SINGLE_TARGET=--single-target
 
@@ -59,16 +60,10 @@ format:
 tidy:
 	go mod tidy
 
-.PHONY: check-goreleaser
-check-goreleaser:
-	@command -v goreleaser >/dev/null 2>&1 || { echo >&2 "goreleaser is required but not installed. Aborting. Run 'make install-goreleaser' to install"; exit 1; }
-
 .PHONY: install-goreleaser
 install-goreleaser:
-	@command -v goreleaser >/dev/null 2>&1 || { \
-		echo >&2 "goreleaser is required but not installed. Installing..."; \
-		curl -sfL https://install.goreleaser.com/github.com/goreleaser/goreleaser.sh | sh; \
-	}
+	$(GO) install github.com/goreleaser/goreleaser@latest
+
 
 .PHONY: build
 build: pget
@@ -77,5 +72,5 @@ build: pget
 build-all: SINGLE_TARGET:=
 build-all: clean pget
 
-pget: check-goreleaser
-	$(GORELEASER) build --snapshot --rm-dist $(SINGLE_TARGET) -o ./pget
+pget: install-goreleaser
+	$(GORELEASER) build --snapshot --clean $(SINGLE_TARGET) -o ./pget

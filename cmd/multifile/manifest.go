@@ -9,9 +9,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/viper"
+
 	pget "github.com/replicate/pget/pkg"
 	"github.com/replicate/pget/pkg/cli"
 	"github.com/replicate/pget/pkg/client"
+	"github.com/replicate/pget/pkg/config"
 )
 
 // A manifest is a file consisting of pairs of URLs and paths:
@@ -86,18 +89,22 @@ func parseManifest(file io.Reader) (pget.Manifest, error) {
 			return nil, err
 		}
 
-		err = checkSeenDests(seenDests, dest, urlString)
-		if err != nil {
-			return nil, err
+		// THIS IS A BODGE - FIX ME MOVE THESE THINGS TO PGET
+		// and make the consumer responsible for knowing if this
+		// is allowed/not allowed/etc
+		consumer := viper.GetString(config.OptOutputConsumer)
+		if consumer != config.ConsumerNull {
+			err = checkSeenDests(seenDests, dest, urlString)
+			if err != nil {
+				return nil, err
+			}
+			seenDests[dest] = urlString
+
+			err = cli.EnsureDestinationNotExist(dest)
+			if err != nil {
+				return nil, err
+			}
 		}
-
-		seenDests[dest] = urlString
-
-		err = cli.EnsureDestinationNotExist(dest)
-		if err != nil {
-			return nil, err
-		}
-
 		schemeHost, err := client.GetSchemeHostKey(urlString)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing url %s: %w", urlString, err)

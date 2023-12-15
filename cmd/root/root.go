@@ -139,8 +139,12 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 		Str("minimum_chunk_size", viper.GetString(config.OptMinimumChunkSize)).
 		Msg("Initiating")
 
-	if err := cli.EnsureDestinationNotExist(dest); err != nil {
-		return err
+	// OMG BODGE FIX THIS
+	consumer := viper.GetString(config.OptOutputConsumer)
+	if consumer != config.ConsumerNull {
+		if err := cli.EnsureDestinationNotExist(dest); err != nil {
+			return err
+		}
 	}
 	if err := rootExecute(cmd.Context(), urlString, dest); err != nil {
 		return err

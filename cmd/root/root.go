@@ -64,11 +64,7 @@ func GetCommand() *cobra.Command {
 			return nil
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-			err := pidFile.Release()
-			if err != nil {
-				return err
-			}
-			return nil
+			return pidFile.Release()
 		},
 		PreRun:  rootCmdPreRun,
 		RunE:    runRootCMD,
@@ -96,7 +92,7 @@ func GetCommand() *cobra.Command {
 }
 
 // defaultPidFilePath returns the default path for the PID file. Notably modern OS X variants
-// do not have /var/run/
+// do not have /var/run or /run
 func defaultPidFilePath() string {
 	// If we're on OS X or Windows, use the user's home directory
 	// Otherwise, use /run

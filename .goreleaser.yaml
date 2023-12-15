@@ -1,3 +1,4 @@
+project_name: pget
 before:
   hooks:
     - go mod tidy
@@ -14,7 +15,7 @@ builds:
       - arm64
     main: ./main.go
     ldflags:
-      - "-s -w -X github.com/replicate/pget/pkg/version.Version={{.Version}} -X github.com/replicate/pget/pkg/version.CommitHash={{.ShortCommit}} -X github.com/replicate/pget/pkg/version.BuildTime={{.Date}}"
+      - "-s -w -X github.com/replicate/pget/pkg/version.Version={{.Version}} -X github.com/replicate/pget/pkg/version.CommitHash={{.ShortCommit}} -X github.com/replicate/pget/pkg/version.BuildTime={{.Date}} -X github.com/replicate/pget/pkg/version.Prerelease={{.Prerelease}} -X github.com/replicate/pget/pkg/version.OS={{.Os}} -X github.com/replicate/pget/pkg/version.Arch={{if eq .Arch \"amd64\"}}x86_64{{else if eq .Arch \"386\"}}i386{{else}}{{.Arch}}{{end}} -X github.com/replicate/pget/pkg/version.Snapshot={{.IsSnapshot}} -X github.com/replicate/pget/pkg/version.Branch={{.Branch}}"
 archives:
   - format: binary
     name_template: >-
@@ -26,7 +27,9 @@ archives:
 checksum:
   name_template: "checksums.txt"
 snapshot:
-  name_template: "{{ .Tag }}-next"
+  name_template: "{{ incminor .Version }}-devbuild"
+universal_binaries:
+  - replace: false
 changelog:
   sort: asc
   filters:

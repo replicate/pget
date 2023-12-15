@@ -92,12 +92,12 @@ func GetCommand() *cobra.Command {
 }
 
 // defaultPidFilePath returns the default path for the PID file. Notably modern OS X variants
-// have permissioning difficulties in /var/run etc.
+// have permissions difficulties in /var/run etc.
 func defaultPidFilePath() string {
-	// If we're on OS X or Windows, use the user's home directory
+	// If we're on OS X, use the user's home directory
 	// Otherwise, use /run
 	path := "/run/pget.pid"
-	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+	if runtime.GOOS == "darwin" {
 		path = os.Getenv("HOME") + "/.pget.pid"
 	}
 	return path

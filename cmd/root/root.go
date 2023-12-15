@@ -40,6 +40,7 @@ efficient file extractor, providing a streamlined solution for fetching and unpa
 `
 
 var concurrency int
+var pidFile *cli.PIDFile
 
 func GetCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -51,22 +52,18 @@ func GetCommand() *cobra.Command {
 				return err
 			}
 			pidFilePath := viper.GetString(config.OptPIDFile)
-			pidFile, err := cli.NewPIDFile(pidFilePath)
+			pid, err := cli.NewPIDFile(pidFilePath)
 			if err != nil {
 				return err
 			}
-			err = pidFile.Acquire()
+			err = pid.Acquire()
 			if err != nil {
 				return err
 			}
-			ctx := context.WithValue(cmd.Context(), config.OptPIDFile, pidFile)
-			cmd.SetContext(ctx)
+			pidFile = pid
 			return nil
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-			// This is absolutely not idiomatic go and somewhat breaks the context of context being
-			// immutable. TODO: Fix this.
-			pidFile := cmd.Context().Value(config.PIDFileContextKey).(*cli.PIDFile)
 			err := pidFile.Release()
 			if err != nil {
 				return err

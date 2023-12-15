@@ -6,11 +6,6 @@ import (
 	"syscall"
 )
 
-type ProcessSerialization interface {
-	Acquire() error
-	Release() error
-}
-
 type PIDFile struct {
 	file *os.File
 	fd   int

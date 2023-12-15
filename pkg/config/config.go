@@ -22,10 +22,8 @@ const (
 )
 
 type ConsistentHashingStrategy struct{}
-type PIDFileKey struct{}
 
 var ConsistentHashingStrategyKey ConsistentHashingStrategy
-var PIDFileContextKey PIDFileKey
 
 type DeprecatedFlag struct {
 	Flag string

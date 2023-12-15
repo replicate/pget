@@ -1,7 +1,6 @@
 package consistent_test
 
 import (
-	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -68,7 +67,6 @@ func FuzzRetriesMostNotRepeatIndices(f *testing.F) {
 			assert.NotContains(t, previous, next)
 
 			previous = append(previous, next)
-			slices.Sort(previous)
 		}
 	})
 }

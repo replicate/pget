@@ -3,6 +3,7 @@ package root
 import (
 	"context"
 	"fmt"
+	"github.com/replicate/pget/cmd/version"
 	"os"
 	"runtime"
 	"time"
@@ -51,20 +52,25 @@ func GetCommand() *cobra.Command {
 			if err := config.PersistentStartupProcessFlags(); err != nil {
 				return err
 			}
-			pidFilePath := viper.GetString(config.OptPIDFile)
-			pid, err := cli.NewPIDFile(pidFilePath)
-			if err != nil {
-				return err
+			if cmd.CalledAs() != version.VersionCMDName {
+				pidFilePath := viper.GetString(config.OptPIDFile)
+				pid, err := cli.NewPIDFile(pidFilePath)
+				if err != nil {
+					return err
+				}
+				err = pid.Acquire()
+				if err != nil {
+					return err
+				}
+				pidFile = pid
 			}
-			err = pid.Acquire()
-			if err != nil {
-				return err
-			}
-			pidFile = pid
 			return nil
 		},
 		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-			return pidFile.Release()
+			if pidFile != nil {
+				return pidFile.Release()
+			}
+			return nil
 		},
 		PreRun:  rootCmdPreRun,
 		RunE:    runRootCMD,

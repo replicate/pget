@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"syscall"
+
+	"github.com/replicate/pget/pkg/logging"
 )
 
 type PIDFile struct {
@@ -22,8 +24,21 @@ func NewPIDFile(path string) (*PIDFile, error) {
 }
 
 func (p *PIDFile) Acquire() error {
+	logger := logging.GetLogger()
 	funcs := []func() error{
-		func() error { return syscall.Flock(p.fd, syscall.LOCK_EX) },
+		func() error {
+			logger.Debug().Str("blocking_lock_acquire", "false").Msg("Waiting on Lock")
+			err := syscall.Flock(p.fd, syscall.LOCK_EX|syscall.LOCK_NB)
+			if err != nil {
+				logger.Warn().
+					Err(err).
+					Str("message", "Another pget process may be running, use 'pget multifile' to download multiple files in parallel").
+					Msg("Waiting on Lock")
+				logger.Debug().Str("blocking_lock_acquire", "true").Msg("Waiting on Lock")
+				err = syscall.Flock(p.fd, syscall.LOCK_EX)
+			}
+			return err
+		},
 		p.writePID,
 		p.file.Sync,
 	}

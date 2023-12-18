@@ -1,4 +1,4 @@
-package cmd
+package version
 
 import (
 	"fmt"
@@ -8,8 +8,10 @@ import (
 	"github.com/replicate/pget/pkg/version"
 )
 
+const VersionCMDName = "version"
+
 var VersionCMD = &cobra.Command{
-	Use:   "version",
+	Use:   VersionCMDName,
 	Short: "print version and build information",
 	Long:  "Print the version information",
 	Run: func(cmd *cobra.Command, args []string) {

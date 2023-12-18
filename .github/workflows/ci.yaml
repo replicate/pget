@@ -42,7 +42,7 @@ jobs:
         name: "Set up Go"
         with:
           go-version-file: go.mod
-      - uses: goreleaser/goreleaser-action@v4
+      - uses: goreleaser/goreleaser-action@v5
         with:
           args: check
 

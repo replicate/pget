@@ -224,7 +224,7 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 
 	// TODO DRY this
 	if srvName := config.GetCacheSRV(); srvName != "" {
-		downloadOpts.SliceSize = 512 * humanize.MiByte
+		downloadOpts.SliceSize = 500 * humanize.MiByte
 		// FIXME: make this a config option
 		downloadOpts.DomainsToCache = []string{"weights.replicate.delivery"}
 		downloadOpts.CacheHosts, err = cli.LookupCacheHosts(srvName)

@@ -3,7 +3,6 @@ package root
 import (
 	"context"
 	"fmt"
-	"github.com/replicate/pget/cmd/version"
 	"os"
 	"runtime"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/replicate/pget/cmd/version"
 	pget "github.com/replicate/pget/pkg"
 	"github.com/replicate/pget/pkg/cli"
 	"github.com/replicate/pget/pkg/client"
@@ -45,37 +45,15 @@ var pidFile *cli.PIDFile
 
 func GetCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "pget [flags] <url> <dest>",
-		Short: "pget",
-		Long:  rootLongDesc,
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if err := config.PersistentStartupProcessFlags(); err != nil {
-				return err
-			}
-			if cmd.CalledAs() != version.VersionCMDName {
-				pidFilePath := viper.GetString(config.OptPIDFile)
-				pid, err := cli.NewPIDFile(pidFilePath)
-				if err != nil {
-					return err
-				}
-				err = pid.Acquire()
-				if err != nil {
-					return err
-				}
-				pidFile = pid
-			}
-			return nil
-		},
-		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-			if pidFile != nil {
-				return pidFile.Release()
-			}
-			return nil
-		},
-		PreRun:  rootCmdPreRun,
-		RunE:    runRootCMD,
-		Args:    cobra.ExactArgs(2),
-		Example: `  pget https://example.com/file.tar ./target-dir`,
+		Use:                "pget [flags] <url> <dest>",
+		Short:              "pget",
+		Long:               rootLongDesc,
+		PersistentPreRunE:  rootPersistentPreRunEFunc,
+		PersistentPostRunE: rootPersistentPostRunEFunc,
+		PreRun:             rootCmdPreRun,
+		RunE:               runRootCMD,
+		Args:               cobra.ExactArgs(2),
+		Example:            `  pget https://example.com/file.tar ./target-dir`,
 	}
 	cmd.Flags().BoolP(config.OptExtract, "x", false, "OptExtract archive after download")
 	cmd.SetUsageTemplate(cli.UsageTemplate)
@@ -107,6 +85,38 @@ func defaultPidFilePath() string {
 		path = os.Getenv("HOME") + "/.pget.pid"
 	}
 	return path
+}
+
+func pidFlock(pidFilePath string) error {
+	pid, err := cli.NewPIDFile(pidFilePath)
+	if err != nil {
+		return err
+	}
+	err = pid.Acquire()
+	if err != nil {
+		return err
+	}
+	pidFile = pid
+	return nil
+}
+
+func rootPersistentPreRunEFunc(cmd *cobra.Command, args []string) error {
+	if err := config.PersistentStartupProcessFlags(); err != nil {
+		return err
+	}
+	if cmd.CalledAs() != version.VersionCMDName {
+		if err := pidFlock(viper.GetString(config.OptPIDFile)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func rootPersistentPostRunEFunc(cmd *cobra.Command, args []string) error {
+	if pidFile != nil {
+		return pidFile.Release()
+	}
+	return nil
 }
 
 func persistentFlags(cmd *cobra.Command) error {

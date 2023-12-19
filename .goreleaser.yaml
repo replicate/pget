@@ -36,6 +36,14 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
+upx:
+  - enabled: true
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    goamd64: [v1]
+    goarm: [8]
+    compress: best
+    brute: true
 release:
   # If set to auto, will mark the release as not ready for production
   # in case there is an indicator for this in the tag e.g. v1.0.0-alpha

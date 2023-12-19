@@ -32,7 +32,7 @@ func (p *PIDFile) Acquire() error {
 			if err != nil {
 				logger.Warn().
 					Err(err).
-					Str("message", "Another pget process may be running, use 'pget multifile' to download multiple files in parallel").
+					Str("warn_message", "Another pget process may be running, use 'pget multifile' to download multiple files in parallel").
 					Msg("Waiting on Lock")
 				logger.Debug().Str("blocking_lock_acquire", "true").Msg("Waiting on Lock")
 				err = syscall.Flock(p.fd, syscall.LOCK_EX)
@@ -49,7 +49,6 @@ func (p *PIDFile) Release() error {
 	funcs := []func() error{
 		func() error { return syscall.Flock(p.fd, syscall.LOCK_UN) },
 		p.file.Close,
-		func() error { return os.Remove(p.file.Name()) },
 	}
 	return p.executeFuncs(funcs)
 }

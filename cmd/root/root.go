@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -82,21 +83,17 @@ func defaultPidFilePath() string {
 	// Otherwise, use /run
 	path := "/run/pget.pid"
 	if runtime.GOOS == "darwin" {
-		path = os.Getenv("HOME") + "/.pget.pid"
+		path = filepath.Join(os.Getenv("HOME"), ".pget.pid")
 	}
 	return path
 }
 
-func pidFlock(pidFilePath string) error {
-	pid, err := cli.NewPIDFile(pidFilePath)
+func acquirePidfile(pidFilePath string) error {
+	pidFile = &cli.PIDFile{Path: pidFilePath}
+	err := pidFile.Acquire()
 	if err != nil {
 		return err
 	}
-	err = pid.Acquire()
-	if err != nil {
-		return err
-	}
-	pidFile = pid
 	return nil
 }
 
@@ -105,7 +102,7 @@ func rootPersistentPreRunEFunc(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if cmd.CalledAs() != version.VersionCMDName {
-		if err := pidFlock(viper.GetString(config.OptPIDFile)); err != nil {
+		if err := acquirePidfile(viper.GetString(config.OptPIDFile)); err != nil {
 			return err
 		}
 	}

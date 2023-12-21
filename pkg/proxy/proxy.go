@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/replicate/pget/pkg/download"
+	"github.com/replicate/pget/pkg/logging"
 )
 
 type Proxy struct {
@@ -25,10 +26,12 @@ func New(chMode *download.ConsistentHashingMode, opts *Options) (*Proxy, error) 
 }
 
 func (p *Proxy) Start() error {
+	logger := logging.GetLogger()
 	var err error
 	if err != nil {
 		return err
 	}
+	logger.Debug().Str("address", p.opts.Address).Msg("Listening on")
 	p.httpServer = &http.Server{
 		Addr:              p.opts.Address,
 		Handler:           p.chMode,

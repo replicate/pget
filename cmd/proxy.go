@@ -30,7 +30,12 @@ func GetProxyCommand() *cobra.Command {
 		Example: `  pget proxy`,
 	}
 	cmd.Flags().String(config.OptListenAddress, "127.0.0.1:9512", "address to listen on")
-	err := viper.BindPFlags(cmd.PersistentFlags())
+	err := viper.BindPFlags(cmd.Flags())
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	err = viper.BindPFlags(cmd.PersistentFlags())
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

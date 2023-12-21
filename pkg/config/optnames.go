@@ -12,6 +12,7 @@ const (
 	OptExtract            = "extract"
 	OptForce              = "force"
 	OptForceHTTP2         = "force-http2"
+	OptListenAddress      = "listen-address"
 	OptLoggingLevel       = "log-level"
 	OptMaxChunks          = "max-chunks"
 	OptMaxConnPerHost     = "max-conn-per-host"

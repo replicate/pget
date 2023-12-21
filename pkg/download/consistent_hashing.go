@@ -91,6 +91,10 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 func (m *ConsistentHashingMode) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	// if we want to forward req, we must blank out req.RequestURI
 	req.RequestURI = ""
+	// client requests don't have scheme or host set on the request. We need to
+	// restore it for hash consistency
+	req.URL.Scheme = "https"
+	req.URL.Host = req.Host
 	reader, size, err := m.fetch(req)
 	if err != nil {
 		var httpErr HttpStatusError

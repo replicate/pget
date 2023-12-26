@@ -174,12 +174,12 @@ func TestConsistentHashing(t *testing.T) {
 	for _, tc := range chTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := download.Options{
-				Client:         client.Options{},
-				MaxConcurrency: tc.concurrency,
-				MinChunkSize:   tc.minChunkSize,
-				CacheHosts:     hostnames[0:tc.numCacheHosts],
-				DomainsToCache: []string{"test.replicate.com"},
-				SliceSize:      tc.sliceSize,
+				Client:               client.Options{},
+				MaxConcurrency:       tc.concurrency,
+				MinChunkSize:         tc.minChunkSize,
+				CacheHosts:           hostnames[0:tc.numCacheHosts],
+				CacheableURIPrefixes: []string{"test.replicate.com"},
+				SliceSize:            tc.sliceSize,
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -212,12 +212,12 @@ func TestConsistentHashRetries(t *testing.T) {
 	hostnames[0] = "localhost:1"
 
 	opts := download.Options{
-		Client:         client.Options{},
-		MaxConcurrency: 8,
-		MinChunkSize:   1,
-		CacheHosts:     hostnames,
-		DomainsToCache: []string{"fake.replicate.delivery"},
-		SliceSize:      1,
+		Client:               client.Options{},
+		MaxConcurrency:       8,
+		MinChunkSize:         1,
+		CacheHosts:           hostnames,
+		CacheableURIPrefixes: []string{"fake.replicate.delivery"},
+		SliceSize:            1,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -251,12 +251,12 @@ func TestConsistentHashRetriesTwoHosts(t *testing.T) {
 	hostnames[1] = "localhost:1"
 
 	opts := download.Options{
-		Client:         client.Options{},
-		MaxConcurrency: 8,
-		MinChunkSize:   1,
-		CacheHosts:     hostnames,
-		DomainsToCache: []string{"testing.replicate.delivery"},
-		SliceSize:      1,
+		Client:               client.Options{},
+		MaxConcurrency:       8,
+		MinChunkSize:         1,
+		CacheHosts:           hostnames,
+		CacheableURIPrefixes: []string{"testing.replicate.delivery"},
+		SliceSize:            1,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -278,12 +278,12 @@ func TestConsistentHashingHasFallback(t *testing.T) {
 	defer server.Close()
 
 	opts := download.Options{
-		Client:         client.Options{},
-		MaxConcurrency: 8,
-		MinChunkSize:   2,
-		CacheHosts:     []string{},
-		DomainsToCache: []string{"fake.replicate.delivery"},
-		SliceSize:      3,
+		Client:               client.Options{},
+		MaxConcurrency:       8,
+		MinChunkSize:         2,
+		CacheHosts:           []string{},
+		CacheableURIPrefixes: []string{"fake.replicate.delivery"},
+		SliceSize:            3,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -373,12 +373,12 @@ func TestConsistentHashingFileFallback(t *testing.T) {
 
 			url, _ := url.Parse(server.URL)
 			opts := download.Options{
-				Client:         client.Options{},
-				MaxConcurrency: 8,
-				MinChunkSize:   2,
-				CacheHosts:     []string{url.Host},
-				DomainsToCache: []string{"fake.replicate.delivery"},
-				SliceSize:      3,
+				Client:               client.Options{},
+				MaxConcurrency:       8,
+				MinChunkSize:         2,
+				CacheHosts:           []string{url.Host},
+				CacheableURIPrefixes: []string{"fake.replicate.delivery"},
+				SliceSize:            3,
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -435,12 +435,12 @@ func TestConsistentHashingChunkFallback(t *testing.T) {
 
 			url, _ := url.Parse(server.URL)
 			opts := download.Options{
-				Client:         client.Options{},
-				MaxConcurrency: 8,
-				MinChunkSize:   3,
-				CacheHosts:     []string{url.Host},
-				DomainsToCache: []string{"fake.replicate.delivery"},
-				SliceSize:      3,
+				Client:               client.Options{},
+				MaxConcurrency:       8,
+				MinChunkSize:         3,
+				CacheHosts:           []string{url.Host},
+				CacheableURIPrefixes: []string{"fake.replicate.delivery"},
+				SliceSize:            3,
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())

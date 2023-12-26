@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -183,4 +184,20 @@ func GetCacheSRV() string {
 		}
 	}
 	return ""
+}
+
+// CacheableURIPrefixes returns a map of cache URI prefixes to send through consistent hash, if set.
+func CacheableURIPrefixes() map[string][]*url.URL {
+	logger := logging.GetLogger()
+	result := make(map[string][]*url.URL)
+
+	URIs := viper.GetStringMapString(OptCacheURIPrefixes)
+	for key, uri := range URIs {
+		parsed, err := url.Parse(uri)
+		if err != nil {
+			logger.Error().Err(err).Str("uri", uri).Msg("Cacheable URI Prefixes")
+		}
+		result[key] = append(result[key], parsed)
+	}
+	return result
 }

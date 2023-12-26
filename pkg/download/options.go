@@ -1,6 +1,7 @@
 package download
 
 import (
+	"net/url"
 	"runtime"
 
 	"github.com/replicate/pget/pkg/client"
@@ -20,9 +21,9 @@ type Options struct {
 	MinChunkSize int64
 	Client       client.Options
 
-	// DomainsToCache is an allowlist of domains which may be routed via a
-	// pull-through cache
-	DomainsToCache []string
+	// CacheableURIPrefixes is an allowlist of domains+path-prefixes which may
+	// be routed via a pull-through cache
+	CacheableURIPrefixes map[string][]*url.URL
 
 	// CacheHosts is a slice of hostnames to use as pull-through caches.
 	// The ordering is significant and will be used with the consistent

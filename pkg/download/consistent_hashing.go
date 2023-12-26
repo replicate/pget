@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"golang.org/x/sync/errgroup"
 
@@ -86,10 +87,12 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		return nil, -1, err
 	}
 	shouldContinue := false
-	for _, host := range m.DomainsToCache {
-		if host == parsed.Host {
-			shouldContinue = true
-			break
+	if prefixes, ok := m.CacheableURIPrefixes[parsed.Host]; ok {
+		for _, prefix := range prefixes {
+			if prefix.Path == parsed.Path || prefix.Path == "/" {
+				shouldContinue = true
+				break
+			}
 		}
 	}
 	// Use our fallback mode if we're not downloading from a consistent-hashing enabled domain
@@ -301,6 +304,11 @@ func (m *ConsistentHashingMode) rewriteRequestToCacheHost(req *http.Request, sta
 	key := CacheKey{URL: req.URL, Slice: slice}
 
 	cachePodIndex, err := consistent.HashBucket(key, len(m.CacheHosts), previousPodIndexes...)
+	if err != nil {
+		return -1, err
+	}
+	// prepend the hostname to the start of the path. The consistent-hash nodes will use this to determine the proxy
+	req.URL.Path, err = url.JoinPath(strings.ToLower(req.URL.Host), req.URL.Path)
 	if err != nil {
 		return -1, err
 	}

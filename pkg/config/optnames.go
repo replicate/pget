@@ -1,12 +1,15 @@
 package config
 
 const (
-	// these two options are a massive hack. They're only availabe via
+	// these options are a massive hack. They're only availabe via
 	// envvar, not command line
 	OptCacheNodesSRVNameByHostCIDR = "cache-nodes-srv-name-by-host-cidr"
+	OptCacheNodesSRVName           = "cache-nodes-srv-name"
+	OptCacheURIPrefixes            = "cache-uri-prefixes"
+	OptCacheUsePathProxy           = "cache-use-path-proxy"
 	OptHostIP                      = "host-ip"
 
-	OptCacheNodesSRVName  = "cache-nodes-srv-name"
+	// Normal options with CLI arguments
 	OptConcurrency        = "concurrency"
 	OptConnTimeout        = "connect-timeout"
 	OptExtract            = "extract"

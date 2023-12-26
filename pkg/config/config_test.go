@@ -1,11 +1,14 @@
 package config
 
 import (
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSetLogLevel(t *testing.T) {
@@ -50,6 +53,85 @@ func TestResolveOverrides(t *testing.T) {
 			resolveOverrides, err := ResolveOverridesToMap(tc.resolve)
 			assert.Equal(t, tc.err, err != nil)
 			assert.Equal(t, tc.expected, resolveOverrides)
+		})
+	}
+}
+
+func helperUrlParse(t *testing.T, uris ...string) []*url.URL {
+	t.Helper()
+	var urls []*url.URL
+	for _, uri := range uris {
+		u, err := url.Parse(uri)
+		require.NoError(t, err)
+		urls = append(urls, u)
+	}
+	return urls
+}
+
+func TestCacheableURIPrefixes(t *testing.T) {
+	defer func() {
+		viper.Reset()
+	}()
+	testCases := []struct {
+		name     string
+		prefixes []string
+		expected map[string][]*url.URL
+	}{
+		{
+			name:     "empty",
+			expected: map[string][]*url.URL{},
+		},
+		{
+			name:     "single",
+			prefixes: []string{"http://example.com"},
+			expected: map[string][]*url.URL{
+				"example.com": helperUrlParse(t, "http://example.com"),
+			},
+		},
+		{
+			name: "multiple", prefixes: []string{"http://example.com", "http://example.org"},
+			expected: map[string][]*url.URL{
+				"example.com": helperUrlParse(t, "http://example.com"),
+				"example.org": helperUrlParse(t, "http://example.org"),
+			},
+		},
+		{
+			name:     "multiple same domain merged",
+			prefixes: []string{"http://example.com/path", "http://example.com/other"},
+			expected: map[string][]*url.URL{
+				"example.com": helperUrlParse(t, "http://example.com/path", "http://example.com/other"),
+			},
+		},
+		{
+			name:     "invalid ignored",
+			prefixes: []string{"http://example.com", "http://example.org", "invalid"},
+			expected: map[string][]*url.URL{
+				"example.com": helperUrlParse(t, "http://example.com"),
+				"example.org": helperUrlParse(t, "http://example.org"),
+			},
+		},
+		{
+			name:     "single with path",
+			prefixes: []string{"http://example.com/path"},
+			expected: map[string][]*url.URL{
+				"example.com": helperUrlParse(t, "http://example.com/path"),
+			},
+		},
+		{
+			name:     "multiple with path",
+			prefixes: []string{"http://example.com/path", "http://example.org/path"},
+			expected: map[string][]*url.URL{
+				"example.com": helperUrlParse(t, "http://example.com/path"),
+				"example.org": helperUrlParse(t, "http://example.org/path"),
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			viper.Set(OptCacheURIPrefixes, strings.Join(tc.prefixes, " "))
+			actual := CacheableURIPrefixes()
+			assert.Equal(t, tc.expected, actual)
+			viper.Reset()
 		})
 	}
 }

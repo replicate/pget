@@ -11,6 +11,7 @@ import (
 func GetRootCommand() *cobra.Command {
 	rootCMD := root.GetCommand()
 	rootCMD.AddCommand(multifile.GetCommand())
+	rootCMD.AddCommand(GetProxyCommand())
 	rootCMD.AddCommand(version.VersionCMD)
 	return rootCMD
 }

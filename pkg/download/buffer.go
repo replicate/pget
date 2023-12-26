@@ -68,6 +68,11 @@ type firstReqResult struct {
 func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
 	logger := logging.GetLogger()
 
+	baseReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	br := newBufferedReader(m.minChunkSize())
 
 	firstReqResultCh := make(chan firstReqResult)
@@ -75,7 +80,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		m.sem.Go(func() error {
 			defer close(firstReqResultCh)
 			defer br.done()
-			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, url)
+			firstChunkResp, err := m.DoRequest(baseReq, 0, m.minChunkSize()-1)
 			if err != nil {
 				firstReqResultCh <- firstReqResult{err: err}
 				return err
@@ -109,7 +114,10 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 	}
 
 	fileSize := firstReqResult.fileSize
-	trueURL := firstReqResult.trueURL
+	trueURLReq, err := http.NewRequestWithContext(ctx, http.MethodGet, firstReqResult.trueURL, nil)
+	if err != nil {
+		return nil, 0, err
+	}
 
 	if fileSize <= m.minChunkSize() {
 		// we only need a single chunk: just download it and finish
@@ -157,7 +165,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 
 			m.sem.Go(func() error {
 				defer br.done()
-				resp, err := m.DoRequest(ctx, start, end, trueURL)
+				resp, err := m.DoRequest(trueURLReq, start, end)
 				if err != nil {
 					return err
 				}
@@ -170,18 +178,15 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 	return newChanMultiReader(readersCh), fileSize, nil
 }
 
-func (m *BufferMode) DoRequest(ctx context.Context, start, end int64, trueURL string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", trueURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to download %s: %w", trueURL, err)
-	}
+func (m *BufferMode) DoRequest(origReq *http.Request, start, end int64) (*http.Response, error) {
+	req := origReq.Clone(origReq.Context())
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 	resp, err := m.Client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)
 	}
 	if resp.StatusCode == 0 || resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("%w %s: %s", ErrUnexpectedHTTPStatus, req.URL.String(), resp.Status)
+		return nil, fmt.Errorf("%w %s", ErrUnexpectedHTTPStatus(resp.StatusCode), req.URL.String())
 	}
 
 	return resp, nil

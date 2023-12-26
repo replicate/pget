@@ -326,14 +326,10 @@ func (s *testStrategy) Fetch(ctx context.Context, url string) (io.Reader, int64,
 	return io.NopCloser(strings.NewReader("00")), -1, nil
 }
 
-func (s *testStrategy) DoRequest(ctx context.Context, start, end int64, url string) (*http.Response, error) {
+func (s *testStrategy) DoRequest(req *http.Request, start, end int64) (*http.Response, error) {
 	s.mut.Lock()
 	s.doRequestCalledCount++
 	s.mut.Unlock()
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
 	resp := &http.Response{
 		Request: req,
 		Body:    io.NopCloser(strings.NewReader("00")),
@@ -362,7 +358,7 @@ func TestConsistentHashingFileFallback(t *testing.T) {
 			responseStatus:       http.StatusNotFound,
 			fetchCalledCount:     0,
 			doRequestCalledCount: 0,
-			expectedError:        download.ErrUnexpectedHTTPStatus,
+			expectedError:        download.ErrUnexpectedHTTPStatus(http.StatusNotFound),
 		},
 	}
 

@@ -2,6 +2,7 @@ package download_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -161,6 +162,18 @@ var chTestCases = []chTestCase{
 	},
 }
 
+func makeCacheableURIPrefixes(uris ...string) map[string][]*url.URL {
+	m := make(map[string][]*url.URL)
+	for _, uri := range uris {
+		parsed, err := url.Parse(uri)
+		if err != nil {
+			panic(err)
+		}
+		m[parsed.Host] = append(m[parsed.Host], parsed)
+	}
+	return m
+}
+
 func TestConsistentHashing(t *testing.T) {
 	hostnames := make([]string, len(testFSes))
 	for i, fs := range testFSes {
@@ -178,7 +191,7 @@ func TestConsistentHashing(t *testing.T) {
 				MaxConcurrency:       tc.concurrency,
 				MinChunkSize:         tc.minChunkSize,
 				CacheHosts:           hostnames[0:tc.numCacheHosts],
-				CacheableURIPrefixes: []string{"test.replicate.com"},
+				CacheableURIPrefixes: makeCacheableURIPrefixes("http://test.replicate.com"),
 				SliceSize:            tc.sliceSize,
 			}
 
@@ -186,13 +199,64 @@ func TestConsistentHashing(t *testing.T) {
 			defer cancel()
 
 			strategy, err := download.GetConsistentHashingMode(opts)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			assert.Equal(t, tc.numCacheHosts, len(strategy.Options.CacheHosts))
 			reader, _, err := strategy.Fetch(ctx, "http://test.replicate.com/hello.txt")
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			bytes, err := io.ReadAll(reader)
-			assert.NoError(t, err)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expectedOutput, string(bytes))
+		})
+	}
+}
+
+func validatePathPrefixMiddleware(t *testing.T, next http.Handler, hostname string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, hostname, r.Host)
+		hostPfx := fmt.Sprintf("/%s", hostname)
+		assert.True(t, strings.HasPrefix(r.URL.Path, hostPfx))
+		r.URL.Path = strings.TrimPrefix(r.URL.Path, hostPfx)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func TestConsistentHashingPathBased(t *testing.T) {
+	var hostname = "test.replicate.com"
+	hostnames := make([]string, len(testFSes))
+	for i, fs := range testFSes {
+		validatePathPrefixAndStrip := validatePathPrefixMiddleware(t, http.FileServer(http.FS(fs)), hostname)
+		ts := httptest.NewServer(validatePathPrefixAndStrip)
+		defer ts.Close()
+		url, err := url.Parse(ts.URL)
+		require.NoError(t, err)
+		hostnames[i] = url.Host
+	}
+
+	for _, tc := range chTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := download.Options{
+				Client:               client.Options{},
+				MaxConcurrency:       tc.concurrency,
+				MinChunkSize:         tc.minChunkSize,
+				CacheHosts:           hostnames[0:tc.numCacheHosts],
+				CacheableURIPrefixes: makeCacheableURIPrefixes(fmt.Sprintf("http://%s", hostname)),
+				CacheUsePathProxy:    true,
+				SliceSize:            tc.sliceSize,
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			strategy, err := download.GetConsistentHashingMode(opts)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.numCacheHosts, len(strategy.Options.CacheHosts))
+			reader, _, err := strategy.Fetch(ctx, fmt.Sprintf("http://%s/hello.txt", hostname))
+			require.NoError(t, err)
+			bytes, err := io.ReadAll(reader)
+			require.NoError(t, err)
 
 			assert.Equal(t, tc.expectedOutput, string(bytes))
 		})
@@ -216,7 +280,7 @@ func TestConsistentHashRetries(t *testing.T) {
 		MaxConcurrency:       8,
 		MinChunkSize:         1,
 		CacheHosts:           hostnames,
-		CacheableURIPrefixes: []string{"fake.replicate.delivery"},
+		CacheableURIPrefixes: makeCacheableURIPrefixes("http://fake.replicate.delivery"),
 		SliceSize:            1,
 	}
 
@@ -224,12 +288,12 @@ func TestConsistentHashRetries(t *testing.T) {
 	defer cancel()
 
 	strategy, err := download.GetConsistentHashingMode(opts)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	reader, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// with a functional hostnames[0], we'd see 0344760706165500, but instead we
 	// should fall back to this. Note that each 0 value has been changed to a
@@ -255,7 +319,7 @@ func TestConsistentHashRetriesTwoHosts(t *testing.T) {
 		MaxConcurrency:       8,
 		MinChunkSize:         1,
 		CacheHosts:           hostnames,
-		CacheableURIPrefixes: []string{"testing.replicate.delivery"},
+		CacheableURIPrefixes: makeCacheableURIPrefixes("http://testing.replicate.delivery"),
 		SliceSize:            1,
 	}
 
@@ -263,12 +327,12 @@ func TestConsistentHashRetriesTwoHosts(t *testing.T) {
 	defer cancel()
 
 	strategy, err := download.GetConsistentHashingMode(opts)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	reader, _, err := strategy.Fetch(ctx, "http://testing.replicate.delivery/hello.txt")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, "0000000000000000", string(bytes))
 }
@@ -282,7 +346,7 @@ func TestConsistentHashingHasFallback(t *testing.T) {
 		MaxConcurrency:       8,
 		MinChunkSize:         2,
 		CacheHosts:           []string{},
-		CacheableURIPrefixes: []string{"fake.replicate.delivery"},
+		CacheableURIPrefixes: makeCacheableURIPrefixes("http://fake.replicate.delivery"),
 		SliceSize:            3,
 	}
 
@@ -297,7 +361,7 @@ func TestConsistentHashingHasFallback(t *testing.T) {
 	reader, _, err := strategy.Fetch(ctx, urlString)
 	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, "0000000000000000", string(bytes))
 }
@@ -377,7 +441,7 @@ func TestConsistentHashingFileFallback(t *testing.T) {
 				MaxConcurrency:       8,
 				MinChunkSize:         2,
 				CacheHosts:           []string{url.Host},
-				CacheableURIPrefixes: []string{"fake.replicate.delivery"},
+				CacheableURIPrefixes: makeCacheableURIPrefixes("http://fake.replicate.delivery"),
 				SliceSize:            3,
 			}
 
@@ -385,7 +449,7 @@ func TestConsistentHashingFileFallback(t *testing.T) {
 			defer cancel()
 
 			strategy, err := download.GetConsistentHashingMode(opts)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			fallbackStrategy := &testStrategy{}
 			strategy.FallbackStrategy = fallbackStrategy
@@ -439,7 +503,7 @@ func TestConsistentHashingChunkFallback(t *testing.T) {
 				MaxConcurrency:       8,
 				MinChunkSize:         3,
 				CacheHosts:           []string{url.Host},
-				CacheableURIPrefixes: []string{"fake.replicate.delivery"},
+				CacheableURIPrefixes: makeCacheableURIPrefixes("http://fake.replicate.delivery"),
 				SliceSize:            3,
 			}
 
@@ -447,7 +511,7 @@ func TestConsistentHashingChunkFallback(t *testing.T) {
 			defer cancel()
 
 			strategy, err := download.GetConsistentHashingMode(opts)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			fallbackStrategy := &testStrategy{}
 			strategy.FallbackStrategy = fallbackStrategy

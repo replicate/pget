@@ -187,17 +187,24 @@ func GetCacheSRV() string {
 }
 
 // CacheableURIPrefixes returns a map of cache URI prefixes to send through consistent hash, if set.
+// ENV is `PGET_CACHE_URI_PREFIXES`, and the
+// format is `https://example.com/prefix1,https://example.com/prefix2 https://example.com/ [...]`
 func CacheableURIPrefixes() map[string][]*url.URL {
 	logger := logging.GetLogger()
 	result := make(map[string][]*url.URL)
 
-	URIs := viper.GetStringMapString(OptCacheURIPrefixes)
-	for key, uri := range URIs {
+	URIs := viper.GetStringSlice(OptCacheURIPrefixes)
+	for _, uri := range URIs {
 		parsed, err := url.Parse(uri)
-		if err != nil {
-			logger.Error().Err(err).Str("uri", uri).Msg("Cacheable URI Prefixes")
+		if err != nil || parsed.Host == "" || parsed.Scheme == "" {
+			logger.Error().
+				Err(err).
+				Str("uri", uri).
+				Str("requirements", "requires at minimum scheme and host").
+				Msg("Cacheable URI Prefixes")
+			continue
 		}
-		result[key] = append(result[key], parsed)
+		result[parsed.Host] = append(result[parsed.Host], parsed)
 	}
 	return result
 }

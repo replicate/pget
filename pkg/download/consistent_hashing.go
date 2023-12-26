@@ -88,8 +88,8 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 	}
 	shouldContinue := false
 	if prefixes, ok := m.CacheableURIPrefixes[parsed.Host]; ok {
-		for _, prefix := range prefixes {
-			if prefix.Path == parsed.Path || prefix.Path == "/" {
+		for _, pfx := range prefixes {
+			if pfx.Path == "/" || strings.HasPrefix(parsed.Path, pfx.Path) {
 				shouldContinue = true
 				break
 			}
@@ -307,10 +307,14 @@ func (m *ConsistentHashingMode) rewriteRequestToCacheHost(req *http.Request, sta
 	if err != nil {
 		return -1, err
 	}
-	// prepend the hostname to the start of the path. The consistent-hash nodes will use this to determine the proxy
-	req.URL.Path, err = url.JoinPath(strings.ToLower(req.URL.Host), req.URL.Path)
-	if err != nil {
-		return -1, err
+	if m.CacheUsePathProxy {
+		// prepend the hostname to the start of the path. The consistent-hash nodes will use this to determine the proxy
+		newPath, err := url.JoinPath(strings.ToLower(req.URL.Host), req.URL.Path)
+		if err != nil {
+			return -1, err
+		}
+		// Ensure wr have a leading slash, things get weird (especially in testing) if we do not.
+		req.URL.Path = fmt.Sprintf("/%s", newPath)
 	}
 	cacheHost := m.CacheHosts[cachePodIndex]
 	logger.Debug().Str("cache_key", fmt.Sprintf("%+v", key)).Int64("start", start).Int64("end", end).Int64("slice_size", m.SliceSize).Int("bucket", cachePodIndex).Msg("consistent hashing")

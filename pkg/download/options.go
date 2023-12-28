@@ -5,6 +5,7 @@ import (
 	"runtime"
 
 	"github.com/replicate/pget/pkg/client"
+	"github.com/replicate/pget/pkg/config"
 )
 
 type Options struct {
@@ -24,6 +25,9 @@ type Options struct {
 	// CacheableURIPrefixes is an allowlist of domains+path-prefixes which may
 	// be routed via a pull-through cache
 	CacheableURIPrefixes map[string][]*url.URL
+
+	// CacheableURIPrefixAliases is a map of alias to the associated target URI prefix
+	CacheableURIPrefixAliases map[string][]config.CacheableURIPrefixAlias
 
 	// CacheUsePathProxy is a flag to indicate whether to use the path proxy mechanism or the host-based mechanism
 	// The default is to use the host-based mechanism, the path proxy mechanism is used when this flag is set to true

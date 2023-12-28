@@ -79,6 +79,32 @@ func (m *ConsistentHashingMode) getFileSizeFromContentRange(contentRange string)
 	return strconv.ParseInt(groups[1], 10, 64)
 }
 
+func (m *ConsistentHashingMode) rewriteURIAliasToTarget(uri url.URL) string {
+	logger := logging.GetLogger()
+
+	var err error
+	original := uri.String()
+
+	if aliases, ok := m.CacheableURIPrefixAliases[uri.Host]; ok {
+		for _, alias := range aliases {
+			if strings.HasPrefix(uri.Path, alias.Alias.Path) {
+				uri.Path = strings.TrimPrefix(uri.Path, alias.Alias.Path)
+				uri.Path, err = url.JoinPath(alias.Target.Path, uri.Path)
+				if err != nil {
+					return original
+				}
+				uri.Path = alias.Target.Path
+				logger.Debug().
+					Str("url", original).
+					Str("alias_rewrite_to", uri.String()).
+					Msg("consistent hashing alias")
+				break
+			}
+		}
+	}
+	return uri.String()
+}
+
 func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io.Reader, int64, error) {
 	logger := logging.GetLogger()
 
@@ -87,6 +113,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		return nil, -1, err
 	}
 	shouldContinue := false
+	cacheableURI := m.rewriteURIAliasToTarget(*parsed)
 	if prefixes, ok := m.CacheableURIPrefixes[parsed.Host]; ok {
 		for _, pfx := range prefixes {
 			if pfx.Path == "/" || strings.HasPrefix(parsed.Path, pfx.Path) {
@@ -110,7 +137,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		m.sem.Go(func() error {
 			defer close(firstReqResultCh)
 			defer br.done()
-			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, urlString)
+			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, cacheableURI)
 			if err != nil {
 				firstReqResultCh <- firstReqResult{err: err}
 				return err
@@ -217,7 +244,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 				m.sem.Go(func() error {
 					defer br.done()
 					logger.Debug().Int64("start", chunkStart).Int64("end", chunkEnd).Msg("starting request")
-					resp, err := m.DoRequest(ctx, chunkStart, chunkEnd, urlString)
+					resp, err := m.DoRequest(ctx, chunkStart, chunkEnd, cacheableURI)
 					if err != nil {
 						// in the case that an error indicating an issue with the cache server, networking, etc is returned,
 						// this will use the fallback strategy. This is a case where the whole file will perform the fall-back

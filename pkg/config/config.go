@@ -186,25 +186,94 @@ func GetCacheSRV() string {
 	return ""
 }
 
-// CacheableURIPrefixes returns a map of cache URI prefixes to send through consistent hash, if set.
-// ENV is `PGET_CACHE_URI_PREFIXES`, and the
-// format is `https://example.com/prefix1 https://example.com/prefix2 https://example.com/ [...]`
-func CacheableURIPrefixes() map[string][]*url.URL {
+func parseURI(uri string) (*url.URL, error) {
 	logger := logging.GetLogger()
+	parsed, err := url.Parse(uri)
+
+	if err != nil || parsed.Host == "" || parsed.Scheme == "" {
+		logger.Error().
+			Err(err).
+			Str("uri", uri).
+			Str("requirements", "must be valid and requires at minimum scheme and host").
+			Msg("Cacheable URI Prefixes")
+		return nil, fmt.Errorf("error parsing URI: %w", err)
+	}
+	return parsed, nil
+}
+
+// CacheableURIPrefixes returns a map of cache URI prefixes and aliases to send through consistent hash, if set.
+func CacheableURIPrefixes() map[string][]*url.URL {
 	result := make(map[string][]*url.URL)
 
 	URIs := viper.GetStringSlice(OptCacheURIPrefixes)
 	for _, uri := range URIs {
-		parsed, err := url.Parse(uri)
-		if err != nil || parsed.Host == "" || parsed.Scheme == "" {
-			logger.Error().
-				Err(err).
-				Str("uri", uri).
-				Str("requirements", "requires at minimum scheme and host").
-				Msg("Cacheable URI Prefixes")
+		parsed, err := parseURI(uri)
+		if err != nil {
 			continue
 		}
 		result[parsed.Host] = append(result[parsed.Host], parsed)
 	}
 	return result
+}
+
+type CacheableURIPrefixAlias struct {
+	Alias  *url.URL
+	Target *url.URL
+}
+
+func isExistInPrefixes(pfxs []*url.URL, parsedTarget *url.URL) bool {
+	for _, pfx := range pfxs {
+		if parsedTarget.Path == pfx.Path && parsedTarget.Scheme == pfx.Scheme && parsedTarget.Host == pfx.Host {
+			return true
+		}
+	}
+	return false
+}
+
+func splitAliasTarget(alias string) (string, string, error) {
+	logger := logging.GetLogger()
+	split := strings.SplitN(alias, ">", 2)
+	if len(split) != 2 {
+		logger.Error().
+			Str("alias", alias).
+			Str("requirements", "requires a '>' as delimiter between alias and target").
+			Msg("Cacheable URI Prefix Aliases")
+		return "", "", fmt.Errorf("requires a '>' as delimiter between alias and target")
+	}
+	return split[0], split[1], nil
+}
+
+// GetURIAliases returns a map of cache URI prefix aliases to send through consistent hash
+func GetURIAliases(prefixes map[string][]*url.URL) map[string][]CacheableURIPrefixAlias {
+	aliases := viper.GetStringSlice(OptCacheURIPrefixAliases)
+	uriMap := make(map[string][]CacheableURIPrefixAlias)
+	logger := logging.GetLogger()
+
+	for _, entry := range aliases {
+		alias, target, err := splitAliasTarget(entry)
+		if err != nil {
+			continue
+		}
+
+		parsedAlias, err := parseURI(alias)
+		if err != nil {
+			continue
+		}
+
+		parsedTarget, err := parseURI(target)
+		if err != nil {
+			continue
+		}
+
+		pfxs, ok := prefixes[parsedTarget.Host]
+		if !ok || !isExistInPrefixes(pfxs, parsedTarget) {
+			logger.Error().
+				Str("alias", alias).
+				Str("requirements", "requires alias to be present in cacheable URI prefixes").
+				Msg("Cacheable URI Prefix Aliases")
+			continue
+		}
+		uriMap[parsedAlias.Host] = append(uriMap[parsedAlias.Host], CacheableURIPrefixAlias{Alias: parsedAlias, Target: parsedTarget})
+	}
+	return uriMap
 }

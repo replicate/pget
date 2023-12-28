@@ -6,6 +6,7 @@ const (
 	OptCacheNodesSRVNameByHostCIDR = "cache-nodes-srv-name-by-host-cidr"
 	OptCacheNodesSRVName           = "cache-nodes-srv-name"
 	OptCacheURIPrefixes            = "cache-uri-prefixes"
+	OptCacheURIPrefixAliases       = "cache-uri-prefix-aliases"
 	OptCacheUsePathProxy           = "cache-use-path-proxy"
 	OptHostIP                      = "host-ip"
 

@@ -148,7 +148,7 @@ func persistentFlags(cmd *cobra.Command) error {
 
 func hideAndDeprecateFlags(cmd *cobra.Command) error {
 	// Hide flags from help, these are intended to be used for testing/internal benchmarking/debugging only
-	if err := config.HideFlags(cmd, config.OptForceHTTP2, config.OptMaxConnPerHost, config.OptOutputConsumer, config.OptPIDFile); err != nil {
+	if err := config.HideFlags(cmd, config.OptForceHTTP2, config.OptMaxConnPerHost, config.OptOutputConsumer); err != nil {
 		return err
 	}
 

@@ -14,7 +14,7 @@ If you're using macOS, you can install PGet with Homebrew:
 
 ```console
 brew tap replicate/tap
-brew install pget
+brew install replicate/tap/pget
 ```
 
 Or you can build from source and install it with these commands

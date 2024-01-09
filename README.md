@@ -8,6 +8,9 @@ If the downloaded file is a tar archive, PGet can automatically extract the cont
 
 The efficiency of PGet's tar extraction lies in its approach to handling data. Instead of writing the downloaded tar file to disk and then reading it back into memory for extraction, PGet conducts the extraction directly from the in-memory download buffer. This method avoids unnecessary memory copies and disk I/O, leading to an increase in performance, especially when dealing with large tar files. This makes PGet not just a parallel downloader, but also an efficient file extractor, providing a streamlined solution for fetching and unpacking files.
 
+> [!NOTE]  
+> This project is not related to [Code-Hex/pget](https://github.com/Code-Hex/pget). The two projects share the same name and similar goals, but are completely different codebases with different capabilities.
+
 ## Install  
 
 If you're using macOS, you can install PGet with Homebrew:

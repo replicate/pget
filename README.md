@@ -74,6 +74,14 @@ Pipe to multifile form from another command:
 
     cat manifest.txt | pget multifile -
 
+An example `manifest.txt` file might look like this:
+
+```txt
+https://example.com/image1.jpg /local/path/to/image1.jpg
+https://example.com/document.pdf /local/path/to/document.pdf
+https://example.com/music.mp3 /local/path/to/music.mp3
+```
+
 #### Multi-file specific options
 - `--max-concurrent-files`
   - Maximum number of files to download concurrently

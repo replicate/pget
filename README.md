@@ -13,6 +13,13 @@ The efficiency of PGet's tar extraction lies in its approach to handling data. I
 
 ## Install  
 
+You can download and install the latest release of PGet directly from GitHub by running the following commands in a terminal:
+
+```console
+sudo curl -o /usr/local/bin/pget -L "https://github.com/replicate/pget/releases/latest/download/pget_$(uname -s)_$(uname -m)"
+sudo chmod +x /usr/local/bin/pget
+```
+
 If you're using macOS, you can install PGet with Homebrew:
 
 ```console

@@ -78,8 +78,10 @@ func TestCacheableURIPrefixes(t *testing.T) {
 		expected map[string][]*url.URL
 	}{
 		{
-			name:     "empty",
-			expected: map[string][]*url.URL{},
+			name: "default",
+			expected: map[string][]*url.URL{
+				"weights.replicate.delivery": helperUrlParse(t, "https://weights.replicate.delivery"),
+			},
 		},
 		{
 			name:     "single",

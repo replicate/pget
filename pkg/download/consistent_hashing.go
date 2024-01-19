@@ -191,12 +191,12 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 			}
 			startFrom := m.SliceSize * int64(slice)
 			sliceSize := m.SliceSize
+			if slice == int(totalSlices)-1 {
+				sliceSize = (fileSize-1)%m.SliceSize + 1
+			}
 			if slice == 0 {
 				startFrom = m.minChunkSize()
 				sliceSize = sliceSize - m.minChunkSize()
-			}
-			if slice == int(totalSlices)-1 {
-				sliceSize = (fileSize-1)%m.SliceSize + 1
 			}
 			if sliceSize/numChunks < m.minChunkSize() {
 				// reset numChunks to respect minChunkSize

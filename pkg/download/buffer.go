@@ -77,6 +77,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 			defer br.done()
 			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, url)
 			if err != nil {
+				br.err = err
 				firstReqResultCh <- firstReqResult{err: err}
 				return err
 			}
@@ -159,6 +160,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 				defer br.done()
 				resp, err := m.DoRequest(ctx, start, end, trueURL)
 				if err != nil {
+					br.err = err
 					return err
 				}
 				defer resp.Body.Close()

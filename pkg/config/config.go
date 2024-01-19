@@ -22,6 +22,10 @@ const (
 	ConsumerNull         = "null"
 )
 
+var (
+	DefaultCacheURIPrefixes = []string{"https://weights.replicate.delivery"}
+)
+
 type ConsistentHashingStrategy struct{}
 
 var ConsistentHashingStrategyKey ConsistentHashingStrategy
@@ -194,6 +198,10 @@ func CacheableURIPrefixes() map[string][]*url.URL {
 	result := make(map[string][]*url.URL)
 
 	URIs := viper.GetStringSlice(OptCacheURIPrefixes)
+	if len(URIs) == 0 {
+		URIs = DefaultCacheURIPrefixes
+	}
+
 	for _, uri := range URIs {
 		parsed, err := url.Parse(uri)
 		if err != nil || parsed.Host == "" || parsed.Scheme == "" {

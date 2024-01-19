@@ -112,6 +112,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 			defer br.done()
 			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, urlString)
 			if err != nil {
+				br.err = err
 				firstReqResultCh <- firstReqResult{err: err}
 				return err
 			}
@@ -190,12 +191,12 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 			}
 			startFrom := m.SliceSize * int64(slice)
 			sliceSize := m.SliceSize
+			if slice == int(totalSlices)-1 {
+				sliceSize = (fileSize-1)%m.SliceSize + 1
+			}
 			if slice == 0 {
 				startFrom = m.minChunkSize()
 				sliceSize = sliceSize - m.minChunkSize()
-			}
-			if slice == int(totalSlices)-1 {
-				sliceSize = (fileSize-1)%m.SliceSize + 1
 			}
 			if sliceSize/numChunks < m.minChunkSize() {
 				// reset numChunks to respect minChunkSize
@@ -232,6 +233,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 							resp, err = m.FallbackStrategy.DoRequest(ctx, chunkStart, chunkEnd, urlString)
 						}
 						if err != nil {
+							br.err = err
 							return err
 						}
 					}
@@ -297,7 +299,7 @@ func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64,
 func (m *ConsistentHashingMode) rewriteRequestToCacheHost(req *http.Request, start int64, end int64, previousPodIndexes ...int) (int, error) {
 	logger := logging.GetLogger()
 	if start/m.SliceSize != end/m.SliceSize {
-		return 0, fmt.Errorf("can't make a range request across a slice boundary: %d-%d straddles a slice boundary (slice size is %d)", start, end, m.SliceSize)
+		return 0, fmt.Errorf("Internal error: can't make a range request across a slice boundary: %d-%d straddles a slice boundary (slice size is %d)", start, end, m.SliceSize)
 	}
 	slice := start / m.SliceSize
 

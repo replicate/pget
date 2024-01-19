@@ -145,6 +145,14 @@ var chTestCases = []chTestCase{
 		expectedOutput: "3333333333333333",
 	},
 	{
+		name:           "test when minChunkSize slightly below file size",
+		concurrency:    4,
+		sliceSize:      16,
+		numCacheHosts:  8,
+		minChunkSize:   15,
+		expectedOutput: "3333333333333333",
+	},
+	{
 		name:           "test when minChunkSize > file size",
 		concurrency:    4,
 		sliceSize:      24,

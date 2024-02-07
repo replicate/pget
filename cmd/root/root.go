@@ -227,6 +227,8 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		return err
 	}
 
+	consumer.SetOverwriteTarget(viper.GetBool(config.OptForce))
+
 	getter := pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
 		Consumer:   consumer,
@@ -241,7 +243,6 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 	// TODO DRY this
 	if srvName := config.GetCacheSRV(); srvName != "" {
 		downloadOpts.SliceSize = 500 * humanize.MiByte
-		// FIXME: make this a config option
 		downloadOpts.CacheableURIPrefixes = config.CacheableURIPrefixes()
 		downloadOpts.CacheUsePathProxy = viper.GetBool(config.OptCacheUsePathProxy)
 		downloadOpts.CacheHosts, err = cli.LookupCacheHosts(srvName)

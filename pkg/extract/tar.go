@@ -17,7 +17,7 @@ type link struct {
 	newName  string
 }
 
-func TarFile(reader io.Reader, destDir string) error {
+func TarFile(reader io.Reader, destDir string, overwrite bool) error {
 	var links []*link
 
 	startTime := time.Now()
@@ -49,7 +49,11 @@ func TarFile(reader io.Reader, destDir string) error {
 				return err
 			}
 		case tar.TypeReg:
-			targetFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, os.FileMode(header.Mode))
+			flags := os.O_CREATE | os.O_WRONLY
+			if overwrite {
+				flags |= os.O_TRUNC
+			}
+			targetFile, err := os.OpenFile(target, flags, os.FileMode(header.Mode))
 			if err != nil {
 				return err
 			}

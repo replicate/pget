@@ -129,6 +129,8 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 		return fmt.Errorf("error getting consumer: %w", err)
 	}
 
+	consumer.SetOverwriteTarget(viper.GetBool(config.OptForce))
+
 	getter := &pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
 		Consumer:   consumer,

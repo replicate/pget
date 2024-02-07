@@ -213,7 +213,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 				chunkStart := startFrom
 				chunkEnd := startFrom + chunkSize - 1
 
-				br := newBufferedReader(m.minChunkSize())
+				br := newBufferedReader(chunkSize)
 				readersCh <- br
 				m.sem.Go(func() error {
 					defer br.done()

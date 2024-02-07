@@ -8,7 +8,7 @@ require (
 	github.com/golangci/golangci-lint v1.55.2
 	github.com/hashicorp/go-retryablehttp v0.7.5
 	github.com/mitchellh/hashstructure/v2 v2.0.2
-	github.com/rs/zerolog v1.31.0
+	github.com/rs/zerolog v1.32.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.8.4

@@ -139,7 +139,6 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 	if srvName := config.GetCacheSRV(); srvName != "" {
 		downloadOpts.SliceSize = 500 * humanize.MiByte
 		downloadOpts.CacheableURIPrefixes = config.CacheableURIPrefixes()
-		downloadOpts.CacheUsePathProxy = viper.GetBool(config.OptCacheUsePathProxy)
 		downloadOpts.CacheHosts, err = cli.LookupCacheHosts(srvName)
 		if err != nil {
 			return err

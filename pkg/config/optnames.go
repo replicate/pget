@@ -6,7 +6,6 @@ const (
 	OptCacheNodesSRVNameByHostCIDR = "cache-nodes-srv-name-by-host-cidr"
 	OptCacheNodesSRVName           = "cache-nodes-srv-name"
 	OptCacheURIPrefixes            = "cache-uri-prefixes"
-	OptCacheUsePathProxy           = "cache-use-path-proxy"
 	OptHostIP                      = "host-ip"
 
 	// Normal options with CLI arguments

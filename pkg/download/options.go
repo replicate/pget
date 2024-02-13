@@ -25,12 +25,6 @@ type Options struct {
 	// be routed via a pull-through cache
 	CacheableURIPrefixes map[string][]*url.URL
 
-	// CacheUsePathProxy is a flag to indicate whether to use the path proxy mechanism or the host-based mechanism
-	// The default is to use the host-based mechanism, the path proxy mechanism is used when this flag is set to true
-	// and involves prepending the host to the path of the request to the cache. In both cases the Hosts header is
-	// sent to the cache.
-	CacheUsePathProxy bool
-
 	// CacheHosts is a slice of hostnames to use as pull-through caches.
 	// The ordering is significant and will be used with the consistent
 	// hashing algorithm.  The slice may contain empty entries which

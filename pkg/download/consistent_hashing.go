@@ -250,21 +250,12 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 }
 
 func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64, urlString string) (*http.Response, error) {
-	logger := logging.GetLogger()
 	chContext := context.WithValue(ctx, config.ConsistentHashingStrategyKey, true)
 	req, err := http.NewRequestWithContext(chContext, "GET", urlString, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
 	}
-	cachePodIndex, err := m.rewriteRequestToCacheHost(req, start, end)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
-
-	logger.Debug().Str("url", urlString).Str("munged_url", req.URL.String()).Str("host", req.Host).Int64("start", start).Int64("end", end).Msg("request")
-
-	resp, err := m.Client.Do(req)
+	resp, cachePodIndex, err := m.doRequestToCacheHost(req, urlString, start, end)
 	if err != nil {
 		if errors.Is(err, client.ErrStrategyFallback) {
 			origErr := err
@@ -272,15 +263,7 @@ func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64,
 			if err != nil {
 				return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)
 			}
-			_, err = m.rewriteRequestToCacheHost(req, start, end, cachePodIndex)
-			if err != nil {
-				// return origErr so that we can use our regular fallback strategy
-				return nil, origErr
-			}
-			req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
-			logger.Debug().Str("url", urlString).Str("munged_url", req.URL.String()).Str("host", req.Host).Int64("start", start).Int64("end", end).Msg("retry request")
-
-			resp, err = m.Client.Do(req)
+			resp, _, err = m.doRequestToCacheHost(req, urlString, start, end, cachePodIndex)
 			if err != nil {
 				// return origErr so that we can use our regular fallback strategy
 				return nil, origErr
@@ -294,6 +277,20 @@ func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64,
 	}
 
 	return resp, nil
+}
+
+func (m *ConsistentHashingMode) doRequestToCacheHost(req *http.Request, urlString string, start int64, end int64, previousPodIndexes ...int) (*http.Response, int, error) {
+	logger := logging.GetLogger()
+	cachePodIndex, err := m.rewriteRequestToCacheHost(req, start, end, previousPodIndexes...)
+	if err != nil {
+		return nil, cachePodIndex, err
+	}
+	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+
+	logger.Debug().Str("url", urlString).Str("munged_url", req.URL.String()).Str("host", req.Host).Int64("start", start).Int64("end", end).Msg("request")
+
+	resp, err := m.Client.Do(req)
+	return resp, cachePodIndex, err
 }
 
 func (m *ConsistentHashingMode) rewriteRequestToCacheHost(req *http.Request, start int64, end int64, previousPodIndexes ...int) (int, error) {
@@ -319,10 +316,28 @@ func (m *ConsistentHashingMode) rewriteRequestToCacheHost(req *http.Request, sta
 		req.URL.Path = fmt.Sprintf("/%s", newPath)
 	}
 	cacheHost := m.CacheHosts[cachePodIndex]
-	logger.Debug().Str("cache_key", fmt.Sprintf("%+v", key)).Int64("start", start).Int64("end", end).Int64("slice_size", m.SliceSize).Int("bucket", cachePodIndex).Msg("consistent hashing")
-	if cacheHost != "" {
-		req.URL.Scheme = "http"
-		req.URL.Host = cacheHost
+	if cacheHost == "" {
+		// this can happen if an SRV record is missing due to a not-ready pod
+		logger.Debug().
+			Str("cache_key", fmt.Sprintf("%+v", key)).
+			Int64("start", start).
+			Int64("end", end).
+			Int64("slice_size", m.SliceSize).
+			Int("bucket", cachePodIndex).
+			Ints("previous_pod_indexes", previousPodIndexes).
+			Msg("cache host for bucket not ready, falling back")
+		return cachePodIndex, client.ErrStrategyFallback
 	}
+	logger.Debug().
+		Str("cache_key", fmt.Sprintf("%+v", key)).
+		Int64("start", start).
+		Int64("end", end).
+		Int64("slice_size", m.SliceSize).
+		Int("bucket", cachePodIndex).
+		Ints("previous_pod_indexes", previousPodIndexes).
+		Msg("consistent hashing")
+	req.URL.Scheme = "http"
+	req.URL.Host = cacheHost
+
 	return cachePodIndex, nil
 }

@@ -310,6 +310,49 @@ func TestConsistentHashRetries(t *testing.T) {
 	assert.Equal(t, "3344761726165516", string(bytes))
 }
 
+func TestConsistentHashRetriesMissingHostname(t *testing.T) {
+	hostnames := make([]string, len(testFSes))
+	for i, fs := range testFSes {
+		ts := httptest.NewServer(http.FileServer(http.FS(fs)))
+		defer ts.Close()
+		url, err := url.Parse(ts.URL)
+		require.NoError(t, err)
+		hostnames[i] = url.Host
+	}
+	// we want to test that we never fall back to origin. So we set origin to be
+	// this canary file and ensure we don't get any data from it
+	origin := "https://weights.replicate.delivery/hello.txt"
+
+	// we deliberately "break" this cache host to make it as if its SRV record was missing
+	hostnames[0] = ""
+
+	opts := download.Options{
+		Client:               client.Options{},
+		MaxConcurrency:       8,
+		MinChunkSize:         1,
+		CacheHosts:           hostnames,
+		CacheableURIPrefixes: makeCacheableURIPrefixes("https://weights.replicate.delivery"),
+		SliceSize:            1,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	strategy, err := download.GetConsistentHashingMode(opts)
+	require.NoError(t, err)
+
+	reader, _, err := strategy.Fetch(ctx, origin)
+	require.NoError(t, err)
+	bytes, err := io.ReadAll(reader)
+	require.NoError(t, err)
+
+	// with a functional hostnames[0], we'd see `5"37132251231713`, where the
+	// `"` character comes from upstream, but instead we should fall back to
+	// this. Note that each 0 value has been changed to a different index; we
+	// don't want every request that previously hit 0 to hit the same new host.
+	assert.Equal(t, "5337132251231713", string(bytes))
+}
+
 // with only two hosts, we should *always* fall back to the other host
 func TestConsistentHashRetriesTwoHosts(t *testing.T) {
 	hostnames := make([]string, 2)

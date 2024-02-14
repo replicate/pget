@@ -12,17 +12,21 @@ import (
 // It implements io.Reader.
 type bufferedReader struct {
 	// ready channel is closed when we're ready to read
-	ready chan struct{}
-	buf   *bytes.Buffer
-	err   error
+	ready   chan struct{}
+	started chan struct{}
+	buf     *bytes.Buffer
+	err     error
+	size    int64
 }
 
 var _ io.Reader = &bufferedReader{}
 
 func newBufferedReader(capacity int64) *bufferedReader {
 	return &bufferedReader{
-		ready: make(chan struct{}),
-		buf:   bytes.NewBuffer(make([]byte, 0, capacity)),
+		ready:   make(chan struct{}),
+		started: make(chan struct{}),
+		buf:     bytes.NewBuffer(make([]byte, 0, capacity)),
+		size:    -1,
 	}
 }
 
@@ -40,8 +44,14 @@ func (b *bufferedReader) done() {
 	close(b.ready)
 }
 
+func (b *bufferedReader) contentLengthReceived() {
+	close(b.started)
+}
+
 func (b *bufferedReader) downloadBody(resp *http.Response) error {
 	expectedBytes := resp.ContentLength
+	b.size = expectedBytes
+	b.contentLengthReceived()
 	n, err := b.buf.ReadFrom(resp.Body)
 	if err != nil && err != io.EOF {
 		b.err = fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)
@@ -52,4 +62,9 @@ func (b *bufferedReader) downloadBody(resp *http.Response) error {
 		return b.err
 	}
 	return nil
+}
+
+func (b *bufferedReader) len() int64 {
+	<-b.started
+	return b.size
 }

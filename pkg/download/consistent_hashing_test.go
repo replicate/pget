@@ -7,11 +7,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"testing/fstest"
 
+	"github.com/jarcoal/httpmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -37,6 +40,66 @@ type chTestCase struct {
 	minChunkSize   int64
 	numCacheHosts  int
 	expectedOutput string
+}
+
+// rangeResponder is an httpmock.Responder that implements enough of HTTP range
+// requests for our purposes.
+func rangeResponder(status int, body string) httpmock.Responder {
+	rangeHeaderRegexp := regexp.MustCompile("^bytes=([0-9]+)-([0-9]+)$")
+	return func(req *http.Request) (*http.Response, error) {
+		rangeHeader := req.Header.Get("Range")
+		if rangeHeader == "" {
+			return httpmock.NewStringResponse(status, body), nil
+		}
+		rangePair := rangeHeaderRegexp.FindStringSubmatch(rangeHeader)
+		if rangePair == nil {
+			return httpmock.NewStringResponse(http.StatusBadRequest, "bad range header"), nil
+		}
+		from, err := strconv.Atoi(rangePair[1])
+		if err != nil {
+			return httpmock.NewStringResponse(http.StatusBadRequest, "bad range header"), nil
+		}
+		to, err := strconv.Atoi(rangePair[2])
+		if err != nil {
+			return httpmock.NewStringResponse(http.StatusBadRequest, "bad range header"), nil
+		}
+		// HTTP range header indexes are inclusive; we increment `to` so we have
+		// inclusive from, exclusive to for use with slice ranges
+		to++
+
+		if from < 0 || from > to || from > len(body) || to < 0 {
+			return httpmock.NewStringResponse(http.StatusRequestedRangeNotSatisfiable, "range unsatisfiable"), nil
+		}
+		if to > len(body) {
+			to = len(body)
+		}
+
+		resp := httpmock.NewStringResponse(http.StatusPartialContent, body[from:to])
+		resp.Request = req
+		resp.Header.Add("Content-Range", fmt.Sprintf("bytes %d-%d/%d", from, to-1, len(body)))
+		resp.ContentLength = int64(to - from)
+		resp.Header.Add("Content-Length", fmt.Sprint(resp.ContentLength))
+		return resp, nil
+	}
+}
+
+// fakeCacheHosts creates an *httpmock.MockTransport with preregistered
+// responses to each of numberOfHosts distinct hostnames for the path
+// /hello.txt.  The response will be bodyLength copies of a single character
+// corresponding to the base-36 index of the cache host, starting 0-9, then a-z.
+func fakeCacheHosts(numberOfHosts int, bodyLength int) (hostnames []string, transport *httpmock.MockTransport) {
+	if numberOfHosts > 36 {
+		panic("can't have more than 36 fake cache hosts, would overflow the base-36 body")
+	}
+	hostnames = make([]string, numberOfHosts)
+	mockTransport := httpmock.NewMockTransport()
+
+	for i := range hostnames {
+		hostnames[i] = fmt.Sprintf("cache-host-%d", i)
+		mockTransport.RegisterResponder("GET", fmt.Sprintf("http://%s/hello.txt", hostnames[i]),
+			rangeResponder(200, strings.Repeat(strconv.FormatInt(int64(i), 36), bodyLength)))
+	}
+	return hostnames, mockTransport
 }
 
 var chTestCases = []chTestCase{
@@ -183,19 +246,12 @@ func makeCacheableURIPrefixes(uris ...string) map[string][]*url.URL {
 }
 
 func TestConsistentHashing(t *testing.T) {
-	hostnames := make([]string, len(testFSes))
-	for i, fs := range testFSes {
-		ts := httptest.NewServer(http.FileServer(http.FS(fs)))
-		defer ts.Close()
-		url, err := url.Parse(ts.URL)
-		require.NoError(t, err)
-		hostnames[i] = url.Host
-	}
+	hostnames, mockTransport := fakeCacheHosts(8, 16)
 
 	for _, tc := range chTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := download.Options{
-				Client:               client.Options{},
+				Client:               client.Options{Transport: mockTransport},
 				MaxConcurrency:       tc.concurrency,
 				MinChunkSize:         tc.minChunkSize,
 				CacheHosts:           hostnames[0:tc.numCacheHosts],
@@ -272,19 +328,13 @@ func TestConsistentHashingPathBased(t *testing.T) {
 }
 
 func TestConsistentHashRetries(t *testing.T) {
-	hostnames := make([]string, len(testFSes))
-	for i, fs := range testFSes {
-		ts := httptest.NewServer(http.FileServer(http.FS(fs)))
-		defer ts.Close()
-		url, err := url.Parse(ts.URL)
-		require.NoError(t, err)
-		hostnames[i] = url.Host
-	}
+	hostnames, mockTransport := fakeCacheHosts(8, 16)
 	// deliberately "break" one cache host
-	hostnames[0] = "localhost:1"
+	hostnames[0] = "broken-host"
+	mockTransport.RegisterResponder("GET", "http://broken-host/hello.txt", httpmock.NewStringResponder(503, "fake broken host"))
 
 	opts := download.Options{
-		Client:               client.Options{},
+		Client:               client.Options{Transport: mockTransport},
 		MaxConcurrency:       8,
 		MinChunkSize:         1,
 		CacheHosts:           hostnames,
@@ -311,27 +361,19 @@ func TestConsistentHashRetries(t *testing.T) {
 }
 
 func TestConsistentHashRetriesMissingHostname(t *testing.T) {
-	hostnames := make([]string, len(testFSes))
-	for i, fs := range testFSes {
-		ts := httptest.NewServer(http.FileServer(http.FS(fs)))
-		defer ts.Close()
-		url, err := url.Parse(ts.URL)
-		require.NoError(t, err)
-		hostnames[i] = url.Host
-	}
-	// we want to test that we never fall back to origin. So we set origin to be
-	// this canary file and ensure we don't get any data from it
-	origin := "https://weights.replicate.delivery/hello.txt"
+	hostnames, mockTransport := fakeCacheHosts(8, 16)
 
 	// we deliberately "break" this cache host to make it as if its SRV record was missing
 	hostnames[0] = ""
 
 	opts := download.Options{
-		Client:               client.Options{},
+		Client: client.Options{
+			Transport: mockTransport,
+		},
 		MaxConcurrency:       8,
 		MinChunkSize:         1,
 		CacheHosts:           hostnames,
-		CacheableURIPrefixes: makeCacheableURIPrefixes("https://weights.replicate.delivery"),
+		CacheableURIPrefixes: makeCacheableURIPrefixes("http://fake.replicate.delivery"),
 		SliceSize:            1,
 	}
 
@@ -341,32 +383,27 @@ func TestConsistentHashRetriesMissingHostname(t *testing.T) {
 	strategy, err := download.GetConsistentHashingMode(opts)
 	require.NoError(t, err)
 
-	reader, _, err := strategy.Fetch(ctx, origin)
+	reader, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
 	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
 	require.NoError(t, err)
 
-	// with a functional hostnames[0], we'd see `5"37132251231713`, where the
-	// `"` character comes from upstream, but instead we should fall back to
-	// this. Note that each 0 value has been changed to a different index; we
-	// don't want every request that previously hit 0 to hit the same new host.
-	assert.Equal(t, "5337132251231713", string(bytes))
+	// with a functional hostnames[0], we'd see 0344760706165500, but instead we
+	// should fall back to this. Note that each 0 value has been changed to a
+	// different index; we don't want every request that previously hit 0 to hit
+	// the same new host.
+	assert.Equal(t, "3344761726165516", string(bytes))
 }
 
 // with only two hosts, we should *always* fall back to the other host
 func TestConsistentHashRetriesTwoHosts(t *testing.T) {
-	hostnames := make([]string, 2)
-	for i, fs := range testFSes[0:1] {
-		ts := httptest.NewServer(http.FileServer(http.FS(fs)))
-		defer ts.Close()
-		url, err := url.Parse(ts.URL)
-		require.NoError(t, err)
-		hostnames[i] = url.Host
-	}
-	hostnames[1] = "localhost:1"
+	hostnames, mockTransport := fakeCacheHosts(2, 16)
+	// deliberately "break" one cache host
+	hostnames[1] = "broken-host"
+	mockTransport.RegisterResponder("GET", "http://broken-host/hello.txt", httpmock.NewStringResponder(503, "fake broken host"))
 
 	opts := download.Options{
-		Client:               client.Options{},
+		Client:               client.Options{Transport: mockTransport},
 		MaxConcurrency:       8,
 		MinChunkSize:         1,
 		CacheHosts:           hostnames,
@@ -389,14 +426,14 @@ func TestConsistentHashRetriesTwoHosts(t *testing.T) {
 }
 
 func TestConsistentHashingHasFallback(t *testing.T) {
-	server := httptest.NewServer(http.FileServer(http.FS(testFSes[0])))
-	defer server.Close()
+	mockTransport := httpmock.NewMockTransport()
+	mockTransport.RegisterResponder("GET", "http://fake.replicate.delivery/hello.txt", rangeResponder(200, "0000000000000000"))
 
 	opts := download.Options{
-		Client:               client.Options{},
+		Client:               client.Options{Transport: mockTransport},
 		MaxConcurrency:       8,
 		MinChunkSize:         2,
-		CacheHosts:           []string{},
+		CacheHosts:           []string{""}, // simulate a single unavailable cache host
 		CacheableURIPrefixes: makeCacheableURIPrefixes("http://fake.replicate.delivery"),
 		SliceSize:            3,
 	}
@@ -407,9 +444,7 @@ func TestConsistentHashingHasFallback(t *testing.T) {
 	strategy, err := download.GetConsistentHashingMode(opts)
 	require.NoError(t, err)
 
-	urlString, err := url.JoinPath(server.URL, "hello.txt")
-	require.NoError(t, err)
-	reader, _, err := strategy.Fetch(ctx, urlString)
+	reader, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
 	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
 	require.NoError(t, err)

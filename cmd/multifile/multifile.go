@@ -109,11 +109,13 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 	}
 
 	clientOpts := client.Options{
-		MaxConnPerHost:   viper.GetInt(config.OptMaxConnPerHost),
-		ForceHTTP2:       viper.GetBool(config.OptForceHTTP2),
-		MaxRetries:       viper.GetInt(config.OptRetries),
-		ConnectTimeout:   viper.GetDuration(config.OptConnTimeout),
-		ResolveOverrides: resolveOverrides,
+		MaxRetries: viper.GetInt(config.OptRetries),
+		TransportOpts: client.TransportOptions{
+			ForceHTTP2:       viper.GetBool(config.OptForceHTTP2),
+			ConnectTimeout:   viper.GetDuration(config.OptConnTimeout),
+			MaxConnPerHost:   viper.GetInt(config.OptMaxConnPerHost),
+			ResolveOverrides: resolveOverrides,
+		},
 	}
 	downloadOpts := download.Options{
 		MaxConcurrency: viper.GetInt(config.OptConcurrency),

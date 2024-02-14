@@ -38,38 +38,48 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 type Options struct {
+	MaxRetries    int
+	Transport     http.RoundTripper
+	TransportOpts TransportOptions
+}
+
+type TransportOptions struct {
 	ForceHTTP2       bool
-	MaxConnPerHost   int
-	MaxRetries       int
-	ConnectTimeout   time.Duration
 	ResolveOverrides map[string]string
+	MaxConnPerHost   int
+	ConnectTimeout   time.Duration
 }
 
 // NewHTTPClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
 // per host if the OptMaxConnPerHost option is set.
 func NewHTTPClient(opts Options) *HTTPClient {
-	disableKeepAlives := opts.ForceHTTP2
 
-	dialer := &transportDialer{
-		DNSOverrideMap: opts.ResolveOverrides,
-		Dialer: &net.Dialer{
-			Timeout:   opts.ConnectTimeout,
-			KeepAlive: 30 * time.Second,
-		},
-	}
+	transport := opts.Transport
 
-	transport := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           dialer.DialContext,
-		ForceAttemptHTTP2:     opts.ForceHTTP2,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   5 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		DisableKeepAlives:     disableKeepAlives,
+	if transport == nil {
+		topts := opts.TransportOpts
+		dialer := &transportDialer{
+			DNSOverrideMap: topts.ResolveOverrides,
+			Dialer: &net.Dialer{
+				Timeout:   topts.ConnectTimeout,
+				KeepAlive: 30 * time.Second,
+			},
+		}
+
+		disableKeepAlives := topts.ForceHTTP2
+		transport = &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           dialer.DialContext,
+			ForceAttemptHTTP2:     topts.ForceHTTP2,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   5 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			DisableKeepAlives:     disableKeepAlives,
+			MaxConnsPerHost:       topts.MaxConnPerHost,
+			MaxIdleConnsPerHost:   topts.MaxConnPerHost,
+		}
 	}
-	transport.MaxConnsPerHost = opts.MaxConnPerHost
-	transport.MaxIdleConnsPerHost = opts.MaxConnPerHost
 
 	retryClient := &retryablehttp.Client{
 		HTTPClient: &http.Client{

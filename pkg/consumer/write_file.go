@@ -10,7 +10,7 @@ type FileWriter struct{}
 
 var _ Consumer = &FileWriter{}
 
-func (f *FileWriter) Consume(reader io.Reader, destPath string) error {
+func (f *FileWriter) Consume(reader io.Reader, destPath string, _ int64) error {
 	// NOTE(morgan): We check if the file exists early on allowing a fast fail, it is safe
 	// to just apply os.O_TRUNC. Getting to this point without checking existence and
 	// the `--force` flag is a programming error further up the stack.

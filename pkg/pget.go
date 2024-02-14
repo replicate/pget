@@ -47,7 +47,7 @@ func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int
 	// downloadElapsed := time.Since(downloadStartTime)
 	// writeStartTime := time.Now()
 
-	err = g.Consumer.Consume(buffer, dest)
+	err = g.Consumer.Consume(buffer, dest, fileSize)
 	if err != nil {
 		return fileSize, 0, fmt.Errorf("error writing file: %w", err)
 	}

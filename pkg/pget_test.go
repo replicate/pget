@@ -33,7 +33,7 @@ func init() {
 }
 
 var defaultOpts = download.Options{Client: client.Options{}}
-var http2Opts = download.Options{Client: client.Options{ForceHTTP2: true}}
+var http2Opts = download.Options{Client: client.Options{TransportOpts: client.TransportOptions{ForceHTTP2: true}}}
 
 func makeGetter(opts download.Options) *pget.Getter {
 	return &pget.Getter{

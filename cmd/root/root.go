@@ -165,6 +165,10 @@ func hideAndDeprecateFlags(cmd *cobra.Command) error {
 
 func rootCmdPreRun(cmd *cobra.Command, args []string) {
 	if viper.GetBool(config.OptExtract) {
+		currentConsumer := viper.GetString(config.OptOutputConsumer)
+		if currentConsumer != config.ConsumerFile && currentConsumer != config.ConsumerTarExtractor {
+			log.Warn().Msg("Tar Extract Enabled, overriding output consumer to `tar-extractor`")
+		}
 		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
 	}
 }

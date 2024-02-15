@@ -27,10 +27,6 @@ var (
 	DefaultCacheURIPrefixes = []string{"https://weights.replicate.delivery"}
 )
 
-type ConsistentHashingStrategy struct{}
-
-var ConsistentHashingStrategyKey ConsistentHashingStrategy
-
 type DeprecatedFlag struct {
 	Flag string
 	Msg  string

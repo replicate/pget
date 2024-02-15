@@ -13,7 +13,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/replicate/pget/pkg/client"
-	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/consistent"
 	"github.com/replicate/pget/pkg/logging"
 )
@@ -250,7 +249,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 }
 
 func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64, urlString string) (*http.Response, error) {
-	chContext := context.WithValue(ctx, config.ConsistentHashingStrategyKey, true)
+	chContext := context.WithValue(ctx, client.ConsistentHashingStrategyKey, true)
 	req, err := http.NewRequestWithContext(chContext, "GET", urlString, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download %s: %w", req.URL.String(), err)

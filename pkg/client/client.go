@@ -12,7 +12,6 @@ import (
 
 	"github.com/hashicorp/go-retryablehttp"
 
-	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/logging"
 	"github.com/replicate/pget/pkg/version"
 )
@@ -23,6 +22,10 @@ const (
 	retryMinWait = 850 * time.Millisecond
 	retryMaxWait = 1250 * time.Millisecond
 )
+
+type ConsistentHashingStrategy struct{}
+
+var ConsistentHashingStrategyKey ConsistentHashingStrategy
 
 var ErrStrategyFallback = errors.New("fallback to next strategy")
 
@@ -111,7 +114,7 @@ func RetryPolicy(ctx context.Context, resp *http.Response, err error) (bool, err
 
 	// While type assertions are not ideal, alternatives are limited to adding custom data in the request
 	// or in the context. The context clearly isolates this data.
-	consistentHashing, ok := ctx.Value(config.ConsistentHashingStrategyKey).(bool)
+	consistentHashing, ok := ctx.Value(ConsistentHashingStrategyKey).(bool)
 	if ok && consistentHashing {
 		if fallbackError(err) {
 			return false, ErrStrategyFallback

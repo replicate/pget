@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/replicate/pget/pkg/client"
-	"github.com/replicate/pget/pkg/config"
 )
 
 func TestGetSchemeHostKey(t *testing.T) {
@@ -24,7 +23,7 @@ func TestGetSchemeHostKey(t *testing.T) {
 
 func TestRetryPolicy(t *testing.T) {
 	bgCtx := context.Background()
-	chCtx := context.WithValue(bgCtx, config.ConsistentHashingStrategyKey, true)
+	chCtx := context.WithValue(bgCtx, client.ConsistentHashingStrategyKey, true)
 	errContext, cancel := context.WithCancel(bgCtx)
 	cancel()
 

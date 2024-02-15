@@ -1,6 +1,6 @@
 module github.com/replicate/pget
 
-go 1.21
+go 1.22
 
 require (
 	github.com/dgryski/go-jump v0.0.0-20211018200510-ba001c3ffce0

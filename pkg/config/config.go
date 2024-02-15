@@ -20,6 +20,7 @@ const (
 	ConsumerFile         = "file"
 	ConsumerTarExtractor = "tar-extractor"
 	ConsumerNull         = "null"
+	ConsumerZipExtractor = "zip-extractor"
 )
 
 var (
@@ -160,6 +161,8 @@ func GetConsumer() (consumer.Consumer, error) {
 		return &consumer.FileWriter{}, nil
 	case ConsumerTarExtractor:
 		return &consumer.TarExtractor{}, nil
+	case ConsumerZipExtractor:
+		return &consumer.ZipExtractor{}, nil
 	case ConsumerNull:
 		return &consumer.NullWriter{}, nil
 	default:

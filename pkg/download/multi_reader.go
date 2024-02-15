@@ -52,7 +52,7 @@ func (m *multiReader) ReadAt(p []byte, off int64) (n int, err error) {
 		// we can start reading from this reader.
 		if off < readerBytes {
 			// Calculate the offset within the reader
-			innerOffset := off - (readerBytes - int64(r.len()))
+			innerOffset := off - (readerBytes - r.len())
 			n = copy(p, r.buf.Bytes()[innerOffset:])
 			if i == len(m.readers)-1 && n < len(p) {
 				// We are at the last reader and the buffer is not full

@@ -37,6 +37,11 @@ const multifileExamples = `
   cat multifile.txt | pget multifile -
 `
 
+const (
+	OptUnzip      = "unzip"
+	OptTarExtract = "tar"
+)
+
 // test seam
 type Getter interface {
 	DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error)
@@ -53,6 +58,9 @@ func GetCommand() *cobra.Command {
 		Example: multifileExamples,
 	}
 
+	cmd.Flags().BoolP(OptUnzip, "u", false, "Extract .zip files in multifile mode")
+	cmd.Flags().BoolP(OptTarExtract, "t", false, "Extract .tar files in multifile mode")
+
 	err := viper.BindPFlags(cmd.PersistentFlags())
 	if err != nil {
 		fmt.Println(err)
@@ -63,15 +71,7 @@ func GetCommand() *cobra.Command {
 }
 
 func multifilePreRunE(cmd *cobra.Command, args []string) error {
-	if viper.GetBool(config.OptExtract) {
-		return fmt.Errorf("cannot use --extract with multifile mode")
-	}
-	if viper.GetString(config.OptOutputConsumer) == config.ConsumerTarExtractor {
-		return fmt.Errorf("cannot use --output-consumer tar-extractor with multifile mode")
-	}
-	if viper.GetString(config.OptOutputConsumer) == config.ConsumerZipExtractor {
-		return fmt.Errorf("cannot use --output-consumer unzip with multifile mode")
-	}
+	// Add any pre-run checks that may return an error here.
 	return nil
 }
 
@@ -129,11 +129,30 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 		MaxConcurrentFiles: maxConcurrentFiles(),
 	}
 
-	consumer, err := config.GetConsumer()
+	configConsumer, err := config.GetConsumer()
 	if err != nil {
 		return fmt.Errorf("error getting consumer: %w", err)
 	}
 
+	consumer := MultiConsumer{
+		defaultConsumer: configConsumer,
+	}
+
+	// Handle zip extraction if unzip flag is set
+	if viper.GetBool(OptUnzip) {
+		if err := consumer.addConsumer("application/zip", config.ConsumerZipExtractor); err != nil {
+			return err
+		}
+	}
+
+	// Handle tar extraction if tar flag is set
+	if viper.GetBool(OptUnzip) {
+		if err := consumer.addConsumer("application/x-tar", config.ConsumerTarExtractor); err != nil {
+			return err
+		}
+	}
+
+	// Enable overwrite if the force flag is set
 	if viper.GetBool(config.OptForce) {
 		consumer.EnableOverwrite()
 	}

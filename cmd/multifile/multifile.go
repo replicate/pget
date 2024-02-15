@@ -70,7 +70,7 @@ func multifilePreRunE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot use --output-consumer tar-extractor with multifile mode")
 	}
 	if viper.GetString(config.OptOutputConsumer) == config.ConsumerZipExtractor {
-		return fmt.Errorf("cannot use --output-consumer zip-extractor with multifile mode")
+		return fmt.Errorf("cannot use --output-consumer unzip with multifile mode")
 	}
 	return nil
 }

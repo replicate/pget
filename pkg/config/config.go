@@ -20,7 +20,7 @@ const (
 	ConsumerFile         = "file"
 	ConsumerTarExtractor = "tar-extractor"
 	ConsumerNull         = "null"
-	ConsumerZipExtractor = "zip-extractor"
+	ConsumerZipExtractor = "unzip"
 )
 
 var (

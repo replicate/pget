@@ -4,7 +4,8 @@ import (
 	"io"
 )
 
-type NullWriter struct{}
+type NullWriter struct {
+}
 
 var _ Consumer = &NullWriter{}
 
@@ -12,4 +13,8 @@ func (f *NullWriter) Consume(reader io.Reader, _ string, _ int64) error {
 	// io.Discard is explicitly designed to always succeed, ignore errors.
 	_, _ = io.Copy(io.Discard, reader)
 	return nil
+}
+
+func (f *NullWriter) EnableOverwrite() {
+	// no-op
 }

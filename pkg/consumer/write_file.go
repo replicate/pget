@@ -6,15 +6,18 @@ import (
 	"os"
 )
 
-type FileWriter struct{}
+type FileWriter struct {
+	overwrite bool
+}
 
 var _ Consumer = &FileWriter{}
 
 func (f *FileWriter) Consume(reader io.Reader, destPath string, _ int64) error {
-	// NOTE(morgan): We check if the file exists early on allowing a fast fail, it is safe
-	// to just apply os.O_TRUNC. Getting to this point without checking existence and
-	// the `--force` flag is a programming error further up the stack.
-	out, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	openFlags := os.O_WRONLY | os.O_CREATE
+	if f.overwrite {
+		openFlags |= os.O_TRUNC
+	}
+	out, err := os.OpenFile(destPath, openFlags, 0644)
 	if err != nil {
 		return fmt.Errorf("error writing file: %w", err)
 	}
@@ -25,4 +28,8 @@ func (f *FileWriter) Consume(reader io.Reader, destPath string, _ int64) error {
 		return fmt.Errorf("error writing file: %w", err)
 	}
 	return nil
+}
+
+func (f *FileWriter) EnableOverwrite() {
+	f.overwrite = true
 }

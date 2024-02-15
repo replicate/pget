@@ -4,13 +4,12 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 )
 
 // ZipFile extracts a zip file to the given destination path.
-func ZipFile(reader io.ReaderAt, destPath string, size int64) error {
+func ZipFile(reader io.ReaderAt, destPath string, size int64, overwrite bool) error {
 	err := os.MkdirAll(destPath, 0755)
 	if err != nil {
 		return fmt.Errorf("error creating destination directory: %w", err)
@@ -22,7 +21,7 @@ func ZipFile(reader io.ReaderAt, destPath string, size int64) error {
 	}
 
 	for _, file := range zipReader.File {
-		err := handleFileFromZip(file, destPath)
+		err := handleFileFromZip(file, destPath, overwrite)
 		if err != nil {
 			return fmt.Errorf("error extracting file: %w", err)
 		}
@@ -30,13 +29,13 @@ func ZipFile(reader io.ReaderAt, destPath string, size int64) error {
 	return nil
 }
 
-func handleFileFromZip(file *zip.File, outputDir string) error {
+func handleFileFromZip(file *zip.File, outputDir string, overwrite bool) error {
 	target := outputDir + file.Name
 	targetDir := filepath.Dir(target)
 	if file.FileInfo().IsDir() {
 		return extractDir(file, targetDir)
 	} else if file.FileInfo().Mode().IsRegular() {
-		return extractFile(file, targetDir)
+		return extractFile(file, targetDir, overwrite)
 	} else {
 		return fmt.Errorf("unsupported file type (not dir or regular): %s (%d)", file.Name, file.FileInfo().Mode().Type())
 	}
@@ -45,14 +44,29 @@ func handleFileFromZip(file *zip.File, outputDir string) error {
 
 func extractDir(file *zip.File, outputDir string) error {
 	target := outputDir + file.Name
-	err := os.MkdirAll(target, file.Mode().Perm())
-	if err != nil {
+	perms := file.Mode().Perm() &^ os.ModeSetuid &^ os.ModeSetgid &^ os.ModeSticky
+	info, err := os.Stat(target)
+	if err == nil && !info.IsDir() {
+		return fmt.Errorf("error creating directory: %s already exists and is not a directory", target)
+	}
+	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("error creating directory: %w", err)
 	}
-	return applyPermissions(target, file.Mode().Perm())
+	if os.IsNotExist(err) {
+		err := os.MkdirAll(target, perms)
+		if err != nil {
+			return fmt.Errorf("error creating directory: %w", err)
+		}
+	} else {
+		err := os.Chmod(target, perms)
+		if err != nil {
+			return fmt.Errorf("error changing directory permissions: %w", err)
+		}
+	}
+	return nil
 }
 
-func extractFile(file *zip.File, outputDir string) error {
+func extractFile(file *zip.File, outputDir string, overwrite bool) error {
 	target := outputDir + file.Name
 	targetDir := filepath.Dir(target)
 	err := os.MkdirAll(targetDir, 0755)
@@ -68,7 +82,13 @@ func extractFile(file *zip.File, outputDir string) error {
 	defer zipFile.Close()
 
 	// Create the file on the filesystem
-	out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, file.Mode())
+	openFlags := os.O_WRONLY | os.O_CREATE
+	if overwrite {
+		openFlags |= os.O_TRUNC
+	}
+	// Do not apply setuid/gid/sticky bits.
+	perms := file.Mode().Perm() &^ os.ModeSetuid &^ os.ModeSetgid &^ os.ModeSticky
+	out, err := os.OpenFile(target, openFlags, perms)
 	if err != nil {
 		return fmt.Errorf("error creating file: %w", err)
 	}
@@ -79,11 +99,5 @@ func extractFile(file *zip.File, outputDir string) error {
 	if err != nil {
 		return fmt.Errorf("error copying file: %w", err)
 	}
-	return applyPermissions(target, file.Mode().Perm())
-}
-
-func applyPermissions(filepath string, fileMode fs.FileMode) error {
-	// Do not apply setuid/gid/sticky bits.
-	perms := fileMode &^ os.ModeSetuid &^ os.ModeSetgid &^ os.ModeSticky
-	return os.Chmod(filepath, perms)
+	return nil
 }

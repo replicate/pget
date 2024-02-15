@@ -12,33 +12,69 @@ import (
 
 func TestCreateLinks(t *testing.T) {
 	tests := []struct {
-		name          string
-		links         []*link
-		expectedError bool
+		name                 string
+		links                []*link
+		expectedError        bool
+		overwrite            bool
+		createOverwritenFile bool
 	}{
 		{
-			name:  "EmptyLink",
+			name:  "Empty Link",
 			links: []*link{},
 		},
 		{
-			name:  "ValidHardLink",
+			name:  "Valid Hard Link",
 			links: []*link{{tar.TypeLink, "", "testLinkHard"}},
 		},
 		{
-			name:  "ValidSymlink",
+			name:  "Valid Symlink",
 			links: []*link{{tar.TypeSymlink, "", "testLinkSym"}},
 		},
 		{
-			name:          "InvalidLinkType",
+			name:          "Invalid LinkType",
 			links:         []*link{{'!', "", "x"}},
 			expectedError: true,
 		},
 		{
-			name: "ValidMultipleLinks",
+			name: "Valid Multiple Links",
 			links: []*link{
 				{tar.TypeLink, "", "testLinkHard"},
 				{tar.TypeSymlink, "", "testLinkSym"},
 			},
+		},
+		{
+			name:                 "HardLink_OverwriteEnabled_File Exists",
+			links:                []*link{{tar.TypeLink, "", "testLinkHard"}},
+			overwrite:            true,
+			createOverwritenFile: true,
+		},
+		{
+			name:                 "HardLink_OverwriteDisabled_FileExists",
+			links:                []*link{{tar.TypeLink, "", "testLinkHard"}},
+			createOverwritenFile: true,
+			expectedError:        true,
+		},
+		{
+			name:      "HardLink_OverwriteEnabled_FileDoesNotExist",
+			links:     []*link{{tar.TypeLink, "", "testLinkHard"}},
+			overwrite: true,
+		},
+		{
+			name:                 "SymLink_OverwriteEnabled_FileExists",
+			links:                []*link{{tar.TypeSymlink, "", "testLinkSym"}},
+			overwrite:            true,
+			createOverwritenFile: true,
+		},
+		{
+			name:                 "SymLink_OverwriteDisabled_FileExists",
+			links:                []*link{{tar.TypeSymlink, "", "testLinkSym"}},
+			createOverwritenFile: true,
+			expectedError:        true,
+		},
+		{
+			name:      "SymLink_OverwriteEnabled_FileDoesNotExist",
+			links:     []*link{{tar.TypeSymlink, "", "testLinkSym"}},
+			overwrite: true,
 		},
 	}
 
@@ -56,6 +92,9 @@ func TestCreateLinks(t *testing.T) {
 			for _, link := range tt.links {
 				if link.linkType == tar.TypeLink || link.linkType == tar.TypeSymlink {
 					testFile, err := os.CreateTemp(destDir, "test-")
+					if tt.createOverwritenFile {
+						_, err = os.Create(filepath.Join(destDir, link.newName))
+					}
 					if err != nil {
 						t.Fatalf("Test failed, could not create test file: %v", err)
 					}
@@ -65,7 +104,7 @@ func TestCreateLinks(t *testing.T) {
 				}
 			}
 
-			err = createLinks(tt.links, destDir)
+			err = createLinks(tt.links, destDir, tt.overwrite)
 
 			// Validation
 			if tt.expectedError {

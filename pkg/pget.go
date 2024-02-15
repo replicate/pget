@@ -40,14 +40,14 @@ func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int
 	}
 	logger := logging.GetLogger()
 	downloadStartTime := time.Now()
-	buffer, fileSize, err := g.Downloader.Fetch(ctx, url)
+	buffer, fileSize, contentType, err := g.Downloader.Fetch(ctx, url)
 	if err != nil {
 		return fileSize, 0, err
 	}
 	// downloadElapsed := time.Since(downloadStartTime)
 	// writeStartTime := time.Now()
 
-	err = g.Consumer.Consume(buffer, dest, fileSize)
+	err = g.Consumer.Consume(buffer, dest, fileSize, contentType)
 	if err != nil {
 		return fileSize, 0, fmt.Errorf("error writing file: %w", err)
 	}

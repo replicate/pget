@@ -25,7 +25,7 @@ func benchmarkDownloadURL(opts download.Options, url string, b *testing.B) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		_, _, err := bufferMode.Fetch(ctx, url)
+		_, _, _, err := bufferMode.Fetch(ctx, url)
 		assert.NoError(b, err)
 	}
 }

@@ -60,15 +60,18 @@ func (m *BufferMode) getFileSizeFromContentRange(contentRange string) (int64, er
 }
 
 type firstReqResult struct {
-	fileSize int64
-	trueURL  string
-	err      error
+	fileSize    int64
+	trueURL     string
+	err         error
+	contentType string
 }
 
-func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
+func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, string, error) {
 	logger := logging.GetLogger()
 
 	br := newBufferedReader(m.minChunkSize())
+
+	var contentType string
 
 	firstReqResultCh := make(chan firstReqResult)
 	m.queue.submit(func() {
@@ -94,7 +97,10 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 				firstReqResultCh <- firstReqResult{err: err}
 				return err
 			}
-			firstReqResultCh <- firstReqResult{fileSize: fileSize, trueURL: trueURL}
+			firstReqResultCh <- firstReqResult{
+				fileSize:    fileSize,
+				trueURL:     trueURL,
+				contentType: firstChunkResp.Header.Get("Content-Type")}
 
 			return br.downloadBody(firstChunkResp)
 		})
@@ -105,8 +111,10 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		panic("logic error in BufferMode: first request didn't return any output")
 	}
 
+	contentType = firstReqResult.contentType
+
 	if firstReqResult.err != nil {
-		return nil, -1, firstReqResult.err
+		return nil, -1, contentType, firstReqResult.err
 	}
 
 	fileSize := firstReqResult.fileSize
@@ -114,7 +122,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 
 	if fileSize <= m.minChunkSize() {
 		// we only need a single chunk: just download it and finish
-		return br, fileSize, nil
+		return br, fileSize, contentType, nil
 	}
 
 	remainingBytes := fileSize - m.minChunkSize()
@@ -134,7 +142,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 
 	chunkSize := remainingBytes / int64(numChunks)
 	if chunkSize < 0 {
-		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
+		return nil, -1, contentType, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
 	}
 
 	m.queue.submit(func() {
@@ -169,7 +177,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		}
 	})
 
-	return newChanMultiReader(readersCh), fileSize, nil
+	return newChanMultiReader(readersCh), fileSize, contentType, nil
 }
 
 func (m *BufferMode) DoRequest(ctx context.Context, start, end int64, trueURL string) (*http.Response, error) {

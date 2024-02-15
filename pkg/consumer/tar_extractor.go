@@ -13,7 +13,7 @@ type TarExtractor struct {
 
 var _ Consumer = &TarExtractor{}
 
-func (f *TarExtractor) Consume(reader io.Reader, destPath string, _ int64) error {
+func (f *TarExtractor) Consume(reader io.Reader, destPath string, fileSize int64, contentType string) error {
 	err := extract.TarFile(reader, destPath, f.overwrite)
 	if err != nil {
 		return fmt.Errorf("error extracting file: %w", err)

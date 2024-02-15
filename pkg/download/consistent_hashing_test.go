@@ -266,7 +266,7 @@ func TestConsistentHashing(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.numCacheHosts, len(strategy.Options.CacheHosts))
-			reader, _, err := strategy.Fetch(ctx, "http://test.replicate.com/hello.txt")
+			reader, _, _, err := strategy.Fetch(ctx, "http://test.replicate.com/hello.txt")
 			require.NoError(t, err)
 			bytes, err := io.ReadAll(reader)
 			require.NoError(t, err)
@@ -317,7 +317,7 @@ func TestConsistentHashingPathBased(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.numCacheHosts, len(strategy.Options.CacheHosts))
-			reader, _, err := strategy.Fetch(ctx, fmt.Sprintf("http://%s/hello.txt", hostname))
+			reader, _, _, err := strategy.Fetch(ctx, fmt.Sprintf("http://%s/hello.txt", hostname))
 			require.NoError(t, err)
 			bytes, err := io.ReadAll(reader)
 			require.NoError(t, err)
@@ -348,7 +348,7 @@ func TestConsistentHashRetries(t *testing.T) {
 	strategy, err := download.GetConsistentHashingMode(opts)
 	require.NoError(t, err)
 
-	reader, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
+	reader, _, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
 	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
 	require.NoError(t, err)
@@ -383,7 +383,7 @@ func TestConsistentHashRetriesMissingHostname(t *testing.T) {
 	strategy, err := download.GetConsistentHashingMode(opts)
 	require.NoError(t, err)
 
-	reader, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
+	reader, _, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
 	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
 	require.NoError(t, err)
@@ -417,7 +417,7 @@ func TestConsistentHashRetriesTwoHosts(t *testing.T) {
 	strategy, err := download.GetConsistentHashingMode(opts)
 	require.NoError(t, err)
 
-	reader, _, err := strategy.Fetch(ctx, "http://testing.replicate.delivery/hello.txt")
+	reader, _, _, err := strategy.Fetch(ctx, "http://testing.replicate.delivery/hello.txt")
 	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
 	require.NoError(t, err)
@@ -444,7 +444,7 @@ func TestConsistentHashingHasFallback(t *testing.T) {
 	strategy, err := download.GetConsistentHashingMode(opts)
 	require.NoError(t, err)
 
-	reader, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
+	reader, _, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
 	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
 	require.NoError(t, err)
@@ -471,9 +471,9 @@ type testStrategy struct {
 	mut                  sync.Mutex
 }
 
-func (s *testStrategy) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
+func (s *testStrategy) Fetch(ctx context.Context, url string) (io.Reader, int64, string, error) {
 	s.fetchCalledCount++
-	return io.NopCloser(strings.NewReader("00")), -1, nil
+	return io.NopCloser(strings.NewReader("00")), -1, "", nil
 }
 
 func (s *testStrategy) DoRequest(ctx context.Context, start, end int64, url string) (*http.Response, error) {
@@ -541,7 +541,7 @@ func TestConsistentHashingFileFallback(t *testing.T) {
 			strategy.FallbackStrategy = fallbackStrategy
 
 			urlString := "http://fake.replicate.delivery/hello.txt"
-			_, _, err = strategy.Fetch(ctx, urlString)
+			_, _, _, err = strategy.Fetch(ctx, urlString)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
 			}
@@ -603,7 +603,7 @@ func TestConsistentHashingChunkFallback(t *testing.T) {
 			strategy.FallbackStrategy = fallbackStrategy
 
 			urlString := "http://fake.replicate.delivery/hello.txt"
-			out, _, err := strategy.Fetch(ctx, urlString)
+			out, _, _, err := strategy.Fetch(ctx, urlString)
 			assert.ErrorIs(t, err, tc.expectedError)
 			if err == nil {
 				// eagerly read the whole output reader to force all the

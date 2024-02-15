@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
+	neturl "net/url"
 	"strconv"
 	"strings"
 
@@ -29,7 +29,7 @@ type ConsistentHashingMode struct {
 }
 
 type CacheKey struct {
-	URL   *url.URL `hash:"string"`
+	URL   *neturl.URL `hash:"string"`
 	Slice int64
 }
 
@@ -78,12 +78,14 @@ func (m *ConsistentHashingMode) getFileSizeFromContentRange(contentRange string)
 	return strconv.ParseInt(groups[1], 10, 64)
 }
 
-func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io.Reader, int64, error) {
+func (m *ConsistentHashingMode) Fetch(ctx context.Context, url string) (io.Reader, int64, string, error) {
 	logger := logging.GetLogger()
 
-	parsed, err := url.Parse(urlString)
+	var contentType string
+
+	parsed, err := neturl.Parse(url)
 	if err != nil {
-		return nil, -1, err
+		return nil, -1, contentType, err
 	}
 	shouldContinue := false
 	if prefixes, ok := m.CacheableURIPrefixes[parsed.Host]; ok {
@@ -97,10 +99,10 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 	// Use our fallback mode if we're not downloading from a consistent-hashing enabled domain
 	if !shouldContinue {
 		logger.Debug().
-			Str("url", urlString).
+			Str("url", url).
 			Str("reason", fmt.Sprintf("consistent hashing not enabled for %s", parsed.Host)).
 			Msg("fallback strategy")
-		return m.FallbackStrategy.Fetch(ctx, urlString)
+		return m.FallbackStrategy.Fetch(ctx, url)
 	}
 
 	br := newBufferedReader(m.minChunkSize())
@@ -109,7 +111,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		m.sem.Go(func() error {
 			defer close(firstReqResultCh)
 			defer br.done()
-			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, urlString)
+			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, url)
 			if err != nil {
 				br.err = err
 				firstReqResultCh <- firstReqResult{err: err}
@@ -122,7 +124,10 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 				firstReqResultCh <- firstReqResult{err: err}
 				return err
 			}
-			firstReqResultCh <- firstReqResult{fileSize: fileSize}
+			firstReqResultCh <- firstReqResult{
+				fileSize:    fileSize,
+				contentType: firstChunkResp.Header.Get("Content-Type"),
+			}
 
 			return br.downloadBody(firstChunkResp)
 		})
@@ -138,19 +143,19 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		if errors.Is(firstReqResult.err, client.ErrStrategyFallback) {
 			// TODO(morgan): we should indicate the fallback strategy we're using in the logs
 			logger.Info().
-				Str("url", urlString).
+				Str("url", url).
 				Str("type", "file").
 				Err(err).
 				Msg("consistent hash fallback")
-			return m.FallbackStrategy.Fetch(ctx, urlString)
+			return m.FallbackStrategy.Fetch(ctx, url)
 		}
-		return nil, -1, firstReqResult.err
+		return nil, -1, contentType, firstReqResult.err
 	}
 	fileSize := firstReqResult.fileSize
 
 	if fileSize <= m.minChunkSize() {
 		// we only need a single chunk: just download it and finish
-		return br, fileSize, nil
+		return br, fileSize, contentType, nil
 	}
 
 	totalSlices := fileSize / m.SliceSize
@@ -175,7 +180,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 	readersCh := make(chan io.Reader, m.maxConcurrency()+1)
 	readersCh <- br
 
-	logger.Debug().Str("url", urlString).
+	logger.Debug().Str("url", url).
 		Int64("size", fileSize).
 		Int("concurrency", m.maxConcurrency()).
 		Ints64("chunks_per_slice", chunksPerSlice).
@@ -217,7 +222,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 				m.sem.Go(func() error {
 					defer br.done()
 					logger.Debug().Int64("start", chunkStart).Int64("end", chunkEnd).Msg("starting request")
-					resp, err := m.DoRequest(ctx, chunkStart, chunkEnd, urlString)
+					resp, err := m.DoRequest(ctx, chunkStart, chunkEnd, url)
 					if err != nil {
 						// in the case that an error indicating an issue with the cache server, networking, etc is returned,
 						// this will use the fallback strategy. This is a case where the whole file will perform the fall-back
@@ -225,11 +230,11 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 						if errors.Is(err, client.ErrStrategyFallback) {
 							// TODO(morgan): we should indicate the fallback strategy we're using in the logs
 							logger.Info().
-								Str("url", urlString).
+								Str("url", url).
 								Str("type", "chunk").
 								Err(err).
 								Msg("consistent hash fallback")
-							resp, err = m.FallbackStrategy.DoRequest(ctx, chunkStart, chunkEnd, urlString)
+							resp, err = m.FallbackStrategy.DoRequest(ctx, chunkStart, chunkEnd, url)
 						}
 						if err != nil {
 							br.err = err
@@ -245,7 +250,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		}
 	})
 
-	return newChanMultiReader(readersCh), fileSize, nil
+	return newChanMultiReader(readersCh), fileSize, contentType, nil
 }
 
 func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64, urlString string) (*http.Response, error) {
@@ -307,7 +312,7 @@ func (m *ConsistentHashingMode) rewriteRequestToCacheHost(req *http.Request, sta
 	}
 	if m.CacheUsePathProxy {
 		// prepend the hostname to the start of the path. The consistent-hash nodes will use this to determine the proxy
-		newPath, err := url.JoinPath(strings.ToLower(req.URL.Host), req.URL.Path)
+		newPath, err := neturl.JoinPath(strings.ToLower(req.URL.Host), req.URL.Path)
 		if err != nil {
 			return -1, err
 		}

@@ -112,7 +112,7 @@ func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
 			opts.MinChunkSize = tc.minChunkSize
 			bufferMode := GetBufferMode(opts)
 			path, _ := url.JoinPath(server.URL, testFilePath)
-			download, size, err := bufferMode.Fetch(context.Background(), path)
+			download, size, _, err := bufferMode.Fetch(context.Background(), path)
 			require.NoError(t, err)
 			data, err := io.ReadAll(download)
 			assert.NoError(t, err)

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 
@@ -216,16 +215,4 @@ func (d *transportDialer) DialContext(ctx context.Context, network, addr string)
 		addr = addrOverride
 	}
 	return d.Dialer.DialContext(ctx, network, addr)
-}
-
-func GetSchemeHostKey(urlString string) (string, error) {
-	parsedURL, err := url.Parse(urlString)
-	if err != nil {
-		return "", err
-	}
-	return getSchemeHostKey(parsedURL), err
-}
-
-func getSchemeHostKey(url *url.URL) string {
-	return fmt.Sprintf("%s://%s", url.Scheme, url.Host)
 }

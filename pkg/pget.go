@@ -3,6 +3,7 @@ package pget
 import (
 	"context"
 	"fmt"
+	netUrl "net/url"
 	"sync/atomic"
 	"time"
 
@@ -25,14 +26,24 @@ type Options struct {
 }
 
 type ManifestEntry struct {
-	URL  string
-	Dest string
+	parsedURL *netUrl.URL
+	Dest      string
 }
 
-// A Manifest is a mapping from a base URI (consisting of scheme://authority) to
-// a list of Manifest entries under that base URI.  That is, the Manifest
-// entries are grouped by remote server that we might connect to.
-type Manifest map[string][]ManifestEntry
+func (m ManifestEntry) URL() string {
+	return m.parsedURL.String()
+}
+
+// A Manifest is a slice of ManifestEntry, with a helper method to add entries
+type Manifest []ManifestEntry
+
+func (m Manifest) AddEntry(url string, destination string) (Manifest, error) {
+	parsed, err := netUrl.Parse(url)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing url %s: %w", url, err)
+	}
+	return append(m, ManifestEntry{parsedURL: parsed, Dest: destination}), nil
+}
 
 func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {
 	if g.Consumer == nil {
@@ -84,13 +95,11 @@ func (g *Getter) DownloadFiles(ctx context.Context, manifest Manifest) (int64, t
 	totalSize := new(atomic.Int64)
 	multifileDownloadStart := time.Now()
 
-	for host, entries := range manifest {
-		err := g.downloadFilesFromHost(ctx, errGroup, entries, totalSize)
-		if err != nil {
-			return 0, 0, fmt.Errorf("error initiating download of files from host %s: %w", host, err)
-		}
+	err := g.downloadFilesFromManifest(ctx, errGroup, manifest, totalSize)
+	if err != nil {
+		return 0, 0, fmt.Errorf("error initiating download of files from manifest: %w", err)
 	}
-	err := errGroup.Wait()
+	err = errGroup.Wait()
 	if err != nil {
 		return 0, 0, fmt.Errorf("error downloading files: %w", err)
 	}
@@ -98,13 +107,13 @@ func (g *Getter) DownloadFiles(ctx context.Context, manifest Manifest) (int64, t
 	return totalSize.Load(), elapsedTime, nil
 }
 
-func (g *Getter) downloadFilesFromHost(ctx context.Context, eg *errgroup.Group, entries []ManifestEntry, totalSize *atomic.Int64) error {
+func (g *Getter) downloadFilesFromManifest(ctx context.Context, eg *errgroup.Group, entries []ManifestEntry, totalSize *atomic.Int64) error {
 	logger := logging.GetLogger()
 
 	for _, entry := range entries {
 		// Avoid the `entry` loop variable being captured by the
 		// goroutine by creating new variables
-		url, dest := entry.URL, entry.Dest
+		url, dest := entry.URL(), entry.Dest
 		logger.Debug().Str("url", url).Str("dest", dest).Msg("Queueing Download")
 
 		eg.Go(func() error {

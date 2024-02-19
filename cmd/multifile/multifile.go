@@ -169,9 +169,7 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 	return nil
 }
 
-func numEntries(manifest pget.Manifest) (totalEntries int) {
-	for _, entries := range manifest {
-		totalEntries += len(entries)
-	}
-	return
+func numEntries(manifest pget.Manifest) int {
+	return len(manifest)
+
 }

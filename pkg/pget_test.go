@@ -158,19 +158,14 @@ func testDownloadMultipleFiles(opts download.Options, sizes []int64, t *testing.
 	ts := httptest.NewServer(http.FileServer(http.Dir(inputDir)))
 	defer ts.Close()
 
-	entries := make([]pget.ManifestEntry, len(sizes))
-	for i, srcFilename := range srcFilenames {
-		entries[i] = pget.ManifestEntry{
-			URL:  ts.URL + "/" + srcFilename,
-			Dest: outputDir + "/" + srcFilename,
-		}
+	manifest := make(pget.Manifest, 0)
+
+	for _, srcFilename := range srcFilenames {
+		manifest, err = manifest.AddEntry(ts.URL+"/"+srcFilename, filepath.Join(outputDir, srcFilename))
+		require.NoError(t, err)
 	}
 
 	getter := makeGetter(opts)
-
-	manifest := pget.Manifest{
-		"ignored-value": entries,
-	}
 
 	actualTotalSize, _, err := getter.DownloadFiles(context.Background(), manifest)
 	assert.NoError(t, err)

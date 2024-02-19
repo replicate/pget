@@ -14,14 +14,6 @@ import (
 	"github.com/replicate/pget/pkg/config"
 )
 
-func TestGetSchemeHostKey(t *testing.T) {
-	expected := "http://example.com"
-	actual, err := client.GetSchemeHostKey("http://example.com/foo/bar;baz/quux?animal=giraffe")
-
-	assert.NoError(t, err)
-	assert.Equal(t, expected, actual)
-}
-
 func TestRetryPolicy(t *testing.T) {
 	bgCtx := context.Background()
 	chCtx := context.WithValue(bgCtx, config.ConsistentHashingStrategyKey, true)

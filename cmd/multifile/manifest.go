@@ -13,7 +13,6 @@ import (
 
 	pget "github.com/replicate/pget/pkg"
 	"github.com/replicate/pget/pkg/cli"
-	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
 )
 
@@ -50,8 +49,8 @@ func parseLine(line string) (urlString, dest string, err error) {
 	return fields[0], fields[1], nil
 }
 
-func checkSeenDests(seenDests map[string]string, dest string, urlString string) error {
-	if seenURL, ok := seenDests[dest]; ok {
+func checkSeenDestinations(destinations map[string]string, dest string, urlString string) error {
+	if seenURL, ok := destinations[dest]; ok {
 		if seenURL != urlString {
 			return fmt.Errorf("duplicate destination %s with different urls: %s and %s", dest, seenURL, urlString)
 		} else {
@@ -61,21 +60,9 @@ func checkSeenDests(seenDests map[string]string, dest string, urlString string) 
 	return nil
 }
 
-func addEntry(manifestMap pget.Manifest, schemeHost string, urlString string, dest string) pget.Manifest {
-	entries, ok := manifestMap[schemeHost]
-
-	if !ok {
-		manifestMap[schemeHost] = []pget.ManifestEntry{{URL: urlString, Dest: dest}}
-	} else {
-		manifestMap[schemeHost] = append(entries, pget.ManifestEntry{URL: urlString, Dest: dest})
-	}
-
-	return manifestMap
-}
-
 func parseManifest(file io.Reader) (pget.Manifest, error) {
-	seenDests := make(map[string]string)
-	manifestMap := make(pget.Manifest)
+	seenDestinations := make(map[string]string)
+	manifest := make(pget.Manifest, 0)
 
 	scanner := bufio.NewScanner(file)
 
@@ -94,24 +81,23 @@ func parseManifest(file io.Reader) (pget.Manifest, error) {
 		// is allowed/not allowed/etc
 		consumer := viper.GetString(config.OptOutputConsumer)
 		if consumer != config.ConsumerNull {
-			err = checkSeenDests(seenDests, dest, urlString)
+			err = checkSeenDestinations(seenDestinations, dest, urlString)
 			if err != nil {
 				return nil, err
 			}
-			seenDests[dest] = urlString
+			seenDestinations[dest] = urlString
 
 			err = cli.EnsureDestinationNotExist(dest)
 			if err != nil {
 				return nil, err
 			}
 		}
-		schemeHost, err := client.GetSchemeHostKey(urlString)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing url %s: %w", urlString, err)
-		}
 
-		manifestMap = addEntry(manifestMap, schemeHost, urlString, dest)
+		manifest, err = manifest.AddEntry(urlString, dest)
+		if err != nil {
+			return nil, fmt.Errorf("error adding url: %w", err)
+		}
 	}
 
-	return manifestMap, nil
+	return manifest, nil
 }

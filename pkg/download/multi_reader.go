@@ -2,6 +2,7 @@ package download
 
 import (
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -47,12 +48,22 @@ func (m *multiReader) ReadAt(p []byte, off int64) (n int, err error) {
 		return 0, ErrInvalidOffset
 	}
 	for i, r := range m.readers {
-		readerBytes += int64(r.len())
+		readerBytes += r.len()
 		// if offset is less than the bytes found in the reader slice to this point,
 		// we can start reading from this reader.
 		if off < readerBytes {
+			//innerOffset 1024 off 2301808284 readerBytes 2301809308 r.len() 47621039
+			//innerOffset 66560 off 2301742748 readerBytes 2301809308 r.len() 47621039
+			//panic: runtime error: slice bounds out of range [66560:15095]
+			//
 			// Calculate the offset within the reader
 			innerOffset := off - (readerBytes - r.len())
+			if innerOffset > r.len() {
+				return 0, fmt.Errorf("innerOffset %d off %d readerBytes %d r.len() %d", innerOffset, off, readerBytes, r.len())
+			}
+			//innerOffset := off - (readerBytes - r.len())
+			//fmt.Println("innerOffset", innerOffset, "off", off, "readerBytes", readerBytes, "r.len()", r.len())
+			<-r.ready
 			n = copy(p, r.buf.Bytes()[innerOffset:])
 			if i == len(m.readers)-1 && n < len(p) {
 				// We are at the last reader and the buffer is not full

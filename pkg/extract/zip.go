@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 )
 
@@ -30,12 +31,10 @@ func ZipFile(reader io.ReaderAt, destPath string, size int64, overwrite bool) er
 }
 
 func handleFileFromZip(file *zip.File, outputDir string, overwrite bool) error {
-	target := outputDir + file.Name
-	targetDir := filepath.Dir(target)
 	if file.FileInfo().IsDir() {
-		return extractDir(file, targetDir)
+		return extractDir(file, outputDir)
 	} else if file.FileInfo().Mode().IsRegular() {
-		return extractFile(file, targetDir, overwrite)
+		return extractFile(file, outputDir, overwrite)
 	} else {
 		return fmt.Errorf("unsupported file type (not dir or regular): %s (%d)", file.Name, file.FileInfo().Mode().Type())
 	}
@@ -43,7 +42,7 @@ func handleFileFromZip(file *zip.File, outputDir string, overwrite bool) error {
 }
 
 func extractDir(file *zip.File, outputDir string) error {
-	target := outputDir + file.Name
+	target := path.Join(outputDir, file.Name)
 	perms := file.Mode().Perm() &^ os.ModeSetuid &^ os.ModeSetgid &^ os.ModeSticky
 	info, err := os.Stat(target)
 	if err == nil && !info.IsDir() {
@@ -67,7 +66,7 @@ func extractDir(file *zip.File, outputDir string) error {
 }
 
 func extractFile(file *zip.File, outputDir string, overwrite bool) error {
-	target := outputDir + file.Name
+	target := path.Join(outputDir, file.Name)
 	targetDir := filepath.Dir(target)
 	err := os.MkdirAll(targetDir, 0755)
 	if err != nil {

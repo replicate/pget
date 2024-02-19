@@ -49,11 +49,6 @@ This builds a static binary that can work inside containers.
 - -c concurrency: The number of concurrent downloads. Default is 4 times the number of cores.
 - -x: Extract the tar file after download. If not set, the downloaded file will be saved as is.
 
-#### Default-Mode Command-Line Options
-- `-x`, `--extract`
-  - Extract archive after download
-  - Type: `bool`
-  - Default: `false`
 
 #### Example
 
@@ -101,9 +96,9 @@ https://example.com/music.mp3 /local/path/to/music.mp3
 
 ### Global Command-Line Options
 - `--max-chunks`
-    - Maximum number of chunks for downloading a given file
-    - Type: `Integer`
-    - Default: `4 * runtime.NumCPU()`
+  - Maximum number of chunks for downloading a given file
+  - Type: `Integer`
+  - Default: `4 * runtime.NumCPU()`
 - `--connect-timeout`
   - Timeout for establishing a connection, format is <number><unit>, e.g. 10s
   - Type: `Duration`
@@ -131,6 +126,17 @@ https://example.com/music.mp3 /local/path/to/music.mp3
   - Verbose mode (equivalent to `--log-level debug`)
   - Type: `bool`
   - Default: `false`
+- `-x`, `--extract`
+  - Extract archive after download
+  - Type: `bool`
+  - Default: `false`
+  - In multifile mode this option will only extract tar files where `content-type` header is `application/x-tar`. This option may be combined with `--unzip` only in multifile mode.
+- `-u`, `--unzip`
+  - Unzip archive after download
+  - Type: `bool`
+  - Default: `false`
+  - In multifile mode this option will only extract tar files where `content-type` header is `application/zip`. This option may be combined with `--extract` only in multifile mode.
+
 
 #### Deprecated
 - `--concurrency` (deprecated, use `--max-chunks` instead)

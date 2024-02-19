@@ -50,12 +50,12 @@ func GetCommand() *cobra.Command {
 		Long:               rootLongDesc,
 		PersistentPreRunE:  rootPersistentPreRunEFunc,
 		PersistentPostRunE: rootPersistentPostRunEFunc,
+		PreRunE:            rootPreRunEFunc,
 		PreRun:             rootCmdPreRun,
 		RunE:               runRootCMD,
 		Args:               cobra.ExactArgs(2),
 		Example:            `  pget https://example.com/file.tar ./target-dir`,
 	}
-	cmd.Flags().BoolP(config.OptExtract, "x", false, "OptExtract archive after download")
 	cmd.SetUsageTemplate(cli.UsageTemplate)
 	config.ViperInit()
 	if err := persistentFlags(cmd); err != nil {
@@ -119,6 +119,13 @@ func rootPersistentPostRunEFunc(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func rootPreRunEFunc(cmd *cobra.Command, args []string) error {
+	if viper.GetBool(config.OptExtract) && viper.GetBool(config.OptUnzip) {
+		return fmt.Errorf("cannot use --unzip and --extract together")
+	}
+	return nil
+}
+
 func persistentFlags(cmd *cobra.Command) error {
 	// Persistent Flags (applies to all commands/subcommands)
 	cmd.PersistentFlags().IntVarP(&concurrency, config.OptConcurrency, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
@@ -134,6 +141,8 @@ func persistentFlags(cmd *cobra.Command) error {
 	cmd.PersistentFlags().Int(config.OptMaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host")
 	cmd.PersistentFlags().StringP(config.OptOutputConsumer, "o", "file", "Output Consumer (file, tar, null)")
 	cmd.PersistentFlags().String(config.OptPIDFile, defaultPidFilePath(), "PID file path")
+	cmd.PersistentFlags().BoolP(config.OptExtract, "x", false, "Extract tar archive after download")
+	cmd.PersistentFlags().BoolP(config.OptUnzip, "u", false, "Unzip archive after download")
 
 	if err := config.AddFlagAlias(cmd, config.OptConcurrency, config.OptMaxChunks); err != nil {
 		return err
@@ -168,6 +177,9 @@ func rootCmdPreRun(cmd *cobra.Command, args []string) {
 		currentConsumer := viper.GetString(config.OptOutputConsumer)
 		if currentConsumer != config.ConsumerFile && currentConsumer != config.ConsumerTarExtractor {
 			log.Warn().Msg("Tar Extract Enabled, overriding output consumer to `tar-extractor`")
+		}
+		if currentConsumer != config.ConsumerFile && currentConsumer != config.ConsumerZipExtractor {
+			log.Warn().Msg("Unzip Enabled, overriding output consumer to `unzip`")
 		}
 		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
 	}

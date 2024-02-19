@@ -27,6 +27,8 @@ func TarFile(reader io.Reader, destDir string, overwrite bool) error {
 	logger.Debug().
 		Str("extractor", "tar").
 		Str("status", "starting").
+		Bool("overwrite", overwrite).
+		Str("destDir", destDir).
 		Msg("Extract")
 	for {
 		header, err := tarReader.Next()
@@ -45,6 +47,10 @@ func TarFile(reader io.Reader, destDir string, overwrite bool) error {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
+			logger.Debug().
+				Str("target", target).
+				Str("perms", fmt.Sprintf("%o", header.Mode)).
+				Msg("Tar: Directory")
 			if err := os.MkdirAll(target, os.FileMode(header.Mode)); err != nil {
 				return err
 			}
@@ -53,6 +59,10 @@ func TarFile(reader io.Reader, destDir string, overwrite bool) error {
 			if overwrite {
 				openFlags |= os.O_TRUNC
 			}
+			logger.Debug().
+				Str("target", target).
+				Str("perms", fmt.Sprintf("%o", header.Mode)).
+				Msg("Tar: File")
 			targetFile, err := os.OpenFile(target, openFlags, os.FileMode(header.Mode))
 			if err != nil {
 				return err
@@ -66,6 +76,10 @@ func TarFile(reader io.Reader, destDir string, overwrite bool) error {
 			}
 		case tar.TypeSymlink, tar.TypeLink:
 			// Defer creation of
+			logger.Debug().Str("link_type", string(header.Typeflag)).
+				Str("old_name", header.Linkname).
+				Str("new_name", target).
+				Msg("Tar: (Defer) Link")
 			links = append(links, &link{linkType: header.Typeflag, oldName: header.Linkname, newName: target})
 		default:
 			return fmt.Errorf("unsupported file type for %s, typeflag %s", header.Name, string(header.Typeflag))
@@ -86,6 +100,7 @@ func TarFile(reader io.Reader, destDir string, overwrite bool) error {
 }
 
 func createLinks(links []*link, destDir string, overwrite bool) error {
+	logger := logging.GetLogger()
 	for _, link := range links {
 		targetDir := filepath.Dir(link.newName)
 		if err := os.MkdirAll(targetDir, 0755); err != nil {
@@ -94,10 +109,18 @@ func createLinks(links []*link, destDir string, overwrite bool) error {
 		switch link.linkType {
 		case tar.TypeLink:
 			oldPath := filepath.Join(destDir, link.oldName)
+			logger.Debug().
+				Str("old_path", oldPath).
+				Str("new_path", link.newName).
+				Msg("Tar: creating hard link")
 			if err := createHardLink(oldPath, link.newName, overwrite); err != nil {
 				return fmt.Errorf("error creating hard link from %s to %s: %w", oldPath, link.newName, err)
 			}
 		case tar.TypeSymlink:
+			logger.Debug().
+				Str("old_path", link.oldName).
+				Str("new_path", link.newName).
+				Msg("Tar: creating symlink")
 			if err := createSymlink(link.oldName, link.newName, overwrite); err != nil {
 				return fmt.Errorf("error creating symlink from %s to %s: %w", link.oldName, link.newName, err)
 			}

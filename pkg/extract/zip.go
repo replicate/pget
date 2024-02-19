@@ -7,15 +7,24 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/replicate/pget/pkg/logging"
 )
 
 // ZipFile extracts a zip file to the given destination path.
 func ZipFile(reader io.ReaderAt, destPath string, size int64, overwrite bool) error {
+	logger := logging.GetLogger()
 	err := os.MkdirAll(destPath, 0755)
 	if err != nil {
 		return fmt.Errorf("error creating destination directory: %w", err)
 	}
 
+	logger.Debug().
+		Str("extractor", "zip").
+		Str("status", "starting").
+		Bool("overwrite", overwrite).
+		Str("destDir", destPath).
+		Msg("Extract")
 	zipReader, err := zip.NewReader(reader, size)
 	if err != nil {
 		return fmt.Errorf("error creating zip reader: %w", err)
@@ -42,8 +51,11 @@ func handleFileFromZip(file *zip.File, outputDir string, overwrite bool) error {
 }
 
 func extractDir(file *zip.File, outputDir string) error {
+	logger := logging.GetLogger()
 	target := path.Join(outputDir, file.Name)
+	// Strip setuid/setgid/sticky bits
 	perms := file.Mode().Perm() &^ os.ModeSetuid &^ os.ModeSetgid &^ os.ModeSticky
+	logger.Debug().Str("target", target).Str("perms", fmt.Sprintf("%o", perms)).Msg("Unzip: directory")
 	info, err := os.Stat(target)
 	if err == nil && !info.IsDir() {
 		return fmt.Errorf("error creating directory: %s already exists and is not a directory", target)
@@ -66,6 +78,7 @@ func extractDir(file *zip.File, outputDir string) error {
 }
 
 func extractFile(file *zip.File, outputDir string, overwrite bool) error {
+	logger := logging.GetLogger()
 	target := path.Join(outputDir, file.Name)
 	targetDir := filepath.Dir(target)
 	err := os.MkdirAll(targetDir, 0755)
@@ -85,8 +98,9 @@ func extractFile(file *zip.File, outputDir string, overwrite bool) error {
 	if overwrite {
 		openFlags |= os.O_TRUNC
 	}
-	// Do not apply setuid/gid/sticky bits.
+	// Strip setuid/gid/sticky bits.
 	perms := file.Mode().Perm() &^ os.ModeSetuid &^ os.ModeSetgid &^ os.ModeSticky
+	logger.Debug().Str("target", target).Str("perms", fmt.Sprintf("%o", perms)).Msg("Unzip: file")
 	out, err := os.OpenFile(target, openFlags, perms)
 	if err != nil {
 		return fmt.Errorf("error creating file: %w", err)

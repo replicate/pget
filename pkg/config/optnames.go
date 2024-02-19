@@ -24,5 +24,6 @@ const (
 	OptPIDFile            = "pid-file"
 	OptResolve            = "resolve"
 	OptRetries            = "retries"
+	OptUnzip              = "unzip"
 	OptVerbose            = "verbose"
 )

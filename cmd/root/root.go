@@ -52,7 +52,7 @@ func GetCommand() *cobra.Command {
 		PersistentPostRunE: rootPersistentPostRunEFunc,
 		PreRun:             rootCmdPreRun,
 		RunE:               runRootCMD,
-		Args:               cobra.ExactArgs(2),
+		Args:               validateArgs,
 		Example:            `  pget https://example.com/file.tar ./target-dir`,
 	}
 	cmd.Flags().BoolP(config.OptExtract, "x", false, "OptExtract archive after download")
@@ -258,4 +258,11 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 
 	_, _, err = getter.DownloadFile(ctx, urlString, dest)
 	return err
+}
+
+func validateArgs(cmd *cobra.Command, args []string) error {
+	if viper.GetString(config.OptOutputConsumer) == config.ConsumerNull {
+		return cobra.RangeArgs(1, 2)(cmd, args)
+	}
+	return cobra.ExactArgs(2)(cmd, args)
 }

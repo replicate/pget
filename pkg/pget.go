@@ -3,7 +3,6 @@ package pget
 import (
 	"context"
 	"fmt"
-	netUrl "net/url"
 	"sync/atomic"
 	"time"
 
@@ -26,23 +25,15 @@ type Options struct {
 }
 
 type ManifestEntry struct {
-	parsedURL *netUrl.URL
-	Dest      string
-}
-
-func (m ManifestEntry) URL() string {
-	return m.parsedURL.String()
+	URL  string
+	Dest string
 }
 
 // A Manifest is a slice of ManifestEntry, with a helper method to add entries
 type Manifest []ManifestEntry
 
-func (m Manifest) AddEntry(url string, destination string) (Manifest, error) {
-	parsed, err := netUrl.Parse(url)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing url %s: %w", url, err)
-	}
-	return append(m, ManifestEntry{parsedURL: parsed, Dest: destination}), nil
+func (m Manifest) AddEntry(url string, destination string) Manifest {
+	return append(m, ManifestEntry{URL: url, Dest: destination})
 }
 
 func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {
@@ -113,7 +104,7 @@ func (g *Getter) downloadFilesFromManifest(ctx context.Context, eg *errgroup.Gro
 	for _, entry := range entries {
 		// Avoid the `entry` loop variable being captured by the
 		// goroutine by creating new variables
-		url, dest := entry.URL(), entry.Dest
+		url, dest := entry.URL, entry.Dest
 		logger.Debug().Str("url", url).Str("dest", dest).Msg("Queueing Download")
 
 		eg.Go(func() error {

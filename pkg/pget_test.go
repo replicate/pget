@@ -161,7 +161,7 @@ func testDownloadMultipleFiles(opts download.Options, sizes []int64, t *testing.
 	manifest := make(pget.Manifest, 0)
 
 	for _, srcFilename := range srcFilenames {
-		manifest, err = manifest.AddEntry(ts.URL+"/"+srcFilename, filepath.Join(outputDir, srcFilename))
+		manifest = manifest.AddEntry(ts.URL+"/"+srcFilename, filepath.Join(outputDir, srcFilename))
 		require.NoError(t, err)
 	}
 
@@ -195,4 +195,19 @@ func TestDownloadFive10MFiles(t *testing.T) {
 		10 * humanize.MiByte,
 		10 * humanize.MiByte,
 	}, t)
+}
+
+func TestManifest_AddEntry(t *testing.T) {
+	entries := make(pget.Manifest, 0)
+
+	entries = entries.AddEntry("https://example.com/file1.txt", "/tmp/file1.txt")
+	assert.Len(t, entries, 1)
+	entries = entries.AddEntry("https://example.org/file2.txt", "/tmp/file2.txt")
+	assert.Len(t, entries, 2)
+
+	assert.Equal(t, "https://example.com/file1.txt", entries[0].URL)
+	assert.Equal(t, "/tmp/file1.txt", entries[0].Dest)
+	assert.Equal(t, "https://example.org/file2.txt", entries[1].URL)
+	assert.Equal(t, "/tmp/file2.txt", entries[1].Dest)
+
 }

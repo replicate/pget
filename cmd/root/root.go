@@ -18,6 +18,7 @@ import (
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/download"
+	"github.com/replicate/pget/pkg/logging"
 )
 
 const rootLongDesc = `
@@ -51,7 +52,6 @@ func GetCommand() *cobra.Command {
 		PersistentPreRunE:  rootPersistentPreRunEFunc,
 		PersistentPostRunE: rootPersistentPostRunEFunc,
 		PreRunE:            rootPreRunEFunc,
-		PreRun:             rootCmdPreRun,
 		RunE:               runRootCMD,
 		Args:               cobra.ExactArgs(2),
 		Example:            `  pget https://example.com/file.tar ./target-dir`,
@@ -120,8 +120,25 @@ func rootPersistentPostRunEFunc(cmd *cobra.Command, args []string) error {
 }
 
 func rootPreRunEFunc(cmd *cobra.Command, args []string) error {
+	logger := logging.GetLogger()
+
 	if viper.GetBool(config.OptExtract) && viper.GetBool(config.OptUnzip) {
 		return fmt.Errorf("cannot use --unzip and --extract together")
+	}
+
+	currentConsumer := viper.GetString(config.OptOutputConsumer)
+
+	if viper.GetBool(config.OptExtract) {
+		if currentConsumer != config.ConsumerFile && currentConsumer != config.ConsumerTarExtractor {
+			logger.Warn().Msg("Tar Extract Enabled, overriding output consumer to `tar-extractor`")
+		}
+		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
+	}
+	if viper.GetBool(config.OptUnzip) {
+		if currentConsumer != config.ConsumerFile && currentConsumer != config.ConsumerZipExtractor {
+			logger.Warn().Msg("Unzip Enabled, overriding output consumer to `unzip`")
+		}
+		viper.Set(config.OptOutputConsumer, config.ConsumerZipExtractor)
 	}
 	return nil
 }
@@ -170,19 +187,6 @@ func hideAndDeprecateFlags(cmd *cobra.Command) error {
 	}
 	return nil
 
-}
-
-func rootCmdPreRun(cmd *cobra.Command, args []string) {
-	if viper.GetBool(config.OptExtract) {
-		currentConsumer := viper.GetString(config.OptOutputConsumer)
-		if currentConsumer != config.ConsumerFile && currentConsumer != config.ConsumerTarExtractor {
-			log.Warn().Msg("Tar Extract Enabled, overriding output consumer to `tar-extractor`")
-		}
-		if currentConsumer != config.ConsumerFile && currentConsumer != config.ConsumerZipExtractor {
-			log.Warn().Msg("Unzip Enabled, overriding output consumer to `unzip`")
-		}
-		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
-	}
 }
 
 func runRootCMD(cmd *cobra.Command, args []string) error {
@@ -254,11 +258,11 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		Consumer:   consumer,
 	}
 
-	if viper.GetBool(config.OptExtract) {
-		// TODO: decide what to do when --output is set *and* --extract is set
-		log.Debug().Msg("Tar Extract Enabled")
-		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
-	}
+	//if viper.GetBool(config.OptExtract) {
+	//	// TODO: decide what to do when --output is set *and* --extract is set
+	//	log.Debug().Msg("Tar Extract Enabled")
+	//	viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
+	//}
 
 	// TODO DRY this
 	if srvName := config.GetCacheSRV(); srvName != "" {

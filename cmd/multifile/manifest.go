@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	netUrl "net/url"
 	"os"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	pget "github.com/replicate/pget/pkg"
 	"github.com/replicate/pget/pkg/cli"
 	"github.com/replicate/pget/pkg/config"
+	"github.com/replicate/pget/pkg/logging"
 )
 
 // A manifest is a file consisting of pairs of URLs and paths:
@@ -26,6 +28,8 @@ import (
 //
 // When we parse a manifest, we group by URL base (ie scheme://hostname) so that
 // all URLs that may share a connection are grouped.
+
+var errDupeURLDestCombo = errors.New("duplicate destination with different URLs")
 
 func manifestFile(manifestPath string) (*os.File, error) {
 	if manifestPath == "-" {
@@ -41,7 +45,7 @@ func manifestFile(manifestPath string) (*os.File, error) {
 	return file, err
 }
 
-func parseLine(line string) (urlString, dest string, err error) {
+func parseLine(line string) (url, dest string, err error) {
 	fields := strings.Fields(line)
 	if len(fields) != 2 {
 		return "", "", fmt.Errorf("error parsing manifest invalid line format `%s`", line)
@@ -49,18 +53,19 @@ func parseLine(line string) (urlString, dest string, err error) {
 	return fields[0], fields[1], nil
 }
 
-func checkSeenDestinations(destinations map[string]string, dest string, urlString string) error {
+func checkSeenDestinations(destinations map[string]string, dest string, url string) error {
 	if seenURL, ok := destinations[dest]; ok {
-		if seenURL != urlString {
-			return fmt.Errorf("duplicate destination %s with different urls: %s and %s", dest, seenURL, urlString)
+		if seenURL != url {
+			return fmt.Errorf("duplicate destination %s with different urls: %s and %s", dest, seenURL, url)
 		} else {
-			return fmt.Errorf("duplicate entry: %s %s", urlString, dest)
+			return errDupeURLDestCombo
 		}
 	}
 	return nil
 }
 
 func parseManifest(file io.Reader) (pget.Manifest, error) {
+	logger := logging.GetLogger()
 	seenDestinations := make(map[string]string)
 	manifest := make(pget.Manifest, 0)
 
@@ -83,6 +88,13 @@ func parseManifest(file io.Reader) (pget.Manifest, error) {
 		if consumer != config.ConsumerNull {
 			err = checkSeenDestinations(seenDestinations, dest, urlString)
 			if err != nil {
+				if errors.Is(err, errDupeURLDestCombo) {
+					logger.Warn().
+						Str("url", urlString).
+						Str("destination", dest).
+						Msg("Parse Manifest: Skip Duplicate URL/Destination")
+					continue
+				}
 				return nil, err
 			}
 			seenDestinations[dest] = urlString
@@ -92,12 +104,17 @@ func parseManifest(file io.Reader) (pget.Manifest, error) {
 				return nil, err
 			}
 		}
+		if valid, err := validURL(urlString); !valid {
+			return nil, fmt.Errorf("error parsing manifest invalid URL: %s: %w", urlString, err)
 
-		manifest, err = manifest.AddEntry(urlString, dest)
-		if err != nil {
-			return nil, fmt.Errorf("error adding url: %w", err)
 		}
+		manifest = manifest.AddEntry(urlString, dest)
 	}
 
 	return manifest, nil
+}
+
+func validURL(s string) (bool, error) {
+	_, err := netUrl.Parse(s)
+	return err == nil, err
 }

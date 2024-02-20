@@ -7,8 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	pget "github.com/replicate/pget/pkg"
 )
 
 // validManifest is a valid manifest file with additional empty lines
@@ -43,45 +41,22 @@ func TestParseLine(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestCheckSeenDests(t *testing.T) {
-	seenDests := map[string]string{
+func TestCheckSeenDestinations(t *testing.T) {
+	seenDestinations := map[string]string{
 		"/tmp/file1.txt": "https://example.com/file1.txt",
 	}
 
 	// a different destination is fine
-	err := checkSeenDestinations(seenDests, "/tmp/file2.txt", "https://example.com/file2.txt")
-	assert.NoError(t, err)
+	err := checkSeenDestinations(seenDestinations, "/tmp/file2.txt", "https://example.com/file2.txt")
+	require.NoError(t, err)
 
 	// the same destination with a different URL is not fine
-	err = checkSeenDestinations(seenDests, "/tmp/file1.txt", "https://example.com/file2.txt")
+	err = checkSeenDestinations(seenDestinations, "/tmp/file1.txt", "https://example.com/file2.txt")
 	assert.Error(t, err)
 
-	// the same destination with the same URL is also not fine
-	err = checkSeenDestinations(seenDests, "/tmp/file1.txt", "https://example.com/file1.txt")
-	assert.Error(t, err)
-}
-
-func TestAddEntry(t *testing.T) {
-	entries := make(pget.Manifest, 0)
-
-	entries, err := entries.AddEntry("https://example.com/file1.txt", "/tmp/file1.txt")
-	require.NoError(t, err)
-	assert.Len(t, entries, 1)
-	assert.Equal(t, "https://example.com/file1.txt", entries[0].URL())
-	assert.Equal(t, "/tmp/file1.txt", entries[0].Dest)
-
-	entries, err = entries.AddEntry("https://example.com/file2.txt", "/tmp/file2.txt")
-	require.NoError(t, err)
-	assert.Len(t, entries, 2)
-	assert.Equal(t, "https://example.com/file2.txt", entries[1].URL())
-	assert.Equal(t, "/tmp/file2.txt", entries[1].Dest)
-
-	entries, err = entries.AddEntry("https://example2.com/file3.txt", "/tmp/file3.txt")
-	require.NoError(t, err)
-	assert.Len(t, entries, 3)
-	assert.Equal(t, "https://example2.com/file3.txt", entries[2].URL())
-	assert.Equal(t, "/tmp/file3.txt", entries[2].Dest)
-
+	// the same destination with the same URL is fine, we raise a specific error to detect and skip
+	err = checkSeenDestinations(seenDestinations, "/tmp/file1.txt", "https://example.com/file1.txt")
+	assert.ErrorIs(t, err, errDupeURLDestCombo)
 }
 
 func TestParseManifest(t *testing.T) {

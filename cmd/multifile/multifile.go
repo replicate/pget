@@ -160,16 +160,11 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 	throughput := float64(totalFileSize) / elapsedTime.Seconds()
 	logger := logging.GetLogger()
 	logger.Info().
-		Int("file_count", numEntries(manifest)).
+		Int("file_count", len(manifest)).
 		Str("total_bytes_downloaded", humanize.Bytes(uint64(totalFileSize))).
 		Str("throughput", fmt.Sprintf("%s/s", humanize.Bytes(uint64(throughput)))).
 		Str("elapsed_time", fmt.Sprintf("%.3fs", elapsedTime.Seconds())).
 		Msg("Metrics")
 
 	return nil
-}
-
-func numEntries(manifest pget.Manifest) int {
-	return len(manifest)
-
 }

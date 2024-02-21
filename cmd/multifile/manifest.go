@@ -76,9 +76,14 @@ func parseManifest(file io.Reader) (pget.Manifest, error) {
 		if line == "" {
 			continue
 		}
-		urlString, dest, err := parseLine(line)
+		url, dest, err := parseLine(line)
 		if err != nil {
 			return nil, err
+		}
+
+		if _, err := netUrl.Parse(url); err != nil {
+			return nil, err
+
 		}
 
 		// THIS IS A BODGE - FIX ME MOVE THESE THINGS TO PGET
@@ -86,35 +91,26 @@ func parseManifest(file io.Reader) (pget.Manifest, error) {
 		// is allowed/not allowed/etc
 		consumer := viper.GetString(config.OptOutputConsumer)
 		if consumer != config.ConsumerNull {
-			err = checkSeenDestinations(seenDestinations, dest, urlString)
+			err = checkSeenDestinations(seenDestinations, dest, url)
 			if err != nil {
 				if errors.Is(err, errDupeURLDestCombo) {
 					logger.Warn().
-						Str("url", urlString).
+						Str("url", url).
 						Str("destination", dest).
 						Msg("Parse Manifest: Skip Duplicate URL/Destination")
 					continue
 				}
 				return nil, err
 			}
-			seenDestinations[dest] = urlString
+			seenDestinations[dest] = url
 
 			err = cli.EnsureDestinationNotExist(dest)
 			if err != nil {
 				return nil, err
 			}
 		}
-		if valid, err := validURL(urlString); !valid {
-			return nil, fmt.Errorf("error parsing manifest invalid URL: %s: %w", urlString, err)
-
-		}
-		manifest = manifest.AddEntry(urlString, dest)
+		manifest = manifest.AddEntry(url, dest)
 	}
 
 	return manifest, nil
-}
-
-func validURL(s string) (bool, error) {
-	_, err := netUrl.Parse(s)
-	return err == nil, err
 }

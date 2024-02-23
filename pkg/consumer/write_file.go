@@ -12,7 +12,7 @@ type FileWriter struct {
 
 var _ Consumer = &FileWriter{}
 
-func (f *FileWriter) Consume(reader io.Reader, destPath string) error {
+func (f *FileWriter) Consume(reader io.Reader, destPath string, fileSize int64) error {
 	openFlags := os.O_WRONLY | os.O_CREATE
 	if f.overwrite {
 		openFlags |= os.O_TRUNC

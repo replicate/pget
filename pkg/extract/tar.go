@@ -17,7 +17,7 @@ type link struct {
 	newName  string
 }
 
-func TarFile(reader io.Reader, destDir string) error {
+func TarFile(reader io.Reader, destDir string, overwrite bool) error {
 	var links []*link
 
 	startTime := time.Now()
@@ -49,7 +49,11 @@ func TarFile(reader io.Reader, destDir string) error {
 				return err
 			}
 		case tar.TypeReg:
-			targetFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, os.FileMode(header.Mode))
+			openFlags := os.O_CREATE | os.O_WRONLY
+			if overwrite {
+				openFlags |= os.O_TRUNC
+			}
+			targetFile, err := os.OpenFile(target, openFlags, os.FileMode(header.Mode))
 			if err != nil {
 				return err
 			}
@@ -68,7 +72,7 @@ func TarFile(reader io.Reader, destDir string) error {
 		}
 	}
 
-	if err := createLinks(links, destDir); err != nil {
+	if err := createLinks(links, destDir, overwrite); err != nil {
 		return fmt.Errorf("error creating links: %w", err)
 	}
 
@@ -81,7 +85,7 @@ func TarFile(reader io.Reader, destDir string) error {
 	return nil
 }
 
-func createLinks(links []*link, destDir string) error {
+func createLinks(links []*link, destDir string, overwrite bool) error {
 	for _, link := range links {
 		targetDir := filepath.Dir(link.newName)
 		if err := os.MkdirAll(targetDir, 0755); err != nil {
@@ -90,11 +94,11 @@ func createLinks(links []*link, destDir string) error {
 		switch link.linkType {
 		case tar.TypeLink:
 			oldPath := filepath.Join(destDir, link.oldName)
-			if err := os.Link(oldPath, link.newName); err != nil {
+			if err := createHardLink(oldPath, link.newName, overwrite); err != nil {
 				return fmt.Errorf("error creating hard link from %s to %s: %w", oldPath, link.newName, err)
 			}
 		case tar.TypeSymlink:
-			if err := os.Symlink(link.oldName, link.newName); err != nil {
+			if err := createSymlink(link.oldName, link.newName, overwrite); err != nil {
 				return fmt.Errorf("error creating symlink from %s to %s: %w", link.oldName, link.newName, err)
 			}
 		default:
@@ -102,4 +106,24 @@ func createLinks(links []*link, destDir string) error {
 		}
 	}
 	return nil
+}
+
+func createHardLink(oldName, newName string, overwrite bool) error {
+	if overwrite {
+		err := os.Remove(newName)
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("error removing existing file: %w", err)
+		}
+	}
+	return os.Link(oldName, newName)
+}
+
+func createSymlink(oldName, newName string, overwrite bool) error {
+	if overwrite {
+		err := os.Remove(newName)
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("error removing existing symlink/file: %w", err)
+		}
+	}
+	return os.Symlink(oldName, newName)
 }

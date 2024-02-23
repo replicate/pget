@@ -16,6 +16,7 @@ import (
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/consistent"
 	"github.com/replicate/pget/pkg/logging"
+	"github.com/replicate/pget/pkg/multireader"
 )
 
 type ConsistentHashingMode struct {
@@ -104,15 +105,15 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		return m.FallbackStrategy.Fetch(ctx, urlString)
 	}
 
-	br := newBufferedReader(m.minChunkSize())
+	br := multireader.NewBufferedReader(m.minChunkSize())
 	firstReqResultCh := make(chan firstReqResult)
 	m.queue.submit(func() {
 		m.sem.Go(func() error {
 			defer close(firstReqResultCh)
-			defer br.done()
+			defer br.Done()
 			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, urlString)
 			if err != nil {
-				br.err = err
+				br.Err = err
 				firstReqResultCh <- firstReqResult{err: err}
 				return err
 			}
@@ -125,7 +126,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 			}
 			firstReqResultCh <- firstReqResult{fileSize: fileSize}
 
-			return br.downloadBody(firstChunkResp)
+			return readBody(br, firstChunkResp)
 		})
 	})
 	firstReqResult, ok := <-firstReqResultCh
@@ -173,7 +174,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		chunksPerSlice = append([]int64{0}, EqualSplit(int64(concurrency), totalSlices-1)...)
 	}
 
-	readersCh := make(chan io.Reader, m.maxConcurrency()+1)
+	readersCh := make(chan *multireader.BufferedReader, m.maxConcurrency()+1)
 	readersCh <- br
 
 	logger.Debug().Str("url", urlString).
@@ -213,10 +214,10 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 				chunkStart := startFrom
 				chunkEnd := startFrom + chunkSize - 1
 
-				br := newBufferedReader(chunkSize)
+				br := multireader.NewBufferedReader(chunkSize)
 				readersCh <- br
 				m.sem.Go(func() error {
-					defer br.done()
+					defer br.Done()
 					logger.Debug().Int64("start", chunkStart).Int64("end", chunkEnd).Msg("starting request")
 					resp, err := m.DoRequest(ctx, chunkStart, chunkEnd, urlString)
 					if err != nil {
@@ -233,12 +234,12 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 							resp, err = m.FallbackStrategy.DoRequest(ctx, chunkStart, chunkEnd, urlString)
 						}
 						if err != nil {
-							br.err = err
+							br.Err = err
 							return err
 						}
 					}
 					defer resp.Body.Close()
-					return br.downloadBody(resp)
+					return readBody(br, resp)
 				})
 
 				startFrom = startFrom + chunkSize
@@ -246,7 +247,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		}
 	})
 
-	return newChanMultiReader(readersCh), fileSize, nil
+	return multireader.NewMultiReader(readersCh), fileSize, nil
 }
 
 func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64, urlString string) (*http.Response, error) {

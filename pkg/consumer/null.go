@@ -13,3 +13,7 @@ func (f *NullWriter) Consume(reader io.Reader, destPath string) error {
 	_, _ = io.Copy(io.Discard, reader)
 	return nil
 }
+
+func (f *NullWriter) EnableOverwrite() {
+	// no-op
+}

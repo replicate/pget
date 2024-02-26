@@ -42,7 +42,7 @@ func (b *BufferedReader) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
-Peek returns the next night bytes without advancing the reader.
+// Peek returns the next night bytes without advancing the reader.
 func (b *BufferedReader) Peek(n int64) ([]byte, error) {
 	var err error
 	b.ReadyWait()

@@ -229,10 +229,6 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		return err
 	}
 
-	if viper.GetBool(config.OptForce) {
-		consumer.EnableOverwrite()
-	}
-
 	getter := pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
 		Consumer:   consumer,

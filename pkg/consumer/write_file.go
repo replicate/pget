@@ -7,14 +7,14 @@ import (
 )
 
 type FileWriter struct {
-	overwrite bool
+	Overwrite bool
 }
 
 var _ Consumer = &FileWriter{}
 
 func (f *FileWriter) Consume(reader io.Reader, destPath string) error {
 	openFlags := os.O_WRONLY | os.O_CREATE
-	if f.overwrite {
+	if f.Overwrite {
 		openFlags |= os.O_TRUNC
 	}
 	out, err := os.OpenFile(destPath, openFlags, 0644)
@@ -28,8 +28,4 @@ func (f *FileWriter) Consume(reader io.Reader, destPath string) error {
 		return fmt.Errorf("error writing file: %w", err)
 	}
 	return nil
-}
-
-func (f *FileWriter) EnableOverwrite() {
-	f.overwrite = true
 }

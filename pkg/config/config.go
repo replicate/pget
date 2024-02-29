@@ -155,11 +155,12 @@ func ResolveOverridesToMap(resolveOverrides []string) (map[string]string, error)
 // calls viper.GetString(OptExtract) internally.
 func GetConsumer() (consumer.Consumer, error) {
 	consumerName := viper.GetString(OptOutputConsumer)
+	enableOverwrite := viper.GetBool(OptForce)
 	switch consumerName {
 	case ConsumerFile:
-		return &consumer.FileWriter{}, nil
+		return &consumer.FileWriter{Overwrite: enableOverwrite}, nil
 	case ConsumerTarExtractor:
-		return &consumer.TarExtractor{}, nil
+		return &consumer.TarExtractor{Overwrite: enableOverwrite}, nil
 	case ConsumerNull:
 		return &consumer.NullWriter{}, nil
 	default:

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/replicate/pget/pkg/logging"
@@ -43,9 +44,13 @@ func TarFile(reader io.Reader, destDir string, overwrite bool) error {
 			return err
 		}
 
+		if err := guardAgainstZipSlip(header, destDir); err != nil {
+			return err
+		}
+
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)); err != nil {
+			if err := os.MkdirAll(target, cleanFileMode(os.FileMode(header.Mode))); err != nil {
 				return err
 			}
 		case tar.TypeReg:
@@ -53,7 +58,7 @@ func TarFile(reader io.Reader, destDir string, overwrite bool) error {
 			if overwrite {
 				openFlags |= os.O_TRUNC
 			}
-			targetFile, err := os.OpenFile(target, openFlags, os.FileMode(header.Mode))
+			targetFile, err := os.OpenFile(target, openFlags, cleanFileMode(os.FileMode(header.Mode)))
 			if err != nil {
 				return err
 			}
@@ -126,4 +131,27 @@ func createSymlink(oldName, newName string, overwrite bool) error {
 		}
 	}
 	return os.Symlink(oldName, newName)
+}
+
+func guardAgainstZipSlip(header *tar.Header, destDir string) error {
+	if header.Name == "" {
+		return fmt.Errorf("tar file contains entry with empty name")
+	}
+	target, err := filepath.Abs(filepath.Join(destDir, header.Name))
+	if err != nil {
+		return fmt.Errorf("error getting absolute path of destDir %s: %w", header.Name, err)
+	}
+	filePath, err := filepath.Abs(target)
+	if err != nil {
+		return fmt.Errorf("error getting absolute path of %s: %w", target, err)
+	}
+	if !strings.HasPrefix(filePath, destDir) {
+		return fmt.Errorf("archive (tar) file contains file (%s) outside of target directory: %s", filePath, target)
+	}
+	return nil
+}
+
+func cleanFileMode(mode os.FileMode) os.FileMode {
+	mask := os.ModeSticky | os.ModeSetuid | os.ModeSetgid
+	return mode &^ mask
 }

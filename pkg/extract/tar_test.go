@@ -163,3 +163,110 @@ func assertSymlinkTarget(t *testing.T, oldName, newName string) {
 	assert.Equal(t, fileStat.Sys().(*syscall.Stat_t).Ino,
 		realTarget.Sys().(*syscall.Stat_t).Ino)
 }
+
+func TestGuardAgainstZipSlip(t *testing.T) {
+	tests := []struct {
+		description   string
+		header        *tar.Header
+		destDir       string
+		expectedError string
+	}{
+		{
+			description: "valid file path within directory",
+			header: &tar.Header{
+				Name: "valid_file",
+			},
+			destDir:       "/tmp/valid_dir",
+			expectedError: "",
+		},
+		{
+			description: "file path outside directory",
+			header: &tar.Header{
+				Name: "../invalid_file",
+			},
+			destDir:       "/tmp/valid_dir",
+			expectedError: "archive (tar) file contains file (/tmp/invalid_file) outside of target directory: ",
+		},
+		{
+			description: "directory traversal with invalid file",
+			header: &tar.Header{
+				Name: "./../../tmp/invalid_dir/invalid_file",
+			},
+			destDir:       "/tmp/valid_dir",
+			expectedError: "archive (tar) file contains file (/tmp/invalid_dir/invalid_file) outside of target directory: ",
+		},
+		{
+			description: "Empty header name",
+			header: &tar.Header{
+				Name: "",
+			},
+			destDir:       "/tmp",
+			expectedError: "tar file contains entry with empty name",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			err := guardAgainstZipSlip(test.header, test.destDir)
+			if test.expectedError != "" {
+				if assert.Error(t, err) {
+					assert.Contains(t, err.Error(), test.expectedError)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+func TestCleanFileMode(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    os.FileMode
+		expected os.FileMode
+	}{
+		{
+			name:     "TestWithoutStickyBit",
+			input:    0755,
+			expected: 0755,
+		},
+		{
+			name:     "TestWithStickyBit",
+			input:    os.ModeSticky | 0755,
+			expected: 0755,
+		},
+		{
+			name:     "TestWithoutSetuidBit",
+			input:    0600,
+			expected: 0600,
+		},
+		{
+			name:     "TestWithSetuidBit",
+			input:    os.ModeSetuid | 0600,
+			expected: 0600,
+		},
+		{
+			name:     "TestWithoutSetgidBit",
+			input:    0777,
+			expected: 0777,
+		},
+		{
+			name:     "TestWithSetgidBit",
+			input:    os.ModeSetgid | 0777,
+			expected: 0777,
+		},
+		{
+			name:     "TestWithAllBits",
+			input:    os.ModeSticky | os.ModeSetuid | os.ModeSetgid | 0777,
+			expected: 0777,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := cleanFileMode(tc.input)
+			if result != tc.expected {
+				t.Errorf("cleanFileMode() = %v, want %v", result, tc.expected)
+			}
+		})
+	}
+}

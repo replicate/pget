@@ -37,7 +37,7 @@ type chTestCase struct {
 	name           string
 	concurrency    int
 	sliceSize      int64
-	minChunkSize   int64
+	chunkSize      int64
 	numCacheHosts  int
 	expectedOutput string
 }
@@ -108,7 +108,7 @@ var chTestCases = []chTestCase{
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  1,
-		minChunkSize:   1,
+		chunkSize:      1,
 		expectedOutput: "0000000000000000",
 	},
 	{
@@ -116,7 +116,7 @@ var chTestCases = []chTestCase{
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  2,
-		minChunkSize:   1,
+		chunkSize:      1,
 		expectedOutput: "1111110000000000",
 	},
 	{
@@ -124,7 +124,7 @@ var chTestCases = []chTestCase{
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  3,
-		minChunkSize:   1,
+		chunkSize:      1,
 		expectedOutput: "2221110000002222",
 	},
 	{
@@ -132,7 +132,7 @@ var chTestCases = []chTestCase{
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  4,
-		minChunkSize:   1,
+		chunkSize:      1,
 		expectedOutput: "3331113333332222",
 	},
 	{
@@ -140,7 +140,7 @@ var chTestCases = []chTestCase{
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  5,
-		minChunkSize:   1,
+		chunkSize:      1,
 		expectedOutput: "3334443333332224",
 	},
 	{
@@ -148,7 +148,7 @@ var chTestCases = []chTestCase{
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  6,
-		minChunkSize:   1,
+		chunkSize:      1,
 		expectedOutput: "3334443333335554",
 	},
 	{
@@ -156,7 +156,7 @@ var chTestCases = []chTestCase{
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  7,
-		minChunkSize:   1,
+		chunkSize:      1,
 		expectedOutput: "3334446666665556",
 	},
 	{
@@ -164,7 +164,7 @@ var chTestCases = []chTestCase{
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  8,
-		minChunkSize:   1,
+		chunkSize:      1,
 		expectedOutput: "3334446666667776",
 	},
 	{
@@ -172,15 +172,15 @@ var chTestCases = []chTestCase{
 		concurrency:    8,
 		sliceSize:      4,
 		numCacheHosts:  8,
-		minChunkSize:   1,
+		chunkSize:      1,
 		expectedOutput: "3333444466666666",
 	},
 	{
-		name:           "when minChunkSize == sliceSize",
+		name:           "when chunkSize == sliceSize",
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  8,
-		minChunkSize:   3,
+		chunkSize:      3,
 		expectedOutput: "3334446666667776",
 	},
 	{
@@ -188,7 +188,7 @@ var chTestCases = []chTestCase{
 		concurrency:    24,
 		sliceSize:      3,
 		numCacheHosts:  8,
-		minChunkSize:   3,
+		chunkSize:      3,
 		expectedOutput: "3334446666667776",
 	},
 	{
@@ -196,39 +196,39 @@ var chTestCases = []chTestCase{
 		concurrency:    3,
 		sliceSize:      3,
 		numCacheHosts:  8,
-		minChunkSize:   3,
+		chunkSize:      3,
 		expectedOutput: "3334446666667776",
 	},
 	{
-		name:           "test when minChunkSize == file size",
+		name:           "test when chunkSize == file size",
 		concurrency:    4,
 		sliceSize:      16,
 		numCacheHosts:  8,
-		minChunkSize:   16,
+		chunkSize:      16,
 		expectedOutput: "3333333333333333",
 	},
 	{
-		name:           "test when minChunkSize slightly below file size",
+		name:           "test when chunkSize slightly below file size",
 		concurrency:    4,
 		sliceSize:      16,
 		numCacheHosts:  8,
-		minChunkSize:   15,
+		chunkSize:      15,
 		expectedOutput: "3333333333333333",
 	},
 	{
-		name:           "test when minChunkSize > file size",
+		name:           "test when chunkSize > file size",
 		concurrency:    4,
 		sliceSize:      24,
 		numCacheHosts:  8,
-		minChunkSize:   24,
+		chunkSize:      24,
 		expectedOutput: "3333333333333333",
 	},
 	{
-		name:           "if minChunkSize > sliceSize, sliceSize overrides it",
+		name:           "if chunkSize > sliceSize, sliceSize overrides it",
 		concurrency:    8,
 		sliceSize:      3,
 		numCacheHosts:  8,
-		minChunkSize:   24,
+		chunkSize:      24,
 		expectedOutput: "3334446666667776",
 	},
 }
@@ -253,7 +253,7 @@ func TestConsistentHashing(t *testing.T) {
 			opts := download.Options{
 				Client:               client.Options{Transport: mockTransport},
 				MaxConcurrency:       tc.concurrency,
-				MinChunkSize:         tc.minChunkSize,
+				ChunkSize:            tc.chunkSize,
 				CacheHosts:           hostnames[0:tc.numCacheHosts],
 				CacheableURIPrefixes: makeCacheableURIPrefixes("http://test.replicate.com"),
 				SliceSize:            tc.sliceSize,
@@ -303,7 +303,7 @@ func TestConsistentHashingPathBased(t *testing.T) {
 			opts := download.Options{
 				Client:               client.Options{},
 				MaxConcurrency:       tc.concurrency,
-				MinChunkSize:         tc.minChunkSize,
+				MinChunkSize:         tc.chunkSize,
 				CacheHosts:           hostnames[0:tc.numCacheHosts],
 				CacheableURIPrefixes: makeCacheableURIPrefixes(fmt.Sprintf("http://%s", hostname)),
 				CacheUsePathProxy:    true,

@@ -17,6 +17,7 @@ import (
 )
 
 const defaultMinChunkSize = 16 * humanize.MiByte
+const defaultChunkSize = 125 * humanize.MiByte
 
 var contentRangeRegexp = regexp.MustCompile(`^bytes .*/([0-9]+)$`)
 

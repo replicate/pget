@@ -159,13 +159,6 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		totalSlices++
 	}
 
-	// we subtract one because we've already got firstChunkResp in flight
-	concurrency := m.maxConcurrency() - 1
-	if concurrency <= int(totalSlices) {
-		// special case: we should just download each slice in full and rely on the semaphore to manage concurrency
-		concurrency = int(totalSlices)
-	}
-
 	readersCh := make(chan io.Reader, m.maxConcurrency()+1)
 	readersCh <- br
 

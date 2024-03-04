@@ -118,7 +118,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 	// integer divide rounding up
 	numChunks := int((remainingBytes-1)/m.chunkSize() + 1)
 
-	readersCh := make(chan io.Reader, numChunks+1)
+	readersCh := make(chan io.ReadCloser, numChunks+1)
 	readersCh <- br
 
 	startOffset := m.chunkSize()

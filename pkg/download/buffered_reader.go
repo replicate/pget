@@ -19,7 +19,7 @@ type bufferedReader struct {
 	pool  *readerPool
 }
 
-var _ io.Reader = &bufferedReader{}
+var _ io.ReadCloser = &bufferedReader{}
 
 func newBufferedReader(capacity int64, readerPool *readerPool) *bufferedReader {
 	return &bufferedReader{
@@ -76,6 +76,11 @@ func (b *bufferedReader) waitOnReady() {
 	b.c.L.Unlock()
 }
 
+func (b *bufferedReader) Close() error {
+	b.pool.Put(b)
+	return nil
+}
+
 type readerPool struct {
 	pool sync.Pool
 }
@@ -87,8 +92,12 @@ func (p *readerPool) Get() *bufferedReader {
 func (p *readerPool) Put(br *bufferedReader) {
 	br.c.L.Lock()
 	defer br.c.L.Unlock()
+	if br.pool == nil {
+		return
+	}
 	br.ready = false
 	br.err = nil
+	br.pool = nil
 	br.buf.Reset()
 	p.pool.Put(br)
 }

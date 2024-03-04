@@ -167,7 +167,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		totalSlices++
 	}
 
-	readersCh := make(chan io.Reader, m.maxConcurrency()+1)
+	readersCh := make(chan io.ReadCloser, m.maxConcurrency()+1)
 	readersCh <- br
 
 	logger.Debug().Str("url", urlString).

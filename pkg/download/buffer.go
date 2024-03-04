@@ -5,21 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"strconv"
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dustin/go-humanize"
-
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/logging"
 )
-
-const defaultMinChunkSize = 16 * humanize.MiByte
-const defaultChunkSize = 125 * humanize.MiByte
-
-var contentRangeRegexp = regexp.MustCompile(`^bytes .*/([0-9]+)$`)
 
 type BufferMode struct {
 	Client *client.HTTPClient

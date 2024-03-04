@@ -42,6 +42,7 @@ efficient file extractor, providing a streamlined solution for fetching and unpa
 
 var concurrency int
 var pidFile *cli.PIDFile
+var chunkSize string
 
 func GetCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -124,7 +125,8 @@ func persistentFlags(cmd *cobra.Command) error {
 	cmd.PersistentFlags().IntVarP(&concurrency, config.OptConcurrency, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
 	cmd.PersistentFlags().IntVar(&concurrency, config.OptMaxChunks, runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
 	cmd.PersistentFlags().Duration(config.OptConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
-	cmd.PersistentFlags().StringP(config.OptMinimumChunkSize, "m", "16M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
+	cmd.PersistentFlags().StringVarP(&chunkSize, config.OptChunkSize, "m", "125M", "Chunk size (in bytes) to use when downloading a file (e.g. 10M)")
+	cmd.PersistentFlags().StringVar(&chunkSize, config.OptMinimumChunkSize, "16M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
 	cmd.PersistentFlags().BoolP(config.OptForce, "f", false, "OptForce download, overwriting existing file")
 	cmd.PersistentFlags().StringSlice(config.OptResolve, []string{}, "OptResolve hostnames to specific IPs")
 	cmd.PersistentFlags().IntP(config.OptRetries, "r", 5, "Number of retries when attempting to retrieve a file")
@@ -154,7 +156,8 @@ func hideAndDeprecateFlags(cmd *cobra.Command) error {
 
 	// DeprecatedFlag flags
 	err := config.DeprecateFlags(cmd,
-		config.DeprecatedFlag{Flag: config.OptMaxChunks, Msg: "use --concurrency instead"},
+		config.DeprecatedFlag{Flag: config.OptMaxChunks, Msg: fmt.Sprintf("use --%s instead", config.OptConcurrency)},
+		config.DeprecatedFlag{Flag: config.OptMinimumChunkSize, Msg: fmt.Sprintf("use --%s instead", config.OptChunkSize)},
 	)
 	if err != nil {
 		return err

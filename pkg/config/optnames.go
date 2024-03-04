@@ -12,6 +12,7 @@ const (
 	// Normal options with CLI arguments
 	OptConcurrency        = "concurrency"
 	OptConnTimeout        = "connect-timeout"
+	OptChunkSize          = "chunk-size"
 	OptExtract            = "extract"
 	OptForce              = "force"
 	OptForceHTTP2         = "force-http2"

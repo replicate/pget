@@ -36,10 +36,10 @@ func GetBufferMode(opts Options) *BufferMode {
 	}
 }
 
-func (m *BufferMode) minChunkSize() int64 {
-	minChunkSize := m.MinChunkSize
+func (m *BufferMode) chunkSize() int64 {
+	minChunkSize := m.ChunkSize
 	if minChunkSize == 0 {
-		return defaultMinChunkSize
+		return defaultChunkSize
 	}
 	return minChunkSize
 }
@@ -61,14 +61,14 @@ type firstReqResult struct {
 func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
 	logger := logging.GetLogger()
 
-	br := newBufferedReader(m.minChunkSize())
+	br := newBufferedReader(m.chunkSize())
 
 	firstReqResultCh := make(chan firstReqResult)
 	m.queue.submit(func() {
 		m.sem.Go(func() error {
 			defer close(firstReqResultCh)
 			defer br.done()
-			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, url)
+			firstChunkResp, err := m.DoRequest(ctx, 0, m.chunkSize()-1, url)
 			if err != nil {
 				br.err = err
 				firstReqResultCh <- firstReqResult{err: err}
@@ -105,25 +105,22 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 	fileSize := firstReqResult.fileSize
 	trueURL := firstReqResult.trueURL
 
-	if fileSize <= m.minChunkSize() {
+	if fileSize <= m.chunkSize() {
 		// we only need a single chunk: just download it and finish
 		return br, fileSize, nil
 	}
 
-	remainingBytes := fileSize - m.minChunkSize()
-	numChunks := int(remainingBytes / m.minChunkSize())
+	remainingBytes := fileSize - m.chunkSize()
+	numChunks := int(remainingBytes / m.chunkSize())
 	// Number of chunks can never be 0
 	if numChunks <= 0 {
 		numChunks = 1
 	}
-	if numChunks > m.maxConcurrency() {
-		numChunks = m.maxConcurrency()
-	}
 
-	readersCh := make(chan io.Reader, m.maxConcurrency()+1)
+	readersCh := make(chan io.Reader, numChunks+1)
 	readersCh <- br
 
-	startOffset := m.minChunkSize()
+	startOffset := m.chunkSize()
 
 	chunkSize := remainingBytes / int64(numChunks)
 	if chunkSize < 0 {
@@ -146,7 +143,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 				end = fileSize - 1
 			}
 
-			br := newBufferedReader(end - start + 1)
+			br := newBufferedReader(m.chunkSize())
 			readersCh <- br
 
 			m.sem.Go(func() error {

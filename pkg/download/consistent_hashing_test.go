@@ -303,7 +303,7 @@ func TestConsistentHashingPathBased(t *testing.T) {
 			opts := download.Options{
 				Client:               client.Options{},
 				MaxConcurrency:       tc.concurrency,
-				MinChunkSize:         tc.chunkSize,
+				ChunkSize:            tc.chunkSize,
 				CacheHosts:           hostnames[0:tc.numCacheHosts],
 				CacheableURIPrefixes: makeCacheableURIPrefixes(fmt.Sprintf("http://%s", hostname)),
 				CacheUsePathProxy:    true,
@@ -336,7 +336,7 @@ func TestConsistentHashRetries(t *testing.T) {
 	opts := download.Options{
 		Client:               client.Options{Transport: mockTransport},
 		MaxConcurrency:       8,
-		MinChunkSize:         1,
+		ChunkSize:            1,
 		CacheHosts:           hostnames,
 		CacheableURIPrefixes: makeCacheableURIPrefixes("http://fake.replicate.delivery"),
 		SliceSize:            1,
@@ -371,7 +371,7 @@ func TestConsistentHashRetriesMissingHostname(t *testing.T) {
 			Transport: mockTransport,
 		},
 		MaxConcurrency:       8,
-		MinChunkSize:         1,
+		ChunkSize:            1,
 		CacheHosts:           hostnames,
 		CacheableURIPrefixes: makeCacheableURIPrefixes("http://fake.replicate.delivery"),
 		SliceSize:            1,
@@ -405,7 +405,7 @@ func TestConsistentHashRetriesTwoHosts(t *testing.T) {
 	opts := download.Options{
 		Client:               client.Options{Transport: mockTransport},
 		MaxConcurrency:       8,
-		MinChunkSize:         1,
+		ChunkSize:            1,
 		CacheHosts:           hostnames,
 		CacheableURIPrefixes: makeCacheableURIPrefixes("http://testing.replicate.delivery"),
 		SliceSize:            1,
@@ -432,7 +432,7 @@ func TestConsistentHashingHasFallback(t *testing.T) {
 	opts := download.Options{
 		Client:               client.Options{Transport: mockTransport},
 		MaxConcurrency:       8,
-		MinChunkSize:         2,
+		ChunkSize:            2,
 		CacheHosts:           []string{""}, // simulate a single unavailable cache host
 		CacheableURIPrefixes: makeCacheableURIPrefixes("http://fake.replicate.delivery"),
 		SliceSize:            3,
@@ -525,7 +525,7 @@ func TestConsistentHashingFileFallback(t *testing.T) {
 			opts := download.Options{
 				Client:               client.Options{},
 				MaxConcurrency:       8,
-				MinChunkSize:         2,
+				ChunkSize:            2,
 				CacheHosts:           []string{url.Host},
 				CacheableURIPrefixes: makeCacheableURIPrefixes("http://fake.replicate.delivery"),
 				SliceSize:            3,
@@ -587,7 +587,7 @@ func TestConsistentHashingChunkFallback(t *testing.T) {
 			opts := download.Options{
 				Client:               client.Options{},
 				MaxConcurrency:       8,
-				MinChunkSize:         3,
+				ChunkSize:            3,
 				CacheHosts:           []string{url.Host},
 				CacheableURIPrefixes: makeCacheableURIPrefixes("http://fake.replicate.delivery"),
 				SliceSize:            3,

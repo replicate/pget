@@ -126,7 +126,7 @@ func persistentFlags(cmd *cobra.Command) error {
 	cmd.PersistentFlags().IntVar(&concurrency, config.OptMaxChunks, runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
 	cmd.PersistentFlags().Duration(config.OptConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
 	cmd.PersistentFlags().StringVarP(&chunkSize, config.OptChunkSize, "m", "125M", "Chunk size (in bytes) to use when downloading a file (e.g. 10M)")
-	cmd.PersistentFlags().StringVar(&chunkSize, config.OptMinimumChunkSize, "16M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
+	cmd.PersistentFlags().StringVar(&chunkSize, config.OptMinimumChunkSize, "125M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
 	cmd.PersistentFlags().BoolP(config.OptForce, "f", false, "OptForce download, overwriting existing file")
 	cmd.PersistentFlags().StringSlice(config.OptResolve, []string{}, "OptResolve hostnames to specific IPs")
 	cmd.PersistentFlags().IntP(config.OptRetries, "r", 5, "Number of retries when attempting to retrieve a file")
@@ -202,7 +202,7 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 // rootExecute is the main function of the program and encapsulates the general logic
 // returns any/all errors to the caller.
 func rootExecute(ctx context.Context, urlString, dest string) error {
-	minChunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
+	chunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
 	if err != nil {
 		return fmt.Errorf("error parsing minimum chunk size: %w", err)
 	}
@@ -223,7 +223,7 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 
 	downloadOpts := download.Options{
 		MaxConcurrency: viper.GetInt(config.OptConcurrency),
-		MinChunkSize:   int64(minChunkSize),
+		ChunkSize:      int64(chunkSize),
 		Client:         clientOpts,
 	}
 

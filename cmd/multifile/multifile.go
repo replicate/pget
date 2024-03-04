@@ -97,7 +97,7 @@ func maxConcurrentFiles() int {
 }
 
 func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
-	minChunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
+	chunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 	}
 	downloadOpts := download.Options{
 		MaxConcurrency: viper.GetInt(config.OptConcurrency),
-		MinChunkSize:   int64(minChunkSize),
+		ChunkSize:      int64(chunkSize),
 		Client:         clientOpts,
 	}
 	pgetOpts := pget.Options{

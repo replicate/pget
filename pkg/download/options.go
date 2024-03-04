@@ -16,12 +16,6 @@ type Options struct {
 	// See https://nginx.org/en/docs/http/ngx_http_slice_module.html
 	SliceSize int64
 
-	// Minimum number of bytes per chunk. If set to zero, 16 MiB will be
-	// used.
-	//
-	// Deprecated: use ChunkSize instead
-	MinChunkSize int64
-
 	// Number of bytes per chunk. If set to zero, 125 MiB will be used.
 	ChunkSize int64
 

@@ -16,14 +16,16 @@ type bufferedReader struct {
 	c     sync.Cond
 	buf   *bytes.Buffer
 	err   error
+	pool  *readerPool
 }
 
 var _ io.Reader = &bufferedReader{}
 
-func newBufferedReader(capacity int64) *bufferedReader {
+func newBufferedReader(capacity int64, readerPool *readerPool) *bufferedReader {
 	return &bufferedReader{
-		c:   sync.Cond{L: new(sync.Mutex)},
-		buf: bytes.NewBuffer(make([]byte, 0, capacity)),
+		c:    sync.Cond{L: new(sync.Mutex)},
+		buf:  bytes.NewBuffer(make([]byte, 0, capacity)),
+		pool: readerPool,
 	}
 }
 
@@ -72,4 +74,31 @@ func (b *bufferedReader) waitOnReady() {
 		b.c.Wait()
 	}
 	b.c.L.Unlock()
+}
+
+type readerPool struct {
+	pool sync.Pool
+}
+
+func (p *readerPool) Get() *bufferedReader {
+	return p.pool.Get().(*bufferedReader)
+}
+
+func (p *readerPool) Put(br *bufferedReader) {
+	br.c.L.Lock()
+	defer br.c.L.Unlock()
+	br.ready = false
+	br.err = nil
+	br.buf.Reset()
+	p.pool.Put(br)
+}
+
+func newReaderPool(chunkSize int64) *readerPool {
+	rp := &readerPool{}
+	rp.pool = sync.Pool{
+		New: func() interface{} {
+			return newBufferedReader(chunkSize, rp)
+		},
+	}
+	return rp
 }

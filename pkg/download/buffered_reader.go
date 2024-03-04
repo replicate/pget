@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 )
 
 // A bufferedReader wraps an http.Response.Body so that it can be eagerly
 // downloaded to a buffer before the actual io.Reader consumer can read it.
 // It implements io.Reader.
 type bufferedReader struct {
-	// ready channel is closed when we're ready to read
-	ready chan struct{}
+	ready bool
+	c     sync.Cond
 	buf   *bytes.Buffer
 	err   error
 }
@@ -21,15 +22,15 @@ var _ io.Reader = &bufferedReader{}
 
 func newBufferedReader(capacity int64) *bufferedReader {
 	return &bufferedReader{
-		ready: make(chan struct{}),
-		buf:   bytes.NewBuffer(make([]byte, 0, capacity)),
+		c:   sync.Cond{L: new(sync.Mutex)},
+		buf: bytes.NewBuffer(make([]byte, 0, capacity)),
 	}
 }
 
 // Read implements io.Reader. It will block until the full body is available for
 // reading.
 func (b *bufferedReader) Read(buf []byte) (int, error) {
-	<-b.ready
+	b.waitOnReady()
 	if b.err != nil {
 		return 0, b.err
 	}
@@ -37,10 +38,16 @@ func (b *bufferedReader) Read(buf []byte) (int, error) {
 }
 
 func (b *bufferedReader) done() {
-	close(b.ready)
+	b.c.L.Lock()
+	defer b.c.L.Unlock()
+	b.ready = true
+	b.c.Broadcast()
 }
 
 func (b *bufferedReader) downloadBody(resp *http.Response) error {
+	if b.ready {
+		return fmt.Errorf("bufferedReader has already been marked as ready")
+	}
 	expectedBytes := resp.ContentLength
 
 	if expectedBytes > int64(b.buf.Cap()) {
@@ -57,4 +64,12 @@ func (b *bufferedReader) downloadBody(resp *http.Response) error {
 		return b.err
 	}
 	return nil
+}
+
+func (b *bufferedReader) waitOnReady() {
+	b.c.L.Lock()
+	for !b.ready {
+		b.c.Wait()
+	}
+	b.c.L.Unlock()
 }

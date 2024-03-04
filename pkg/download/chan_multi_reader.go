@@ -1,16 +1,26 @@
 package download
 
-import "io"
+import (
+	"io"
+	"sync"
+)
 
 type chanMultiReader struct {
-	ch  <-chan io.Reader
-	cur io.Reader
+	ch         <-chan *bufferedReader
+	cur        *bufferedReader
+	bufferPool *sync.Pool
 }
 
 var _ io.Reader = &chanMultiReader{}
 
-func newChanMultiReader(ch <-chan io.Reader) *chanMultiReader {
-	return &chanMultiReader{ch: ch}
+func newChanMultiReader(ch <-chan *bufferedReader, chunkSize int64) *chanMultiReader {
+	pool := &sync.Pool{
+		New: func() any {
+			return newBufferedReader(chunkSize)
+		},
+	}
+
+	return &chanMultiReader{ch: ch, bufferPool: pool}
 }
 
 func (c *chanMultiReader) Read(p []byte) (n int, err error) {
@@ -25,6 +35,7 @@ func (c *chanMultiReader) Read(p []byte) (n int, err error) {
 		}
 		n, err = c.cur.Read(p)
 		if err == io.EOF {
+			c.putBufferedReader(c.cur)
 			c.cur = nil
 		}
 		if n > 0 || err != io.EOF {
@@ -37,6 +48,19 @@ func (c *chanMultiReader) Read(p []byte) (n int, err error) {
 			return
 		}
 		// n == 0, err == EOF; this reader is done and we need to start the next
+		c.putBufferedReader(c.cur)
 		c.cur = nil
 	}
+}
+
+func (c *chanMultiReader) getBufferedReader() *bufferedReader {
+	return c.bufferPool.Get().(*bufferedReader)
+}
+
+func (c *chanMultiReader) putBufferedReader(br *bufferedReader) {
+	if br == nil {
+		return
+	}
+	br.reset()
+	c.bufferPool.Put(br)
 }

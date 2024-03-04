@@ -173,8 +173,15 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		chunksPerSlice = append([]int64{0}, EqualSplit(int64(concurrency), totalSlices-1)...)
 	}
 
-	readersCh := make(chan io.Reader, m.maxConcurrency()+1)
+	readersCh := make(chan *bufferedReader, m.maxConcurrency()+1)
 	readersCh <- br
+
+	largestChunkSize := m.SliceSize / chunksPerSlice[0]
+	if largestChunkSize < m.minChunkSize() {
+		largestChunkSize = m.minChunkSize()
+	}
+
+	multiReader := newChanMultiReader(readersCh, largestChunkSize)
 
 	logger.Debug().Str("url", urlString).
 		Int64("size", fileSize).
@@ -213,7 +220,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 				chunkStart := startFrom
 				chunkEnd := startFrom + chunkSize - 1
 
-				br := newBufferedReader(chunkSize)
+				multiReader.getBufferedReader()
 				readersCh <- br
 				m.sem.Go(func() error {
 					defer br.done()
@@ -246,7 +253,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		}
 	})
 
-	return newChanMultiReader(readersCh), fileSize, nil
+	return multiReader, fileSize, nil
 }
 
 func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64, urlString string) (*http.Response, error) {

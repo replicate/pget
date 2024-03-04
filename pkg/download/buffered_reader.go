@@ -37,10 +37,20 @@ func (b *bufferedReader) Read(buf []byte) (int, error) {
 }
 
 func (b *bufferedReader) done() {
-	close(b.ready)
+	select {
+	case <-b.ready:
+	default:
+		close(b.ready)
+	}
 }
 
 func (b *bufferedReader) downloadBody(resp *http.Response) error {
+	select {
+	case <-b.ready:
+		return fmt.Errorf("downloadBody called twice")
+	default:
+		// no-op channel is still open
+	}
 	expectedBytes := resp.ContentLength
 	n, err := b.buf.ReadFrom(resp.Body)
 	if err != nil && err != io.EOF {
@@ -52,4 +62,10 @@ func (b *bufferedReader) downloadBody(resp *http.Response) error {
 		return b.err
 	}
 	return nil
+}
+
+func (b *bufferedReader) reset() {
+	b.buf.Reset()
+	b.ready = make(chan struct{})
+	b.err = nil
 }

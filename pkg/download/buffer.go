@@ -127,7 +127,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		numChunks = m.maxConcurrency()
 	}
 
-	readersCh := make(chan io.Reader, m.maxConcurrency()+1)
+	readersCh := make(chan *bufferedReader, m.maxConcurrency()+1)
 	readersCh <- br
 
 	startOffset := m.minChunkSize()
@@ -136,6 +136,8 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 	if chunkSize < 0 {
 		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
 	}
+
+	multiReader := newChanMultiReader(readersCh, chunkSize)
 
 	m.queue.submit(func() {
 		defer close(readersCh)
@@ -153,7 +155,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 				end = fileSize - 1
 			}
 
-			br := newBufferedReader(end - start + 1)
+			br := multiReader.getBufferedReader()
 			readersCh <- br
 
 			m.sem.Go(func() error {
@@ -169,7 +171,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		}
 	})
 
-	return newChanMultiReader(readersCh), fileSize, nil
+	return multiReader, fileSize, nil
 }
 
 func (m *BufferMode) DoRequest(ctx context.Context, start, end int64, trueURL string) (*http.Response, error) {

@@ -101,7 +101,7 @@ https://example.com/music.mp3 /local/path/to/music.mp3
 
 ### Global Command-Line Options
 - `--concurrency`
-  - Maximum number of chunks for downloading a given file
+  - Maximum number of chunks to download in parallel for a given file
   - Type: `Integer`
   - Default: `4 * runtime.NumCPU()`
 - `--connect-timeout`

@@ -97,7 +97,7 @@ func maxConcurrentFiles() int {
 }
 
 func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
-	chunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
+	chunkSize, err := humanize.ParseBytes(viper.GetString(config.OptChunkSize))
 	if err != nil {
 		return err
 	}

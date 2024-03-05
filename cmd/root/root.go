@@ -204,7 +204,15 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 func rootExecute(ctx context.Context, urlString, dest string) error {
 	chunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
 	if err != nil {
+		return fmt.Errorf("error parsing chunk size: %w", err)
+	}
+	minChunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
+	if err != nil {
 		return fmt.Errorf("error parsing minimum chunk size: %w", err)
+	}
+	if chunkSize < minChunkSize {
+		// minChunkSize is deprecated but we should still respect it
+		chunkSize = minChunkSize
 	}
 
 	resolveOverrides, err := config.ResolveOverridesToMap(viper.GetStringSlice(config.OptResolve))

@@ -174,10 +174,13 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 	// on all errors
 	cmd.SilenceUsage = true
 
-	urlString := args[0]
-	dest := args[1]
+	var url, dest string
+	url = args[0]
+	if len(args) > 1 {
+		dest = args[1]
+	}
 
-	log.Info().Str("url", urlString).
+	log.Info().Str("url", url).
 		Str("dest", dest).
 		Str("minimum_chunk_size", viper.GetString(config.OptMinimumChunkSize)).
 		Msg("Initiating")
@@ -189,7 +192,7 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	if err := rootExecute(cmd.Context(), urlString, dest); err != nil {
+	if err := rootExecute(cmd.Context(), url, dest); err != nil {
 		return err
 	}
 

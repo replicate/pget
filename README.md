@@ -117,7 +117,7 @@ https://example.com/music.mp3 /local/path/to/music.mp3
   - Type: `string`
   - Default: `info`
 - `-m`, `--chunk-size string`
-  - Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)
+  - Chunk size (in bytes) to use when downloading a file (e.g. 10M)
   - Type: `string`
   - Default: `125M`
 - `--resolve`

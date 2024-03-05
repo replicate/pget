@@ -2,6 +2,7 @@ package extract
 
 import (
 	"archive/tar"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,9 @@ import (
 
 	"github.com/replicate/pget/pkg/logging"
 )
+
+var ErrZipSlip = errors.New("archive (tar) file contains file outside of target directory")
+var ErrEmptyHeaderName = errors.New("tar file contains entry with empty name")
 
 type link struct {
 	linkType byte
@@ -135,18 +139,18 @@ func createSymlink(oldName, newName string, overwrite bool) error {
 
 func guardAgainstZipSlip(header *tar.Header, destDir string) error {
 	if header.Name == "" {
-		return fmt.Errorf("tar file contains entry with empty name")
+		return ErrEmptyHeaderName
 	}
 	target, err := filepath.Abs(filepath.Join(destDir, header.Name))
 	if err != nil {
 		return fmt.Errorf("error getting absolute path of destDir %s: %w", header.Name, err)
 	}
-	filePath, err := filepath.Abs(target)
+	destAbs, err := filepath.Abs(destDir)
 	if err != nil {
-		return fmt.Errorf("error getting absolute path of %s: %w", target, err)
+		return fmt.Errorf("error getting absolute path of %s: %w", destDir, err)
 	}
-	if !strings.HasPrefix(filePath, destDir) {
-		return fmt.Errorf("archive (tar) file contains file (%s) outside of target directory: %s", filePath, target)
+	if !strings.HasPrefix(target, destAbs) {
+		return fmt.Errorf("%w: `%s` outside of `%s`", ErrZipSlip, target, destAbs)
 	}
 	return nil
 }

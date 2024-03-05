@@ -169,7 +169,7 @@ func TestGuardAgainstZipSlip(t *testing.T) {
 		description   string
 		header        *tar.Header
 		destDir       string
-		expectedError string
+		expectedError error
 	}{
 		{
 			description: "valid file path within directory",
@@ -177,7 +177,7 @@ func TestGuardAgainstZipSlip(t *testing.T) {
 				Name: "valid_file",
 			},
 			destDir:       "/tmp/valid_dir",
-			expectedError: "",
+			expectedError: nil,
 		},
 		{
 			description: "file path outside directory",
@@ -185,7 +185,7 @@ func TestGuardAgainstZipSlip(t *testing.T) {
 				Name: "../invalid_file",
 			},
 			destDir:       "/tmp/valid_dir",
-			expectedError: "archive (tar) file contains file (/tmp/invalid_file) outside of target directory: ",
+			expectedError: ErrZipSlip,
 		},
 		{
 			description: "directory traversal with invalid file",
@@ -193,7 +193,7 @@ func TestGuardAgainstZipSlip(t *testing.T) {
 				Name: "./../../tmp/invalid_dir/invalid_file",
 			},
 			destDir:       "/tmp/valid_dir",
-			expectedError: "archive (tar) file contains file (/tmp/invalid_dir/invalid_file) outside of target directory: ",
+			expectedError: ErrZipSlip,
 		},
 		{
 			description: "Empty header name",
@@ -201,20 +201,30 @@ func TestGuardAgainstZipSlip(t *testing.T) {
 				Name: "",
 			},
 			destDir:       "/tmp",
-			expectedError: "tar file contains entry with empty name",
+			expectedError: ErrEmptyHeaderName,
+		},
+		{
+			description: "relative destDir path, valid file",
+			header: &tar.Header{
+				Name: "bar.txt",
+			},
+			destDir:       "foo",
+			expectedError: nil,
+		},
+		{
+			description: "relative path, invalid file",
+			header: &tar.Header{
+				Name: "../../bar.txt",
+			},
+			destDir:       "foo",
+			expectedError: ErrZipSlip,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			err := guardAgainstZipSlip(test.header, test.destDir)
-			if test.expectedError != "" {
-				if assert.Error(t, err) {
-					assert.Contains(t, err.Error(), test.expectedError)
-				}
-			} else {
-				assert.NoError(t, err)
-			}
+			assert.ErrorIs(t, err, test.expectedError)
 		})
 	}
 }

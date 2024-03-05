@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -113,7 +114,7 @@ func TestBufferedReader_done(t *testing.T) {
 }
 
 func getReaderPool(t *testing.T) (*readerPool, int64) {
-	capacity := 750 + rand.Int63n(2000-750+1)
+	capacity := 1000 + rand.Int63n(2225-1000+1)
 	rp := newReaderPool(capacity)
 	require.NotNil(t, rp)
 	return rp, capacity
@@ -126,27 +127,36 @@ func TestReaderPool_Get(t *testing.T) {
 	assert.Equal(t, capacity, int64(buf.buf.Cap()))
 	assert.Equal(t, int64(0), int64(buf.buf.Len()))
 	assert.Equal(t, false, buf.ready)
+
+	rp.Put(buf)
+	buf.pool = nil
+
+	newBuf := rp.Get()
+	require.NotNil(t, buf)
+	assert.Equal(t, &buf, &newBuf)
+
+	buf.ready = true
+	rp.pool.Put(buf)
+	newBuf = rp.Get()
+	require.NotNil(t, newBuf)
+	assert.NotEqual(t, &buf, &newBuf)
 }
 
 func TestReaderPool_Put(t *testing.T) {
-	rp, capacity := getReaderPool(t)
-	data := []byte("The quick brown fox jumps over the lazy dog.")
+	rp, _ := getReaderPool(t)
 	// Get a buffer from the pool and fill it with data
 	buf := rp.pool.Get().(*bufferedReader)
 	require.NotNil(t, buf)
-	_, _ = buf.buf.ReadFrom(bytes.NewReader(data))
-	assert.Equal(t, int64(len(data)), int64(buf.buf.Len()))
-	// Mark the buffer as ready
-	buf.ready = true
-	// Put the buffer back into the pool, verify it is reset
 	rp.Put(buf)
-	assert.Equal(t, capacity, int64(buf.buf.Cap()))
-	assert.Equal(t, int64(0), int64(buf.buf.Len()))
-	assert.Equal(t, false, buf.ready)
 	// Get a new buffer from the pool and verify it is the same as the one we just put back
 	newBuffer := rp.pool.Get().(*bufferedReader)
 	require.NotNil(t, newBuffer)
-	assert.Equal(t, newBuffer, buf)
+	assert.Equal(t, &newBuffer, &buf)
+	// check a nil put
+	rp.Put(nil)
+	reader := rp.pool.Get()
+	require.NotNil(t, reader)
+	assert.NotEqual(t, &newBuffer, &reader)
 }
 
 func TestNewReaderPool(t *testing.T) {
@@ -156,4 +166,45 @@ func TestNewReaderPool(t *testing.T) {
 	assert.Equal(t, capacity, int64(buf.buf.Cap()))
 	assert.Equal(t, int64(0), int64(buf.buf.Len()))
 	assert.Equal(t, false, buf.ready)
+}
+
+type mockPool struct {
+	mock.Mock
+	br *bufferedReader
+}
+
+func (m *mockPool) Get() *bufferedReader {
+	m.Called()
+	return m.br
+}
+
+func (m *mockPool) Put(br *bufferedReader) {
+	m.Called(br)
+}
+
+func TestBufferedReader_Close(t *testing.T) {
+	var rp Pool
+	mp := &mockPool{}
+	rp = mp
+	mp.br = newBufferedReader(1024, rp)
+	capacity := int64(1024)
+
+	mp.On("Get").Return(mp.br)
+	mp.On("Put", mp.br).Return()
+
+	buf := rp.Get()
+	require.NotNil(t, buf)
+	content := []byte(strings.Repeat("a", 100))
+	_, _ = buf.buf.ReadFrom(bytes.NewReader(content))
+	buf.done()
+	assert.True(t, buf.ready)
+	assert.Nil(t, buf.err)
+	assert.Equal(t, int64(100), int64(buf.buf.Len()))
+	assert.Equal(t, &rp, &buf.pool)
+	assert.Equal(t, capacity, int64(buf.buf.Cap()))
+	buf.Close()
+	assert.NotNil(t, buf.pool)
+	assert.Nil(t, buf.err)
+	assert.Zero(t, buf.buf.Len())
+	assert.Equal(t, capacity, int64(buf.buf.Cap()))
 }

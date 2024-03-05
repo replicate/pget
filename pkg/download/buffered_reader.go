@@ -16,12 +16,17 @@ type bufferedReader struct {
 	c     sync.Cond
 	buf   *bytes.Buffer
 	err   error
-	pool  *readerPool
+	pool  Pool
+}
+
+type Pool interface {
+	Get() *bufferedReader
+	Put(br *bufferedReader)
 }
 
 var _ io.ReadCloser = &bufferedReader{}
 
-func newBufferedReader(capacity int64, readerPool *readerPool) *bufferedReader {
+func newBufferedReader(capacity int64, readerPool Pool) *bufferedReader {
 	return &bufferedReader{
 		c:    sync.Cond{L: new(sync.Mutex)},
 		buf:  bytes.NewBuffer(make([]byte, 0, capacity)),
@@ -77,7 +82,17 @@ func (b *bufferedReader) waitOnReady() {
 }
 
 func (b *bufferedReader) Close() error {
-	b.pool.Put(b)
+	b.c.L.Lock()
+	defer b.c.L.Unlock()
+
+	b.ready = false
+	b.err = nil
+	b.buf.Reset()
+
+	if b.pool != nil {
+		b.pool.Put(b)
+	}
+
 	return nil
 }
 
@@ -86,19 +101,25 @@ type readerPool struct {
 }
 
 func (p *readerPool) Get() *bufferedReader {
-	return p.pool.Get().(*bufferedReader)
+	var reader *bufferedReader
+	for {
+		reader = p.pool.Get().(*bufferedReader)
+		if reader.ready || reader.buf.Len() != 0 {
+			// unclean buffer, get a different one
+			continue
+		}
+		break
+	}
+	// suspenders and a belt, we should not need this but it guarantees the reader
+	// is coming back to the pool instead of who-knows-where
+	reader.pool = p
+	return reader
 }
 
 func (p *readerPool) Put(br *bufferedReader) {
-	br.c.L.Lock()
-	defer br.c.L.Unlock()
-	if br.pool == nil {
+	if br == nil || br.pool == nil {
 		return
 	}
-	br.ready = false
-	br.err = nil
-	br.pool = nil
-	br.buf.Reset()
 	p.pool.Put(br)
 }
 

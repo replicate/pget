@@ -170,7 +170,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 	m.queue.submit(func() {
 		defer close(readersCh)
 		for slice := 0; slice < int(totalSlices); slice++ {
-			startFrom := m.SliceSize * int64(slice)
+			sliceStart := m.SliceSize * int64(slice)
 			sliceSize := m.SliceSize
 			sliceEnd := m.SliceSize*int64(slice+1) - 1
 			if slice == int(totalSlices)-1 {
@@ -181,16 +181,14 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 					// we've downloaded the whole slice already
 					continue
 				}
-				startFrom = m.chunkSize()
+				sliceStart = m.chunkSize()
 				sliceSize = sliceSize - m.chunkSize()
 			}
 			// integer divide rounding up
 			numChunks := int(((sliceSize - 1) / m.chunkSize()) + 1)
 			for chunk := 0; chunk < numChunks; chunk++ {
-				// startFrom changes each time round the loop
-				// we create chunkStart to be a stable variable for the goroutine to capture
-				chunkStart := startFrom
-				chunkEnd := startFrom + m.chunkSize() - 1
+				chunkStart := sliceStart + int64(chunk)*m.chunkSize()
+				chunkEnd := chunkStart + m.chunkSize() - 1
 				if chunkEnd > sliceEnd {
 					chunkEnd = sliceEnd
 				}
@@ -223,7 +221,6 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 					return br.downloadBody(resp)
 				})
 
-				startFrom = startFrom + m.chunkSize()
 			}
 		}
 	})

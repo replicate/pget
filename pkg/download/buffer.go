@@ -111,33 +111,25 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 	}
 
 	remainingBytes := fileSize - m.chunkSize()
-	numChunks := int(remainingBytes / m.chunkSize())
-	// Number of chunks can never be 0
-	if numChunks <= 0 {
-		numChunks = 1
-	}
+	// integer divide rounding up
+	numChunks := int((remainingBytes-1)/m.chunkSize() + 1)
 
 	readersCh := make(chan io.Reader, numChunks+1)
 	readersCh <- br
 
 	startOffset := m.chunkSize()
 
-	chunkSize := remainingBytes / int64(numChunks)
-	if chunkSize < 0 {
-		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
-	}
-
 	m.queue.submit(func() {
 		defer close(readersCh)
 		logger.Debug().Str("url", url).
 			Int64("size", fileSize).
 			Int("connections", numChunks).
-			Int64("chunkSize", chunkSize).
+			Int64("chunkSize", m.chunkSize()).
 			Msg("Downloading")
 
 		for i := 0; i < numChunks; i++ {
-			start := startOffset + chunkSize*int64(i)
-			end := start + chunkSize - 1
+			start := startOffset + m.chunkSize()*int64(i)
+			end := start + m.chunkSize() - 1
 
 			if i == numChunks-1 {
 				end = fileSize - 1

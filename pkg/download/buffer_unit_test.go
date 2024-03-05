@@ -45,7 +45,7 @@ func newTestServer(t *testing.T, content []byte) *httptest.Server {
 // TODO: Implement the test
 // func TestGetFileSizeFromContentRange(t *testing.T) {}
 func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
-	contentSize := int64(humanize.KByte)
+	contentSize := int64(humanize.KiByte)
 	content := generateTestContent(contentSize)
 	server := newTestServer(t, content)
 	defer server.Close()
@@ -98,9 +98,9 @@ func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
 			maxConcurrency: 2,
 		},
 		{
-			// humanize.KByte = 1024, remainder will result in 1024/10 = 102 chunks, max-chunks is set to 25
+			// humanize.KByte = 1024, remainder will result in 1024/10 = 102 chunks, concurrency is set to 25
 			// resulting in a chunkSize of 41
-			name:           "many chunks, low maxChunks",
+			name:           "many chunks, low maxConcurrency",
 			chunkSize:      10,
 			maxConcurrency: 25,
 		},

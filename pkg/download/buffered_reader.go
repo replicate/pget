@@ -42,6 +42,11 @@ func (b *bufferedReader) done() {
 
 func (b *bufferedReader) downloadBody(resp *http.Response) error {
 	expectedBytes := resp.ContentLength
+
+	if expectedBytes > int64(b.buf.Cap()) {
+		b.err = fmt.Errorf("Tried to download 0x%x bytes to a 0x%x-sized buffer", expectedBytes, b.buf.Cap())
+		return b.err
+	}
 	n, err := b.buf.ReadFrom(resp.Body)
 	if err != nil && err != io.EOF {
 		b.err = fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)

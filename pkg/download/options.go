@@ -19,10 +19,6 @@ type Options struct {
 	// Number of bytes per chunk. If set to zero, 125 MiB will be used.
 	ChunkSize int64
 
-	// Maximum size of buffer (in bytes) to allocate for storing partial
-	// download in memory.
-	MaxBuffer int64
-
 	Client client.Options
 
 	// CacheableURIPrefixes is an allowlist of domains+path-prefixes which may

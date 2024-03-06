@@ -60,6 +60,7 @@ func GetConsistentHashingMode(opts Options) (*ConsistentHashingMode, error) {
 		queue:            queue,
 	}
 	m.pool = newBufferPool(m.chunkSize())
+	fallbackStrategy.pool = m.pool
 	return m, nil
 }
 

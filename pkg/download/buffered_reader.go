@@ -21,6 +21,8 @@ type bufferedReader struct {
 
 var _ io.Reader = &bufferedReader{}
 
+var emptyBuffer = bytes.NewBuffer(nil)
+
 func newBufferedReader(pool *bufferPool) *bufferedReader {
 	return &bufferedReader{
 		ready: make(chan struct{}),
@@ -39,12 +41,12 @@ func (b *bufferedReader) Read(buf []byte) (int, error) {
 	}
 	n, err := b.buf.Read(buf)
 	// If we've read all the data,
-	if b.buf.Len() == 0 {
-		// replace our buffer with something that will always return EOF on
-		// future reads
-		b.buf = bytes.NewBuffer(nil)
-		// and return the buffer to the pool
+	if b.buf.Len() == 0 && b.buf != emptyBuffer {
+		// return the buffer to the pool
 		b.pool.Put(b.buf)
+		// and replace our buffer with something that will always return EOF on
+		// future reads
+		b.buf = emptyBuffer
 	}
 	return n, err
 }

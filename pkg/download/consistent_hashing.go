@@ -27,6 +27,7 @@ type ConsistentHashingMode struct {
 	// we use this errgroup as a semaphore (via sem.SetLimit())
 	sem   *errgroup.Group
 	queue *workQueue
+	pool  *bufferPool
 }
 
 type CacheKey struct {
@@ -51,13 +52,16 @@ func GetConsistentHashingMode(opts Options) (*ConsistentHashingMode, error) {
 		queue:   queue,
 	}
 
-	return &ConsistentHashingMode{
+	m := &ConsistentHashingMode{
 		Client:           client,
 		Options:          opts,
 		FallbackStrategy: fallbackStrategy,
 		sem:              sem,
 		queue:            queue,
-	}, nil
+	}
+	m.pool = newBufferPool(m.chunkSize())
+	fallbackStrategy.pool = m.pool
+	return m, nil
 }
 
 func (m *ConsistentHashingMode) chunkSize() int64 {
@@ -104,7 +108,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		return m.FallbackStrategy.Fetch(ctx, urlString)
 	}
 
-	br := newBufferedReader(m.chunkSize())
+	br := newBufferedReader(m.pool)
 	firstReqResultCh := make(chan firstReqResult)
 	m.queue.submit(func() {
 		m.sem.Go(func() error {
@@ -193,7 +197,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 					chunkEnd = sliceEnd
 				}
 
-				br := newBufferedReader(m.chunkSize())
+				br := newBufferedReader(m.pool)
 				readersCh <- br
 				m.sem.Go(func() error {
 					defer br.done()

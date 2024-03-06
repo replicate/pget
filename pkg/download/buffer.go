@@ -20,6 +20,7 @@ type BufferMode struct {
 	// we use this errgroup as a semaphore (via sem.SetLimit())
 	sem   *errgroup.Group
 	queue *workQueue
+	pool  *bufferPool
 }
 
 func GetBufferMode(opts Options) *BufferMode {
@@ -28,12 +29,14 @@ func GetBufferMode(opts Options) *BufferMode {
 	sem.SetLimit(opts.maxConcurrency())
 	queue := newWorkQueue(opts.maxConcurrency())
 	queue.start()
-	return &BufferMode{
+	m := &BufferMode{
 		Client:  client,
 		Options: opts,
 		sem:     sem,
 		queue:   queue,
 	}
+	m.pool = newBufferPool(m.chunkSize())
+	return m
 }
 
 func (m *BufferMode) chunkSize() int64 {
@@ -61,7 +64,7 @@ type firstReqResult struct {
 func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
 	logger := logging.GetLogger()
 
-	br := newBufferedReader(m.chunkSize())
+	br := newBufferedReader(m.pool)
 
 	firstReqResultCh := make(chan firstReqResult)
 	m.queue.submit(func() {
@@ -135,7 +138,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 				end = fileSize - 1
 			}
 
-			br := newBufferedReader(m.chunkSize())
+			br := newBufferedReader(m.pool)
 			readersCh <- br
 
 			m.sem.Go(func() error {

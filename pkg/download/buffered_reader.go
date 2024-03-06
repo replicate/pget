@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 )
 
 // A bufferedReader wraps an http.Response.Body so that it can be eagerly
@@ -15,25 +16,37 @@ type bufferedReader struct {
 	ready chan struct{}
 	buf   *bytes.Buffer
 	err   error
+	pool  *bufferPool
 }
 
 var _ io.Reader = &bufferedReader{}
 
-func newBufferedReader(capacity int64) *bufferedReader {
+func newBufferedReader(pool *bufferPool) *bufferedReader {
 	return &bufferedReader{
 		ready: make(chan struct{}),
-		buf:   bytes.NewBuffer(make([]byte, 0, capacity)),
+		buf:   pool.Get(),
+		pool:  pool,
 	}
 }
 
 // Read implements io.Reader. It will block until the full body is available for
-// reading.
+// reading. Once the underlying buffer is fully read, it will be returned to the
+// pool.
 func (b *bufferedReader) Read(buf []byte) (int, error) {
 	<-b.ready
 	if b.err != nil {
 		return 0, b.err
 	}
-	return b.buf.Read(buf)
+	n, err := b.buf.Read(buf)
+	// If we've read all the data,
+	if b.buf.Len() == 0 {
+		// replace our buffer with something that will always return EOF on
+		// future reads
+		b.buf = bytes.NewBuffer(nil)
+		// and return the buffer to the pool
+		b.pool.Put(b.buf)
+	}
+	return n, err
 }
 
 func (b *bufferedReader) done() {
@@ -57,4 +70,27 @@ func (b *bufferedReader) downloadBody(resp *http.Response) error {
 		return b.err
 	}
 	return nil
+}
+
+type bufferPool struct {
+	pool sync.Pool
+}
+
+func newBufferPool(capacity int64) *bufferPool {
+	return &bufferPool{
+		pool: sync.Pool{
+			New: func() any {
+				return bytes.NewBuffer(make([]byte, 0, capacity))
+			},
+		},
+	}
+}
+
+func (p *bufferPool) Get() *bytes.Buffer {
+	return p.pool.Get().(*bytes.Buffer)
+}
+
+func (p *bufferPool) Put(buf *bytes.Buffer) {
+	buf.Reset()
+	p.pool.Put(buf)
 }

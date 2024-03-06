@@ -65,6 +65,31 @@ func TestBufferedReader_downloadBody(t *testing.T) {
 	}
 }
 
+func TestBufferedReader_readFrom(t *testing.T) {
+	reader := bytes.NewReader([]byte(strings.Repeat("a", 1000)))
+	reader2 := bytes.NewReader([]byte(strings.Repeat("b", 1000)))
+	pool := newBufferPool(1000)
+	br := newBufferedReader(pool)
+	require.NotNil(t, br)
+	n, err := br.readFrom(reader)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1000), n)
+	assert.Equal(t, int64(1000), int64(br.buf.Len()))
+	br.done()
+	readerBuf := make([]byte, 1000)
+	readN, err := br.Read(readerBuf)
+	assert.NoError(t, err)
+	assert.Equal(t, 1000, readN)
+	assert.Equal(t, 0, br.buf.Len())
+	defer func() {
+		if r := recover(); r == nil {
+			assert.Fail(t, "readFrom did not panic with emptyBuffer")
+		}
+	}()
+	_, _ = br.readFrom(reader2)
+
+}
+
 func TestBufferedReader_Read(t *testing.T) {
 	testErr := errors.New("error")
 	tc := []struct {

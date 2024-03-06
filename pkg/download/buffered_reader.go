@@ -52,6 +52,13 @@ func (b *bufferedReader) Read(buf []byte) (int, error) {
 	return n, err
 }
 
+func (b *bufferedReader) readFrom(r io.Reader) (int64, error) {
+	if b.buf == emptyBuffer {
+		panic("readFrom called with singleton emptyBuffer; this should never happen")
+	}
+	return b.buf.ReadFrom(r)
+}
+
 func (b *bufferedReader) done() {
 	close(b.ready)
 }
@@ -63,7 +70,7 @@ func (b *bufferedReader) downloadBody(resp *http.Response) error {
 		b.err = fmt.Errorf("%w: tried to download 0x%x bytes to a 0x%x-sized buffer", errContentLengthMismatch, expectedBytes, b.buf.Cap())
 		return b.err
 	}
-	n, err := b.buf.ReadFrom(resp.Body)
+	n, err := b.readFrom(resp.Body)
 	if err != nil && err != io.EOF {
 		b.err = fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)
 		return b.err

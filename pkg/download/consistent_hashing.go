@@ -60,15 +60,15 @@ func GetConsistentHashingMode(opts Options) (*ConsistentHashingMode, error) {
 	}, nil
 }
 
-func (m *ConsistentHashingMode) minChunkSize() int64 {
-	minChunkSize := m.MinChunkSize
-	if minChunkSize == 0 {
-		minChunkSize = defaultMinChunkSize
+func (m *ConsistentHashingMode) chunkSize() int64 {
+	chunkSize := m.ChunkSize
+	if chunkSize == 0 {
+		chunkSize = defaultChunkSize
 	}
-	if minChunkSize > m.SliceSize {
-		minChunkSize = m.SliceSize
+	if chunkSize > m.SliceSize {
+		chunkSize = m.SliceSize
 	}
-	return minChunkSize
+	return chunkSize
 }
 
 func (m *ConsistentHashingMode) getFileSizeFromContentRange(contentRange string) (int64, error) {
@@ -104,13 +104,13 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		return m.FallbackStrategy.Fetch(ctx, urlString)
 	}
 
-	br := newBufferedReader(m.minChunkSize())
+	br := newBufferedReader(m.chunkSize())
 	firstReqResultCh := make(chan firstReqResult)
 	m.queue.submit(func() {
 		m.sem.Go(func() error {
 			defer close(firstReqResultCh)
 			defer br.done()
-			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, urlString)
+			firstChunkResp, err := m.DoRequest(ctx, 0, m.chunkSize()-1, urlString)
 			if err != nil {
 				br.err = err
 				firstReqResultCh <- firstReqResult{err: err}
@@ -149,7 +149,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 	}
 	fileSize := firstReqResult.fileSize
 
-	if fileSize <= m.minChunkSize() {
+	if fileSize <= m.chunkSize() {
 		// we only need a single chunk: just download it and finish
 		return br, fileSize, nil
 	}
@@ -159,61 +159,41 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		totalSlices++
 	}
 
-	// we subtract one because we've already got firstChunkResp in flight
-	concurrency := m.maxConcurrency() - 1
-	if concurrency <= int(totalSlices) {
-		// special case: we should just download each slice in full and rely on the semaphore to manage concurrency
-		concurrency = int(totalSlices)
-	}
-
-	chunksPerSlice := EqualSplit(int64(concurrency), totalSlices)
-	if m.minChunkSize() == m.SliceSize {
-		// firstChunkResp will download the whole first chunk in full;
-		// we set slice 0 to a special value of 0 so we skip it later
-		chunksPerSlice = append([]int64{0}, EqualSplit(int64(concurrency), totalSlices-1)...)
-	}
-
 	readersCh := make(chan io.Reader, m.maxConcurrency()+1)
 	readersCh <- br
 
 	logger.Debug().Str("url", urlString).
 		Int64("size", fileSize).
 		Int("concurrency", m.maxConcurrency()).
-		Ints64("chunks_per_slice", chunksPerSlice).
 		Msg("Downloading")
 
 	m.queue.submit(func() {
 		defer close(readersCh)
-		for slice, numChunks := range chunksPerSlice {
-			if numChunks == 0 {
-				// this happens if we've already downloaded the whole first slice
-				continue
-			}
-			startFrom := m.SliceSize * int64(slice)
+		for slice := 0; slice < int(totalSlices); slice++ {
+			sliceStart := m.SliceSize * int64(slice)
 			sliceSize := m.SliceSize
+			sliceEnd := m.SliceSize*int64(slice+1) - 1
 			if slice == int(totalSlices)-1 {
 				sliceSize = (fileSize-1)%m.SliceSize + 1
 			}
 			if slice == 0 {
-				startFrom = m.minChunkSize()
-				sliceSize = sliceSize - m.minChunkSize()
-			}
-			if sliceSize/numChunks < m.minChunkSize() {
-				// reset numChunks to respect minChunkSize
-				numChunks = sliceSize / m.minChunkSize()
-				// although we must always have at least one chunk
-				if numChunks == 0 {
-					numChunks = 1
+				if m.chunkSize() == m.SliceSize {
+					// we've downloaded the whole slice already
+					continue
 				}
+				sliceStart = m.chunkSize()
+				sliceSize = sliceSize - m.chunkSize()
 			}
-			chunkSizes := EqualSplit(sliceSize, numChunks)
-			for _, chunkSize := range chunkSizes {
-				// startFrom changes each time round the loop
-				// we create chunkStart to be a stable variable for the goroutine to capture
-				chunkStart := startFrom
-				chunkEnd := startFrom + chunkSize - 1
+			// integer divide rounding up
+			numChunks := int(((sliceSize - 1) / m.chunkSize()) + 1)
+			for chunk := 0; chunk < numChunks; chunk++ {
+				chunkStart := sliceStart + int64(chunk)*m.chunkSize()
+				chunkEnd := chunkStart + m.chunkSize() - 1
+				if chunkEnd > sliceEnd {
+					chunkEnd = sliceEnd
+				}
 
-				br := newBufferedReader(chunkSize)
+				br := newBufferedReader(m.chunkSize())
 				readersCh <- br
 				m.sem.Go(func() error {
 					defer br.done()
@@ -241,7 +221,6 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 					return br.downloadBody(resp)
 				})
 
-				startFrom = startFrom + chunkSize
 			}
 		}
 	})

@@ -100,10 +100,10 @@ https://example.com/music.mp3 /local/path/to/music.mp3
   - Type `Integer`
 
 ### Global Command-Line Options
-- `--max-chunks`
-    - Maximum number of chunks for downloading a given file
-    - Type: `Integer`
-    - Default: `4 * runtime.NumCPU()`
+- `--concurrency`
+  - Maximum number of chunks to download in parallel for a given file
+  - Type: `Integer`
+  - Default: `4 * runtime.NumCPU()`
 - `--connect-timeout`
   - Timeout for establishing a connection, format is <number><unit>, e.g. 10s
   - Type: `Duration`
@@ -116,10 +116,10 @@ https://example.com/music.mp3 /local/path/to/music.mp3
   - Log level (debug, info, warn, error)
   - Type: `string`
   - Default: `info`
-- `-m`, `--minimum-chunk-size string`
-  - Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M) 
+- `-m`, `--chunk-size string`
+  - Chunk size (in bytes) to use when downloading a file (e.g. 10M)
   - Type: `string`
-  - Default: `16M`
+  - Default: `125M`
 - `--resolve`
   - Resolve hostnames to specific IPs, can be specified multiple times, format <hostname>:<port>:<ip> (e.g. example.com:443:127.0.0.1)
   - Type: `string
@@ -133,10 +133,14 @@ https://example.com/music.mp3 /local/path/to/music.mp3
   - Default: `false`
 
 #### Deprecated
-- `--concurrency` (deprecated, use `--max-chunks` instead)
+- `--max-chunks` (deprecated, use `--concurrency` instead)
   - Maximum number of chunks for downloading a given file
   - Type: `Integer`
   - Default: `4 * runtime.NumCPU()`
+- `-m`, `--minimum-chunk-size string` (deprecated, use `--chunk-size` instead)
+  - Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)
+  - Type: `string`
+  - Default: `16M`
 
 ## Error Handling
 

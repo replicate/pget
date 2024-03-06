@@ -5,20 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"strconv"
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dustin/go-humanize"
-
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/logging"
 )
-
-const defaultMinChunkSize = 16 * humanize.MiByte
-
-var contentRangeRegexp = regexp.MustCompile(`^bytes .*/([0-9]+)$`)
 
 type BufferMode struct {
 	Client *client.HTTPClient
@@ -43,10 +36,10 @@ func GetBufferMode(opts Options) *BufferMode {
 	}
 }
 
-func (m *BufferMode) minChunkSize() int64 {
-	minChunkSize := m.MinChunkSize
+func (m *BufferMode) chunkSize() int64 {
+	minChunkSize := m.ChunkSize
 	if minChunkSize == 0 {
-		return defaultMinChunkSize
+		return defaultChunkSize
 	}
 	return minChunkSize
 }
@@ -68,14 +61,14 @@ type firstReqResult struct {
 func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
 	logger := logging.GetLogger()
 
-	br := newBufferedReader(m.minChunkSize())
+	br := newBufferedReader(m.chunkSize())
 
 	firstReqResultCh := make(chan firstReqResult)
 	m.queue.submit(func() {
 		m.sem.Go(func() error {
 			defer close(firstReqResultCh)
 			defer br.done()
-			firstChunkResp, err := m.DoRequest(ctx, 0, m.minChunkSize()-1, url)
+			firstChunkResp, err := m.DoRequest(ctx, 0, m.chunkSize()-1, url)
 			if err != nil {
 				br.err = err
 				firstReqResultCh <- firstReqResult{err: err}
@@ -112,48 +105,37 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 	fileSize := firstReqResult.fileSize
 	trueURL := firstReqResult.trueURL
 
-	if fileSize <= m.minChunkSize() {
+	if fileSize <= m.chunkSize() {
 		// we only need a single chunk: just download it and finish
 		return br, fileSize, nil
 	}
 
-	remainingBytes := fileSize - m.minChunkSize()
-	numChunks := int(remainingBytes / m.minChunkSize())
-	// Number of chunks can never be 0
-	if numChunks <= 0 {
-		numChunks = 1
-	}
-	if numChunks > m.maxConcurrency() {
-		numChunks = m.maxConcurrency()
-	}
+	remainingBytes := fileSize - m.chunkSize()
+	// integer divide rounding up
+	numChunks := int((remainingBytes-1)/m.chunkSize() + 1)
 
-	readersCh := make(chan io.Reader, m.maxConcurrency()+1)
+	readersCh := make(chan io.Reader, numChunks+1)
 	readersCh <- br
 
-	startOffset := m.minChunkSize()
-
-	chunkSize := remainingBytes / int64(numChunks)
-	if chunkSize < 0 {
-		return nil, -1, fmt.Errorf("error: chunksize incorrect - result is negative, %d", chunkSize)
-	}
+	startOffset := m.chunkSize()
 
 	m.queue.submit(func() {
 		defer close(readersCh)
 		logger.Debug().Str("url", url).
 			Int64("size", fileSize).
 			Int("connections", numChunks).
-			Int64("chunkSize", chunkSize).
+			Int64("chunkSize", m.chunkSize()).
 			Msg("Downloading")
 
 		for i := 0; i < numChunks; i++ {
-			start := startOffset + chunkSize*int64(i)
-			end := start + chunkSize - 1
+			start := startOffset + m.chunkSize()*int64(i)
+			end := start + m.chunkSize() - 1
 
 			if i == numChunks-1 {
 				end = fileSize - 1
 			}
 
-			br := newBufferedReader(end - start + 1)
+			br := newBufferedReader(m.chunkSize())
 			readersCh <- br
 
 			m.sem.Go(func() error {

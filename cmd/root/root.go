@@ -18,6 +18,7 @@ import (
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/download"
+	"github.com/replicate/pget/pkg/logging"
 )
 
 const rootLongDesc = `
@@ -42,6 +43,9 @@ efficient file extractor, providing a streamlined solution for fetching and unpa
 
 var concurrency int
 var pidFile *cli.PIDFile
+var chunkSize string
+
+const chunkSizeDefault = "125M"
 
 func GetCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -50,7 +54,6 @@ func GetCommand() *cobra.Command {
 		Long:               rootLongDesc,
 		PersistentPreRunE:  rootPersistentPreRunEFunc,
 		PersistentPostRunE: rootPersistentPostRunEFunc,
-		PreRun:             rootCmdPreRun,
 		RunE:               runRootCMD,
 		Args:               validateArgs,
 		Example:            `  pget https://example.com/file.tar ./target-dir`,
@@ -67,6 +70,7 @@ func GetCommand() *cobra.Command {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+
 	err = viper.BindPFlags(cmd.Flags())
 	if err != nil {
 		fmt.Println(err)
@@ -101,6 +105,7 @@ func pidFlock(pidFilePath string) error {
 }
 
 func rootPersistentPreRunEFunc(cmd *cobra.Command, args []string) error {
+	logger := logging.GetLogger()
 	if err := config.PersistentStartupProcessFlags(); err != nil {
 		return err
 	}
@@ -109,6 +114,37 @@ func rootPersistentPreRunEFunc(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
+
+	// Handle chunk size flags (deprecation and overwriting where needed)
+	//
+	// Expected Behavior for chunk size flags:
+	// * If either cli option is set, use that value
+	// * If both are set, emit an error
+	// * If neither are set, use ENV values
+	// ** If PGET_CHUNK_SIZE is set, use that value
+	// ** If PGET_CHUNK_SIZE is not set, use PGET_MINIMUM_CHUNK_SIZE if set
+	//    NOTE: PGET_MINIMUM_CHUNK_SIZE value is just set over the key for PGET_CHUNK_SIZE
+	//    Warning message will be emitted
+	// ** If both PGET_CHUNK_SIZE and PGET_MINIMUM_CHUNK_SIZE are set, use PGET_CHUNK_SIZE
+	//    Warning message will be emitted if they differ
+	// * If neither are set, use the default value
+
+	changedMin := cmd.PersistentFlags().Changed(config.OptMinimumChunkSize)
+	changedChunk := cmd.PersistentFlags().Changed(config.OptChunkSize)
+	if changedMin && changedChunk {
+		return fmt.Errorf("--minimum-chunk-size and --chunk-size cannot be used at the same time, use --chunk-size instead")
+	}
+	minChunkSizeEnv := viper.GetString(config.OptMinimumChunkSize)
+	chunkSizeEnv := viper.GetString(config.OptChunkSize)
+	if minChunkSizeEnv != chunkSizeDefault && minChunkSizeEnv != chunkSizeEnv {
+		if chunkSizeEnv == chunkSizeDefault {
+			logger.Warn().Msg("Using PGET_MINIMUM_CHUNK_SIZE is deprecated, use PGET_CHUNK_SIZE instead")
+			viper.Set(config.OptChunkSize, minChunkSizeEnv)
+		} else {
+			logger.Warn().Msg("Both PGET_MINIMUM_CHUNK_SIZE and PGET_CHUNK_SIZE are set, using PGET_CHUNK_SIZE")
+		}
+	}
+
 	return nil
 }
 
@@ -124,7 +160,8 @@ func persistentFlags(cmd *cobra.Command) error {
 	cmd.PersistentFlags().IntVarP(&concurrency, config.OptConcurrency, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
 	cmd.PersistentFlags().IntVar(&concurrency, config.OptMaxChunks, runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
 	cmd.PersistentFlags().Duration(config.OptConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
-	cmd.PersistentFlags().StringP(config.OptMinimumChunkSize, "m", "16M", "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
+	cmd.PersistentFlags().StringVarP(&chunkSize, config.OptChunkSize, "m", chunkSizeDefault, "Chunk size (in bytes) to use when downloading a file (e.g. 10M)")
+	cmd.PersistentFlags().StringVar(&chunkSize, config.OptMinimumChunkSize, chunkSizeDefault, "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
 	cmd.PersistentFlags().BoolP(config.OptForce, "f", false, "OptForce download, overwriting existing file")
 	cmd.PersistentFlags().StringSlice(config.OptResolve, []string{}, "OptResolve hostnames to specific IPs")
 	cmd.PersistentFlags().IntP(config.OptRetries, "r", 5, "Number of retries when attempting to retrieve a file")
@@ -134,10 +171,6 @@ func persistentFlags(cmd *cobra.Command) error {
 	cmd.PersistentFlags().Int(config.OptMaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host")
 	cmd.PersistentFlags().StringP(config.OptOutputConsumer, "o", "file", "Output Consumer (file, tar, null)")
 	cmd.PersistentFlags().String(config.OptPIDFile, defaultPidFilePath(), "PID file path")
-
-	if err := config.AddFlagAlias(cmd, config.OptConcurrency, config.OptMaxChunks); err != nil {
-		return err
-	}
 
 	if err := hideAndDeprecateFlags(cmd); err != nil {
 		return err
@@ -154,19 +187,14 @@ func hideAndDeprecateFlags(cmd *cobra.Command) error {
 
 	// DeprecatedFlag flags
 	err := config.DeprecateFlags(cmd,
-		config.DeprecatedFlag{Flag: config.OptMaxChunks, Msg: "use --concurrency instead"},
+		config.DeprecatedFlag{Flag: config.OptMaxChunks, Msg: fmt.Sprintf("use --%s instead", config.OptConcurrency)},
+		config.DeprecatedFlag{Flag: config.OptMinimumChunkSize, Msg: fmt.Sprintf("use --%s instead", config.OptChunkSize)},
 	)
 	if err != nil {
 		return err
 	}
 	return nil
 
-}
-
-func rootCmdPreRun(cmd *cobra.Command, args []string) {
-	if viper.GetBool(config.OptExtract) {
-		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
-	}
 }
 
 func runRootCMD(cmd *cobra.Command, args []string) error {
@@ -182,7 +210,7 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 
 	log.Info().Str("url", url).
 		Str("dest", dest).
-		Str("minimum_chunk_size", viper.GetString(config.OptMinimumChunkSize)).
+		Str("chunk_size", viper.GetString(config.OptChunkSize)).
 		Msg("Initiating")
 
 	// OMG BODGE FIX THIS
@@ -202,9 +230,9 @@ func runRootCMD(cmd *cobra.Command, args []string) error {
 // rootExecute is the main function of the program and encapsulates the general logic
 // returns any/all errors to the caller.
 func rootExecute(ctx context.Context, urlString, dest string) error {
-	minChunkSize, err := humanize.ParseBytes(viper.GetString(config.OptMinimumChunkSize))
+	chunkSize, err := humanize.ParseBytes(viper.GetString(config.OptChunkSize))
 	if err != nil {
-		return fmt.Errorf("error parsing minimum chunk size: %w", err)
+		return fmt.Errorf("error parsing chunk size: %w", err)
 	}
 
 	resolveOverrides, err := config.ResolveOverridesToMap(viper.GetStringSlice(config.OptResolve))
@@ -223,7 +251,7 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 
 	downloadOpts := download.Options{
 		MaxConcurrency: viper.GetInt(config.OptConcurrency),
-		MinChunkSize:   int64(minChunkSize),
+		ChunkSize:      int64(chunkSize),
 		Client:         clientOpts,
 	}
 

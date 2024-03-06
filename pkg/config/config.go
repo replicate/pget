@@ -78,16 +78,6 @@ func DeprecateFlags(cmd *cobra.Command, deprecations ...DeprecatedFlag) error {
 	return nil
 }
 
-func AddFlagAlias(cmd *cobra.Command, alias, flag string) error {
-	f := cmd.Flag(flag)
-	if f == nil {
-		return fmt.Errorf("flag %s does not exist", flag)
-	}
-
-	viper.RegisterAlias(alias, flag)
-	return nil
-}
-
 func ViperInit() {
 	viper.SetEnvPrefix(viperEnvPrefix)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))

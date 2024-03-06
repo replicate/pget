@@ -126,23 +126,22 @@ func rootPersistentPreRunEFunc(cmd *cobra.Command, args []string) error {
 	//    NOTE: PGET_MINIMUM_CHUNK_SIZE value is just set over the key for PGET_CHUNK_SIZE
 	//    Warning message will be emitted
 	// ** If both PGET_CHUNK_SIZE and PGET_MINIMUM_CHUNK_SIZE are set, use PGET_CHUNK_SIZE
-	//    Warning message will be emitted
+	//    Warning message will be emitted if they differ
 	// * If neither are set, use the default value
 
 	changedMin := cmd.PersistentFlags().Changed(config.OptMinimumChunkSize)
 	changedChunk := cmd.PersistentFlags().Changed(config.OptChunkSize)
 	if changedMin && changedChunk {
 		return fmt.Errorf("--minimum-chunk-size and --chunk-size cannot be used at the same time, use --chunk-size instead")
-	} else if !(changedMin && changedChunk) {
-		minChunkSizeEnv := viper.GetString(config.OptMinimumChunkSize)
-		chunkSizeEnv := viper.GetString(config.OptChunkSize)
-		if minChunkSizeEnv != chunkSizeDefault {
-			if chunkSizeEnv == chunkSizeDefault {
-				logger.Warn().Msg("Using PGET_MINIMUM_CHUNK_SIZE is deprecated, use PGET_CHUNK_SIZE instead")
-				viper.Set(config.OptChunkSize, minChunkSizeEnv)
-			} else {
-				logger.Warn().Msg("Both PGET_MINIMUM_CHUNK_SIZE and PGET_CHUNK_SIZE are set, using PGET_CHUNK_SIZE")
-			}
+	}
+	minChunkSizeEnv := viper.GetString(config.OptMinimumChunkSize)
+	chunkSizeEnv := viper.GetString(config.OptChunkSize)
+	if minChunkSizeEnv != chunkSizeDefault && minChunkSizeEnv != chunkSizeEnv {
+		if chunkSizeEnv == chunkSizeDefault {
+			logger.Warn().Msg("Using PGET_MINIMUM_CHUNK_SIZE is deprecated, use PGET_CHUNK_SIZE instead")
+			viper.Set(config.OptChunkSize, minChunkSizeEnv)
+		} else {
+			logger.Warn().Msg("Both PGET_MINIMUM_CHUNK_SIZE and PGET_CHUNK_SIZE are set, using PGET_CHUNK_SIZE")
 		}
 	}
 

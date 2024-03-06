@@ -22,6 +22,7 @@ type bufferedReader struct {
 var _ io.Reader = &bufferedReader{}
 
 var emptyBuffer = bytes.NewBuffer(nil)
+var errContentLengthMismatch = fmt.Errorf("Content-Length doesn't match expected bytes")
 
 func newBufferedReader(pool *bufferPool) *bufferedReader {
 	return &bufferedReader{
@@ -59,7 +60,7 @@ func (b *bufferedReader) downloadBody(resp *http.Response) error {
 	expectedBytes := resp.ContentLength
 
 	if expectedBytes > int64(b.buf.Cap()) {
-		b.err = fmt.Errorf("Tried to download 0x%x bytes to a 0x%x-sized buffer", expectedBytes, b.buf.Cap())
+		b.err = fmt.Errorf("%w: tried to download 0x%x bytes to a 0x%x-sized buffer", errContentLengthMismatch, expectedBytes, b.buf.Cap())
 		return b.err
 	}
 	n, err := b.buf.ReadFrom(resp.Body)

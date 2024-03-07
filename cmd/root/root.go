@@ -145,6 +145,12 @@ func rootPersistentPreRunEFunc(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if viper.GetBool(config.OptExtract) {
+		// TODO: decide what to do when --output is set *and* --extract is set
+		log.Debug().Msg("Tar Extract Enabled")
+		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
+	}
+
 	return nil
 }
 
@@ -263,12 +269,6 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 	getter := pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
 		Consumer:   consumer,
-	}
-
-	if viper.GetBool(config.OptExtract) {
-		// TODO: decide what to do when --output is set *and* --extract is set
-		log.Debug().Msg("Tar Extract Enabled")
-		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
 	}
 
 	// TODO DRY this

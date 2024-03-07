@@ -56,7 +56,15 @@ func (b *bufferedReader) Read(buf []byte) (int, error) {
 
 func (b *bufferedReader) ReadFrom(r io.Reader) (int64, error) {
 	b.buf.Reset(r)
-	bytes, err := b.buf.Peek(b.buf.Size())
+	var bytes []byte
+	var err error
+	for {
+		bytes, err = b.buf.Peek(b.buf.Size())
+		if err != io.ErrNoProgress {
+			// keep trying until we make progress
+			break
+		}
+	}
 	if err == io.EOF {
 		// ReadFrom does not return io.EOF
 		err = nil

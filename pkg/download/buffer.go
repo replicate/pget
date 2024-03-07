@@ -70,7 +70,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 	m.queue.submit(func() {
 		m.sem.Go(func() error {
 			defer close(firstReqResultCh)
-			defer br.done()
+			defer br.Done()
 			firstChunkResp, err := m.DoRequest(ctx, 0, m.chunkSize()-1, url)
 			if err != nil {
 				firstReqResultCh <- firstReqResult{err: err}
@@ -91,7 +91,14 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 			}
 			firstReqResultCh <- firstReqResult{fileSize: fileSize, trueURL: trueURL}
 
-			return br.downloadBody(firstChunkResp)
+			contentLength := firstChunkResp.ContentLength
+			n, err := br.ReadFrom(firstChunkResp.Body)
+			if err != nil {
+				return err
+			} else if n != contentLength {
+				return ErrContentLengthMismatch{downloadedBytes: n, contentLength: contentLength}
+			}
+			return nil
 		})
 	})
 
@@ -141,13 +148,21 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 			readersCh <- br
 
 			m.sem.Go(func() error {
-				defer br.done()
+				defer br.Done()
 				resp, err := m.DoRequest(ctx, start, end, trueURL)
 				if err != nil {
 					return err
 				}
 				defer resp.Body.Close()
-				return br.downloadBody(resp)
+
+				contentLength := resp.ContentLength
+				n, err := br.ReadFrom(resp.Body)
+				if err != nil {
+					return err
+				} else if n != contentLength {
+					return ErrContentLengthMismatch{downloadedBytes: n, contentLength: contentLength}
+				}
+				return nil
 			})
 		}
 	})

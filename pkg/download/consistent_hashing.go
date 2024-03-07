@@ -113,7 +113,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 	m.queue.submit(func() {
 		m.sem.Go(func() error {
 			defer close(firstReqResultCh)
-			defer br.done()
+			defer br.Done()
 			firstChunkResp, err := m.DoRequest(ctx, 0, m.chunkSize()-1, urlString)
 			if err != nil {
 				firstReqResultCh <- firstReqResult{err: err}
@@ -130,7 +130,14 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 			}
 			firstReqResultCh <- firstReqResult{fileSize: fileSize}
 
-			return br.downloadBody(firstChunkResp)
+			contentLength := firstChunkResp.ContentLength
+			n, err := br.ReadFrom(firstChunkResp.Body)
+			if err != nil {
+				return err
+			} else if n != contentLength {
+				return ErrContentLengthMismatch{downloadedBytes: n, contentLength: contentLength}
+			}
+			return nil
 		})
 	})
 	firstReqResult, ok := <-firstReqResultCh
@@ -201,7 +208,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 				br := newBufferedReader(m.pool)
 				readersCh <- br
 				m.sem.Go(func() error {
-					defer br.done()
+					defer br.Done()
 					logger.Debug().Int64("start", chunkStart).Int64("end", chunkEnd).Msg("starting request")
 					resp, err := m.DoRequest(ctx, chunkStart, chunkEnd, urlString)
 					if err != nil {
@@ -222,7 +229,14 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 						}
 					}
 					defer resp.Body.Close()
-					return br.downloadBody(resp)
+					contentLength := resp.ContentLength
+					n, err := br.ReadFrom(resp.Body)
+					if err != nil {
+						return err
+					} else if n != contentLength {
+						return ErrContentLengthMismatch{downloadedBytes: n, contentLength: contentLength}
+					}
+					return nil
 				})
 
 			}

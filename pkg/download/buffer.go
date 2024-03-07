@@ -73,7 +73,6 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 			defer br.done()
 			firstChunkResp, err := m.DoRequest(ctx, 0, m.chunkSize()-1, url)
 			if err != nil {
-				br.err = err
 				firstReqResultCh <- firstReqResult{err: err}
 				return err
 			}
@@ -145,7 +144,6 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 				defer br.done()
 				resp, err := m.DoRequest(ctx, start, end, trueURL)
 				if err != nil {
-					br.err = err
 					return err
 				}
 				defer resp.Body.Close()
@@ -155,6 +153,10 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 	})
 
 	return newChanMultiReader(readersCh), fileSize, nil
+}
+
+func (m *BufferMode) Wait() error {
+	return m.sem.Wait()
 }
 
 func (m *BufferMode) DoRequest(ctx context.Context, start, end int64, trueURL string) (*http.Response, error) {

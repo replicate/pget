@@ -15,7 +15,6 @@ type bufferedReader struct {
 	// ready channel is closed when we're ready to read
 	ready chan struct{}
 	buf   *bytes.Buffer
-	err   error
 	pool  *bufferPool
 }
 
@@ -36,9 +35,6 @@ func newBufferedReader(pool *bufferPool) *bufferedReader {
 // pool.
 func (b *bufferedReader) Read(buf []byte) (int, error) {
 	<-b.ready
-	if b.err != nil {
-		return 0, b.err
-	}
 	n, err := b.buf.Read(buf)
 	// If we've read all the data,
 	if b.buf.Len() == 0 && b.buf != emptyBuffer {
@@ -59,17 +55,14 @@ func (b *bufferedReader) downloadBody(resp *http.Response) error {
 	expectedBytes := resp.ContentLength
 
 	if expectedBytes > int64(b.buf.Cap()) {
-		b.err = fmt.Errorf("Tried to download 0x%x bytes to a 0x%x-sized buffer", expectedBytes, b.buf.Cap())
-		return b.err
+		return fmt.Errorf("Tried to download 0x%x bytes to a 0x%x-sized buffer", expectedBytes, b.buf.Cap())
 	}
 	n, err := b.buf.ReadFrom(resp.Body)
 	if err != nil && err != io.EOF {
-		b.err = fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)
-		return b.err
+		return fmt.Errorf("error reading response for %s: %w", resp.Request.URL.String(), err)
 	}
 	if n != expectedBytes {
-		b.err = fmt.Errorf("downloaded %d bytes instead of %d for %s", n, expectedBytes, resp.Request.URL.String())
-		return b.err
+		return fmt.Errorf("downloaded %d bytes instead of %d for %s", n, expectedBytes, resp.Request.URL.String())
 	}
 	return nil
 }

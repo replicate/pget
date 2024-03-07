@@ -15,6 +15,9 @@ type Strategy interface {
 	// This is the primary method that should be called to initiate a download of a file.
 	Fetch(ctx context.Context, url string) (result io.Reader, fileSize int64, err error)
 
+	// Wait waits until all requests have completed, and returns the first error encountered, if any.
+	Wait() error
+
 	// DoRequest sends an HTTP GET request with a specified range of bytes to the given URL using the provided context.
 	// It returns the HTTP response and any error encountered during the request. It is intended that Fetch calls DoRequest
 	// and that each chunk is downloaded with a call to DoRequest. DoRequest is exposed so that consistent-hashing can

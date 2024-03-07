@@ -116,9 +116,10 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 			defer br.done()
 			firstChunkResp, err := m.DoRequest(ctx, 0, m.chunkSize()-1, urlString)
 			if err != nil {
-				br.err = err
 				firstReqResultCh <- firstReqResult{err: err}
-				return err
+				// The error will be handled by the firstReqResultCh consumer,
+				// and may be recoverable; so we return nil to the errGroup
+				return nil
 			}
 			defer firstChunkResp.Body.Close()
 
@@ -217,7 +218,6 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 							resp, err = m.FallbackStrategy.DoRequest(ctx, chunkStart, chunkEnd, urlString)
 						}
 						if err != nil {
-							br.err = err
 							return err
 						}
 					}
@@ -230,6 +230,10 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 	})
 
 	return newChanMultiReader(readersCh), fileSize, nil
+}
+
+func (m *ConsistentHashingMode) Wait() error {
+	return m.sem.Wait()
 }
 
 func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64, urlString string) (*http.Response, error) {

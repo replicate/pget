@@ -270,6 +270,8 @@ func TestConsistentHashing(t *testing.T) {
 			require.NoError(t, err)
 			bytes, err := io.ReadAll(reader)
 			require.NoError(t, err)
+			err = strategy.Wait()
+			require.NoError(t, err)
 
 			assert.Equal(t, tc.expectedOutput, string(bytes))
 		})
@@ -321,6 +323,8 @@ func TestConsistentHashingPathBased(t *testing.T) {
 			require.NoError(t, err)
 			bytes, err := io.ReadAll(reader)
 			require.NoError(t, err)
+			err = strategy.Wait()
+			require.NoError(t, err)
 
 			assert.Equal(t, tc.expectedOutput, string(bytes))
 		})
@@ -351,6 +355,8 @@ func TestConsistentHashRetries(t *testing.T) {
 	reader, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
 	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	err = strategy.Wait()
 	require.NoError(t, err)
 
 	// with a functional hostnames[0], we'd see 0344760706165500, but instead we
@@ -387,6 +393,8 @@ func TestConsistentHashRetriesMissingHostname(t *testing.T) {
 	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
 	require.NoError(t, err)
+	err = strategy.Wait()
+	require.NoError(t, err)
 
 	// with a functional hostnames[0], we'd see 0344760706165500, but instead we
 	// should fall back to this. Note that each 0 value has been changed to a
@@ -421,6 +429,8 @@ func TestConsistentHashRetriesTwoHosts(t *testing.T) {
 	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
 	require.NoError(t, err)
+	err = strategy.Wait()
+	require.NoError(t, err)
 
 	assert.Equal(t, "0000000000000000", string(bytes))
 }
@@ -448,6 +458,8 @@ func TestConsistentHashingHasFallback(t *testing.T) {
 	require.NoError(t, err)
 	bytes, err := io.ReadAll(reader)
 	require.NoError(t, err)
+	err = strategy.Wait()
+	require.NoError(t, err)
 
 	assert.Equal(t, "0000000000000000", string(bytes))
 }
@@ -474,6 +486,10 @@ type testStrategy struct {
 func (s *testStrategy) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
 	s.fetchCalledCount++
 	return io.NopCloser(strings.NewReader("00")), -1, nil
+}
+
+func (s *testStrategy) Wait() error {
+	return nil
 }
 
 func (s *testStrategy) DoRequest(ctx context.Context, start, end int64, url string) (*http.Response, error) {

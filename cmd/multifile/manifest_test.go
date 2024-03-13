@@ -87,3 +87,40 @@ func TestManifestFile(t *testing.T) {
 	_, err = manifestFile("/does/not/exist")
 	assert.Error(t, err)
 }
+
+func TestGetExtension(t *testing.T) {
+	testCases := []struct {
+		name     string
+		path     string
+		expected string
+	}{
+		{
+			name:     "no_extension",
+			path:     "/home/user/filename",
+			expected: "",
+		},
+		{
+			name:     "single_extension",
+			path:     "/home/user/filename.txt",
+			expected: ".txt",
+		},
+		{
+			name:     "double_extension",
+			path:     "/home/user/filename.txt.gz",
+			expected: ".gz",
+		},
+		{
+			name:     "hidden_file_with_extension",
+			path:     "/home/user/.filename.txt",
+			expected: ".txt",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if res := getExtension(tc.path); res != tc.expected {
+				t.Errorf("expected %q, got %q", tc.expected, res)
+			}
+		})
+	}
+}

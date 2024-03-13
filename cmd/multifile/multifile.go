@@ -3,7 +3,10 @@ package multifile
 import (
 	"context"
 	"fmt"
+	"io"
+	neturl "net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -14,6 +17,7 @@ import (
 	"github.com/replicate/pget/pkg/cli"
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
+	"github.com/replicate/pget/pkg/consumer"
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/logging"
 )
@@ -63,11 +67,12 @@ func GetCommand() *cobra.Command {
 }
 
 func multifilePreRunE(cmd *cobra.Command, args []string) error {
-	if viper.GetBool(config.OptExtract) {
-		return fmt.Errorf("cannot use --extract with multifile mode")
-	}
+	log := logging.GetLogger()
 	if viper.GetString(config.OptOutputConsumer) == config.ConsumerTarExtractor {
-		return fmt.Errorf("cannot use --output-consumer tar-extractor with multifile mode")
+		return fmt.Errorf("--output=tar-extractor consumer is not supported in multifile mode, use -x instead to extract tar files")
+	}
+	if viper.GetBool(config.OptExtract) {
+		log.Debug().Msg("Tar Extract Enabled")
 	}
 	return nil
 }
@@ -126,14 +131,25 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 		MaxConcurrentFiles: maxConcurrentFiles(),
 	}
 
-	consumer, err := config.GetConsumer()
+	outputConsumer, err := config.GetConsumer()
 	if err != nil {
-		return fmt.Errorf("error getting consumer: %w", err)
+		return fmt.Errorf("error getting outputConsumer: %w", err)
+	}
+
+	if viper.GetBool(config.OptExtract) {
+		tarConsumer := &consumer.TarExtractor{
+			Overwrite: viper.GetBool(config.OptForce),
+		}
+		outputConsumer = &multiConsumer{
+			tarConsumer: tarConsumer,
+			consumer:    outputConsumer,
+		}
+
 	}
 
 	getter := &pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
-		Consumer:   consumer,
+		Consumer:   outputConsumer,
 		Options:    pgetOpts,
 	}
 
@@ -167,4 +183,29 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 		Msg("Metrics")
 
 	return nil
+}
+
+var _ consumer.Consumer = &multiConsumer{}
+
+type multiConsumer struct {
+	tarConsumer consumer.Consumer
+	consumer    consumer.Consumer
+}
+
+func (c *multiConsumer) Consume(reader io.Reader, url string, destPath string) error {
+	parsed, _ := neturl.Parse(url)
+	path := parsed.Path
+	ext := getExtension(path)
+	if _, ok := config.TarFileExtensions[ext]; ok {
+		return c.tarConsumer.Consume(reader, url, destPath)
+	}
+	return c.consumer.Consume(reader, url, destPath)
+}
+
+func getExtension(path string) string {
+	dotIdx := strings.LastIndex(path, ".")
+	if dotIdx == -1 {
+		return ""
+	}
+	return path[dotIdx:]
 }

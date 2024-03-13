@@ -85,7 +85,9 @@ func defaultPidFilePath() string {
 	// If we're on OS X, use the user's home directory
 	// Otherwise, use /run
 	path := "/run/pget.pid"
-	if runtime.GOOS == "darwin" {
+	if xdgPath, ok := os.LookupEnv("XDG_RUNTIME_DIR"); ok {
+		path = xdgPath + "/pget.pid"
+	} else if runtime.GOOS == "darwin" {
 		path = os.Getenv("HOME") + "/.pget.pid"
 	}
 	return path

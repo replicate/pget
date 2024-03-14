@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 type FileWriter struct {
@@ -14,6 +15,10 @@ var _ Consumer = &FileWriter{}
 
 func (f *FileWriter) Consume(reader io.Reader, destPath string) error {
 	openFlags := os.O_WRONLY | os.O_CREATE
+	targetDir := filepath.Dir(destPath)
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return fmt.Errorf("error creating directory: %w", err)
+	}
 	if f.Overwrite {
 		openFlags |= os.O_TRUNC
 	}

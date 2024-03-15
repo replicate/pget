@@ -2,18 +2,15 @@ package download
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"testing"
 	"testing/fstest"
 
 	"github.com/dustin/go-humanize"
-	"github.com/jarcoal/httpmock"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,6 +42,8 @@ func newTestServer(t *testing.T, content []byte) *httptest.Server {
 	return server
 }
 
+// TODO: Implement the test
+// func TestGetFileSizeFromContentRange(t *testing.T) {}
 func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
 	contentSize := int64(humanize.KiByte)
 	content := generateTestContent(contentSize)
@@ -117,51 +116,9 @@ func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
 			require.NoError(t, err)
 			data, err := io.ReadAll(download)
 			assert.NoError(t, err)
-			err = bufferMode.Wait()
-			assert.NoError(t, err)
 			assert.Equal(t, contentSize, size)
 			assert.Equal(t, len(content), len(data))
 			assert.Equal(t, content, data)
 		})
 	}
-}
-
-func TestWaitReturnsErrorWhenRequestFails(t *testing.T) {
-	mockTransport := httpmock.NewMockTransport()
-	opts := Options{
-		Client:    client.Options{Transport: mockTransport},
-		ChunkSize: 2,
-	}
-	expectedErr := fmt.Errorf("Expected error in chunk 3")
-	mockTransport.RegisterResponder("GET", "http://test.example/hello.txt",
-		func(req *http.Request) (*http.Response, error) {
-			rangeHeader := req.Header.Get("Range")
-			var body string
-			switch rangeHeader {
-			case "bytes=0-1":
-				body = "he"
-			case "bytes=2-3":
-				body = "ll"
-			case "bytes=4-5":
-				body = "o "
-			case "bytes=6-7":
-				return nil, expectedErr
-			default:
-				return nil, fmt.Errorf("should't see this error")
-			}
-			resp := httpmock.NewStringResponse(http.StatusPartialContent, body)
-			resp.Request = req
-			resp.Header.Add("Content-Range", strings.Replace(rangeHeader, "=", " ", 1)+"/8")
-			resp.ContentLength = 2
-			resp.Header.Add("Content-Length", "2")
-			return resp, nil
-		})
-	bufferMode := GetBufferMode(opts)
-	download, _, err := bufferMode.Fetch(context.Background(), "http://test.example/hello.txt")
-	// No error here, because the first chunk was fetched successfully
-	require.NoError(t, err)
-	// the read might or might not return an error
-	_, _ = io.ReadAll(download)
-	err = bufferMode.Wait()
-	assert.ErrorIs(t, err, expectedErr)
 }

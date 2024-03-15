@@ -20,6 +20,7 @@ type bufferedReader struct {
 	// ready channel is closed when we're ready to read
 	ready chan struct{}
 	buf   *bufio.Reader
+	err   error
 	pool  *bufferPool
 }
 
@@ -41,6 +42,9 @@ func (b *bufferedReader) Read(buf []byte) (int, error) {
 	<-b.ready
 	if b.buf == nil {
 		return 0, io.EOF
+	}
+	if b.err != nil {
+		return 0, b.err
 	}
 	n, err := b.buf.Read(buf)
 	// If we've read all the data,

@@ -2,6 +2,7 @@ package download
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -13,8 +14,7 @@ import (
 func TestBufferedReaderSerial(t *testing.T) {
 	pool := newBufferPool(10)
 	br := newBufferedReader(pool)
-	n, err := br.ReadFrom(strings.NewReader("foobar"))
-	assert.NoError(t, err)
+	n := br.Prefetch(strings.NewReader("foobar"))
 	assert.Equal(t, int64(6), n)
 	br.Done()
 	buf, err := io.ReadAll(br)
@@ -30,8 +30,7 @@ func TestBufferedReaderParallel(t *testing.T) {
 	go func() {
 		defer br.Done()
 		defer wg.Done()
-		n, err := br.ReadFrom(strings.NewReader("foobar"))
-		assert.NoError(t, err)
+		n := br.Prefetch(strings.NewReader("foobar"))
 		assert.Equal(t, int64(6), n)
 	}()
 	buf, err := io.ReadAll(br)
@@ -45,8 +44,7 @@ func TestBufferedReaderReadsWholeChunk(t *testing.T) {
 	pool := newBufferPool(chunkSize)
 	br := newBufferedReader(pool)
 	data := bytes.Repeat([]byte("x"), int(chunkSize))
-	n64, err := br.ReadFrom(bytes.NewReader(data))
-	assert.NoError(t, err)
+	n64 := br.Prefetch(bytes.NewReader(data))
 	assert.Equal(t, chunkSize, n64)
 	br.Done()
 	buf := make([]byte, chunkSize)
@@ -58,11 +56,35 @@ func TestBufferedReaderReadsWholeChunk(t *testing.T) {
 	assert.Equal(t, int(chunkSize), n)
 }
 
+type alwaysErrorReader struct{ err error }
+
+var _ io.Reader = &alwaysErrorReader{}
+
+func (err *alwaysErrorReader) Read([]byte) (int, error) {
+	return 0, err.err
+}
+
+func alwaysError(err error) io.Reader { return &alwaysErrorReader{err: err} }
+
+func TestBufferedReaderPrefetchPassesErrorsToConsumer(t *testing.T) {
+	pool := newBufferPool(10)
+	br := newBufferedReader(pool)
+
+	expectedErr := fmt.Errorf("oh no")
+
+	n64 := br.Prefetch(alwaysError(expectedErr))
+	assert.Equal(t, int64(0), n64)
+	br.Done()
+	buf := make([]byte, 10)
+	n, err := br.Read(buf)
+	assert.ErrorIs(t, expectedErr, err)
+	assert.Equal(t, 0, n)
+}
+
 func TestBufferedReaderSubsequentReadsReturnEOF(t *testing.T) {
 	pool := newBufferPool(10)
 	br := newBufferedReader(pool)
-	n64, err := br.ReadFrom(strings.NewReader("foobar"))
-	assert.NoError(t, err)
+	n64 := br.Prefetch(strings.NewReader("foobar"))
 	assert.Equal(t, int64(6), n64)
 	br.Done()
 	buf, err := io.ReadAll(br)
@@ -74,11 +96,10 @@ func TestBufferedReaderSubsequentReadsReturnEOF(t *testing.T) {
 	assert.ErrorIs(t, err, io.EOF)
 }
 
-func TestBufferedReaderDoneWithoutReadFrom(t *testing.T) {
+func TestBufferedReaderDoneWithoutPrefetch(t *testing.T) {
 	pool := newBufferPool(10)
 	br := newBufferedReader(pool)
 	br.Done()
-	buf, err := io.ReadAll(br)
-	assert.NoError(t, err)
-	assert.Equal(t, 0, len(buf))
+	_, err := io.ReadAll(br)
+	assert.Error(t, err)
 }

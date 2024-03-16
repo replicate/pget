@@ -2,8 +2,8 @@ package download
 
 import (
 	"bufio"
+	"fmt"
 	"io"
-	"strings"
 	"sync"
 )
 
@@ -13,24 +13,31 @@ import (
 // block until Done() is called.
 //
 // The intended use is: one goroutine calls Read(), which blocks until data is
-// ready.  Another calls ReadFrom() and then Done().  The call to Done()
+// ready.  Another calls Prefetch() and then Done().  The call to Done()
 // unblocks the Read() call and allows it to read the data that was fetched by
-// ReadFrom().
+// Prefetch().
+//
+// Note that Prefetch() will allocate a buffer from the shared pool, and Read()
+// will return that buffer to the shared pool once it gets to the end of the
+// underlying io.Reader.
 type bufferedReader struct {
 	// ready channel is closed when we're ready to read
 	ready chan struct{}
 	buf   *bufio.Reader
 	pool  *bufferPool
+	errs  chan error
 }
 
 var _ io.Reader = &bufferedReader{}
-var _ io.ReaderFrom = &bufferedReader{}
+
+var uninitializedReader = bufio.NewReader(nil)
 
 func newBufferedReader(pool *bufferPool) *bufferedReader {
 	return &bufferedReader{
 		ready: make(chan struct{}),
-		buf:   pool.Get(),
+		buf:   uninitializedReader,
 		pool:  pool,
+		errs:  make(chan error, 1),
 	}
 }
 
@@ -39,6 +46,16 @@ func newBufferedReader(pool *bufferPool) *bufferedReader {
 // pool.
 func (b *bufferedReader) Read(buf []byte) (int, error) {
 	<-b.ready
+	err := b.readErr()
+	if err != nil {
+		return 0, err
+	}
+	if b.buf == uninitializedReader {
+		// this happens if the producer calls Done() without calling Prefetch()
+		// or recordError().
+		// we signal to the consumer that something has gone wrong
+		return 0, fmt.Errorf("internal error: uninitialized chunk")
+	}
 	if b.buf == nil {
 		return 0, io.EOF
 	}
@@ -54,8 +71,8 @@ func (b *bufferedReader) Read(buf []byte) (int, error) {
 	return n, err
 }
 
-func (b *bufferedReader) ReadFrom(r io.Reader) (int64, error) {
-	b.buf.Reset(r)
+func (b *bufferedReader) Prefetch(r io.Reader) int64 {
+	b.buf = b.pool.Get(r)
 	var bytes []byte
 	var err error
 	for {
@@ -65,11 +82,28 @@ func (b *bufferedReader) ReadFrom(r io.Reader) (int64, error) {
 			break
 		}
 	}
-	if err == io.EOF {
-		// ReadFrom does not return io.EOF
-		err = nil
+	if err != nil && err != io.EOF {
+		// ensure we emit this on Read()
+		b.recordError(err)
 	}
-	return int64(len(bytes)), err
+	return int64(len(bytes))
+}
+
+func (b *bufferedReader) recordError(err error) {
+	// don't block if the error channel is full.
+	select {
+	case b.errs <- err:
+	default:
+	}
+}
+
+func (b *bufferedReader) readErr() error {
+	select {
+	case err := <-b.errs:
+		return err
+	default:
+		return nil
+	}
 }
 
 func (b *bufferedReader) Done() {
@@ -90,12 +124,10 @@ func newBufferPool(size int64) *bufferPool {
 	}
 }
 
-var emptyReader = strings.NewReader("")
-
-// Get returns a bufio.Reader with the correct size, with a blank underlying io.Reader.
-func (p *bufferPool) Get() *bufio.Reader {
+// Get returns a bufio.Reader with the correct size, wrapping the given io.Reader.
+func (p *bufferPool) Get(r io.Reader) *bufio.Reader {
 	br := p.pool.Get().(*bufio.Reader)
-	br.Reset(emptyReader)
+	br.Reset(r)
 	return br
 }
 

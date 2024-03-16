@@ -37,6 +37,15 @@ func (m Manifest) AddEntry(url string, destination string) Manifest {
 }
 
 func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {
+	fileSize, totalElapsed, err := g.downloadFile(ctx, url, dest)
+	if err != nil {
+		return fileSize, totalElapsed, err
+	}
+	err = g.Downloader.Wait()
+	return fileSize, totalElapsed, err
+}
+
+func (g *Getter) downloadFile(ctx context.Context, url string, dest string) (int64, time.Duration, error) {
 	if g.Consumer == nil {
 		g.Consumer = &consumer.FileWriter{}
 	}
@@ -52,10 +61,6 @@ func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int
 	err = g.Consumer.Consume(buffer, dest)
 	if err != nil {
 		return fileSize, 0, fmt.Errorf("error writing file: %w", err)
-	}
-	err = g.Downloader.Wait()
-	if err != nil {
-		return fileSize, 0, err
 	}
 
 	// writeElapsed := time.Since(writeStartTime)
@@ -99,6 +104,10 @@ func (g *Getter) DownloadFiles(ctx context.Context, manifest Manifest) (int64, t
 	if err != nil {
 		return 0, 0, fmt.Errorf("error downloading files: %w", err)
 	}
+	err = g.Downloader.Wait()
+	if err != nil {
+		return 0, 0, fmt.Errorf("error downloading files: %w", err)
+	}
 	elapsedTime := time.Since(multifileDownloadStart)
 	return totalSize.Load(), elapsedTime, nil
 }
@@ -120,7 +129,7 @@ func (g *Getter) downloadFilesFromManifest(ctx context.Context, eg *errgroup.Gro
 }
 
 func (g *Getter) downloadAndMeasure(ctx context.Context, url, dest string, totalSize *atomic.Int64) error {
-	fileSize, _, err := g.DownloadFile(ctx, url, dest)
+	fileSize, _, err := g.downloadFile(ctx, url, dest)
 	if err != nil {
 		return err
 	}

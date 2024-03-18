@@ -15,20 +15,17 @@ type BufferMode struct {
 	Client *client.HTTPClient
 	Options
 
-	queue *workQueue
-	pool  *bufferPool
+	queue *priorityWorkQueue
 }
 
 func GetBufferMode(opts Options) *BufferMode {
 	client := client.NewHTTPClient(opts.Client)
-	queue := newWorkQueue(opts.maxConcurrency())
-	queue.start()
 	m := &BufferMode{
 		Client:  client,
 		Options: opts,
-		queue:   queue,
 	}
-	m.pool = newBufferPool(m.chunkSize())
+	m.queue = newWorkQueue(opts.maxConcurrency(), m.chunkSize())
+	m.queue.start()
 	return m
 }
 
@@ -57,12 +54,11 @@ type firstReqResult struct {
 func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
 	logger := logging.GetLogger()
 
-	firstChunk := newBufferedReader(m.pool)
+	firstChunk := newReaderPromise()
 
 	firstReqResultCh := make(chan firstReqResult)
-	m.queue.submitLow(func() {
+	m.queue.submitLow(func(buf []byte) {
 		defer close(firstReqResultCh)
-		defer firstChunk.Done()
 		firstChunkResp, err := m.DoRequest(ctx, 0, m.chunkSize()-1, url)
 		if err != nil {
 			firstReqResultCh <- firstReqResult{err: err}
@@ -84,10 +80,8 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		firstReqResultCh <- firstReqResult{fileSize: fileSize, trueURL: trueURL}
 
 		contentLength := firstChunkResp.ContentLength
-		n := firstChunk.Prefetch(firstChunkResp.Body)
-		if n != contentLength {
-			firstChunk.recordError(ErrContentLengthMismatch{downloadedBytes: n, contentLength: contentLength})
-		}
+		n, err := io.ReadFull(firstChunkResp.Body, buf[0:contentLength])
+		firstChunk.Deliver(buf[0:n], err)
 	})
 
 	firstReqResult, ok := <-firstReqResultCh
@@ -123,14 +117,13 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		Msg("Downloading")
 
 	for i := 0; i < numChunks; i++ {
-		chunk := newBufferedReader(m.pool)
+		chunk := newReaderPromise()
 		chunks[i+1] = chunk
 	}
 	go func(chunks []io.Reader) {
 		for i, reader := range chunks {
-			chunk := reader.(*bufferedReader)
-			m.queue.submitHigh(func() {
-				defer chunk.Done()
+			chunk := reader.(*readerPromise)
+			m.queue.submitHigh(func(buf []byte) {
 				start := startOffset + m.chunkSize()*int64(i)
 				end := start + m.chunkSize() - 1
 
@@ -144,16 +137,14 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 
 				resp, err := m.DoRequest(ctx, start, end, trueURL)
 				if err != nil {
-					chunk.recordError(err)
+					chunk.Deliver(nil, err)
 					return
 				}
 				defer resp.Body.Close()
 
 				contentLength := resp.ContentLength
-				n := chunk.Prefetch(resp.Body)
-				if n != contentLength {
-					chunk.recordError(ErrContentLengthMismatch{downloadedBytes: n, contentLength: contentLength})
-				}
+				n, err := io.ReadFull(resp.Body, buf[0:contentLength])
+				chunk.Deliver(buf[0:n], err)
 			})
 		}
 	}(chunks[1:])

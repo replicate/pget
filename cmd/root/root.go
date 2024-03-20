@@ -58,7 +58,6 @@ func GetCommand() *cobra.Command {
 		Args:               validateArgs,
 		Example:            `  pget https://example.com/file.tar ./target-dir`,
 	}
-	cmd.Flags().BoolP(config.OptExtract, "x", false, "OptExtract archive after download")
 	cmd.SetUsageTemplate(cli.UsageTemplate)
 	config.ViperInit()
 	if err := persistentFlags(cmd); err != nil {
@@ -146,13 +145,6 @@ func rootPersistentPreRunEFunc(cmd *cobra.Command, args []string) error {
 			logger.Warn().Msg("Both PGET_MINIMUM_CHUNK_SIZE and PGET_CHUNK_SIZE are set, using PGET_CHUNK_SIZE")
 		}
 	}
-
-	if viper.GetBool(config.OptExtract) {
-		// TODO: decide what to do when --output is set *and* --extract is set
-		log.Debug().Msg("Tar Extract Enabled")
-		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
-	}
-
 	return nil
 }
 
@@ -179,6 +171,7 @@ func persistentFlags(cmd *cobra.Command) error {
 	cmd.PersistentFlags().Int(config.OptMaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host")
 	cmd.PersistentFlags().StringP(config.OptOutputConsumer, "o", "file", "Output Consumer (file, tar, null)")
 	cmd.PersistentFlags().String(config.OptPIDFile, defaultPidFilePath(), "PID file path")
+	cmd.PersistentFlags().BoolP(config.OptExtract, "x", false, "OptExtract archive after download")
 
 	if err := hideAndDeprecateFlags(cmd); err != nil {
 		return err
@@ -261,6 +254,12 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		MaxConcurrency: viper.GetInt(config.OptConcurrency),
 		ChunkSize:      int64(chunkSize),
 		Client:         clientOpts,
+	}
+
+	if viper.GetBool(config.OptExtract) {
+		// TODO: decide what to do when --output is set *and* --extract is set
+		log.Debug().Msg("Tar Extract Enabled")
+		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
 	}
 
 	consumer, err := config.GetConsumer()

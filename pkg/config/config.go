@@ -24,6 +24,19 @@ const (
 
 var (
 	DefaultCacheURIPrefixes = []string{"https://weights.replicate.delivery"}
+
+	TarFileExtensions = map[string]bool{
+		".tar":     true,
+		".tar.gz":  true,
+		".tgz":     true,
+		".tar.bz2": true,
+		".tbz":     true,
+		".tbz2":    true,
+		".tar.xz":  true,
+		".txz":     true,
+		".tar.lz4": true,
+		".tar.Z":   true,
+	}
 )
 
 type ConsistentHashingStrategy struct{}

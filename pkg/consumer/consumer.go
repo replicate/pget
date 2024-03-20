@@ -3,5 +3,5 @@ package consumer
 import "io"
 
 type Consumer interface {
-	Consume(reader io.Reader, destPath string) error
+	Consume(reader io.Reader, url string, destPath string) error
 }

@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/logging"
 )
@@ -17,25 +15,17 @@ type BufferMode struct {
 	Client *client.HTTPClient
 	Options
 
-	// we use this errgroup as a semaphore (via sem.SetLimit())
-	sem   *errgroup.Group
-	queue *workQueue
-	pool  *bufferPool
+	queue *priorityWorkQueue
 }
 
 func GetBufferMode(opts Options) *BufferMode {
 	client := client.NewHTTPClient(opts.Client)
-	sem := new(errgroup.Group)
-	sem.SetLimit(opts.maxConcurrency())
-	queue := newWorkQueue(opts.maxConcurrency())
-	queue.start()
 	m := &BufferMode{
 		Client:  client,
 		Options: opts,
-		sem:     sem,
-		queue:   queue,
 	}
-	m.pool = newBufferPool(m.chunkSize())
+	m.queue = newWorkQueue(opts.maxConcurrency(), m.chunkSize())
+	m.queue.start()
 	return m
 }
 
@@ -64,42 +54,34 @@ type firstReqResult struct {
 func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, error) {
 	logger := logging.GetLogger()
 
-	br := newBufferedReader(m.pool)
+	firstChunk := newReaderPromise()
 
 	firstReqResultCh := make(chan firstReqResult)
-	m.queue.submit(func() {
-		m.sem.Go(func() error {
-			defer close(firstReqResultCh)
-			defer br.Done()
-			firstChunkResp, err := m.DoRequest(ctx, 0, m.chunkSize()-1, url)
-			if err != nil {
-				firstReqResultCh <- firstReqResult{err: err}
-				return err
-			}
+	m.queue.submitLow(func(buf []byte) {
+		defer close(firstReqResultCh)
+		firstChunkResp, err := m.DoRequest(ctx, 0, m.chunkSize()-1, url)
+		if err != nil {
+			firstReqResultCh <- firstReqResult{err: err}
+			return
+		}
 
-			defer firstChunkResp.Body.Close()
+		defer firstChunkResp.Body.Close()
 
-			trueURL := firstChunkResp.Request.URL.String()
-			if trueURL != url {
-				logger.Info().Str("url", url).Str("redirect_url", trueURL).Msg("Redirect")
-			}
+		trueURL := firstChunkResp.Request.URL.String()
+		if trueURL != url {
+			logger.Info().Str("url", url).Str("redirect_url", trueURL).Msg("Redirect")
+		}
 
-			fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
-			if err != nil {
-				firstReqResultCh <- firstReqResult{err: err}
-				return err
-			}
-			firstReqResultCh <- firstReqResult{fileSize: fileSize, trueURL: trueURL}
+		fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
+		if err != nil {
+			firstReqResultCh <- firstReqResult{err: err}
+			return
+		}
+		firstReqResultCh <- firstReqResult{fileSize: fileSize, trueURL: trueURL}
 
-			contentLength := firstChunkResp.ContentLength
-			n, err := br.ReadFrom(firstChunkResp.Body)
-			if err != nil {
-				return err
-			} else if n != contentLength {
-				return ErrContentLengthMismatch{downloadedBytes: n, contentLength: contentLength}
-			}
-			return nil
-		})
+		contentLength := firstChunkResp.ContentLength
+		n, err := io.ReadFull(firstChunkResp.Body, buf[0:contentLength])
+		firstChunk.Deliver(buf[0:n], err)
 	})
 
 	firstReqResult, ok := <-firstReqResultCh
@@ -116,62 +98,58 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 
 	if fileSize <= m.chunkSize() {
 		// we only need a single chunk: just download it and finish
-		return br, fileSize, nil
+		return firstChunk, fileSize, nil
 	}
 
 	remainingBytes := fileSize - m.chunkSize()
 	// integer divide rounding up
 	numChunks := int((remainingBytes-1)/m.chunkSize() + 1)
 
-	readersCh := make(chan io.Reader, numChunks+1)
-	readersCh <- br
+	chunks := make([]io.Reader, numChunks+1)
+	chunks[0] = firstChunk
 
 	startOffset := m.chunkSize()
 
-	m.queue.submit(func() {
-		defer close(readersCh)
-		logger.Debug().Str("url", url).
-			Int64("size", fileSize).
-			Int("connections", numChunks).
-			Int64("chunkSize", m.chunkSize()).
-			Msg("Downloading")
+	logger.Debug().Str("url", url).
+		Int64("size", fileSize).
+		Int("connections", numChunks).
+		Int64("chunkSize", m.chunkSize()).
+		Msg("Downloading")
 
-		for i := 0; i < numChunks; i++ {
-			start := startOffset + m.chunkSize()*int64(i)
-			end := start + m.chunkSize() - 1
+	for i := 0; i < numChunks; i++ {
+		chunk := newReaderPromise()
+		chunks[i+1] = chunk
+	}
+	go func(chunks []io.Reader) {
+		for i, reader := range chunks {
+			chunk := reader.(*readerPromise)
+			m.queue.submitHigh(func(buf []byte) {
+				start := startOffset + m.chunkSize()*int64(i)
+				end := start + m.chunkSize() - 1
 
-			if i == numChunks-1 {
-				end = fileSize - 1
-			}
+				if i == numChunks-1 {
+					end = fileSize - 1
+				}
+				logger.Debug().Str("url", url).
+					Int64("size", fileSize).
+					Int("chunk", i).
+					Msg("Downloading chunk")
 
-			br := newBufferedReader(m.pool)
-			readersCh <- br
-
-			m.sem.Go(func() error {
-				defer br.Done()
 				resp, err := m.DoRequest(ctx, start, end, trueURL)
 				if err != nil {
-					return err
+					chunk.Deliver(nil, err)
+					return
 				}
 				defer resp.Body.Close()
 
 				contentLength := resp.ContentLength
-				n, err := br.ReadFrom(resp.Body)
-				if err != nil {
-					return err
-				} else if n != contentLength {
-					return ErrContentLengthMismatch{downloadedBytes: n, contentLength: contentLength}
-				}
-				return nil
+				n, err := io.ReadFull(resp.Body, buf[0:contentLength])
+				chunk.Deliver(buf[0:n], err)
 			})
 		}
-	})
+	}(chunks[1:])
 
-	return newChanMultiReader(readersCh), fileSize, nil
-}
-
-func (m *BufferMode) Wait() error {
-	return m.sem.Wait()
+	return io.MultiReader(chunks...), fileSize, nil
 }
 
 func (m *BufferMode) DoRequest(ctx context.Context, start, end int64, trueURL string) (*http.Response, error) {

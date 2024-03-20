@@ -117,8 +117,6 @@ func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
 			require.NoError(t, err)
 			data, err := io.ReadAll(download)
 			assert.NoError(t, err)
-			err = bufferMode.Wait()
-			assert.NoError(t, err)
 			assert.Equal(t, contentSize, size)
 			assert.Equal(t, len(content), len(data))
 			assert.Equal(t, content, data)
@@ -126,7 +124,7 @@ func TestFileToBufferChunkCountExceedsMaxChunks(t *testing.T) {
 	}
 }
 
-func TestWaitReturnsErrorWhenRequestFails(t *testing.T) {
+func TestReaderReturnsErrorWhenRequestFails(t *testing.T) {
 	mockTransport := httpmock.NewMockTransport()
 	opts := Options{
 		Client:    client.Options{Transport: mockTransport},
@@ -160,8 +158,7 @@ func TestWaitReturnsErrorWhenRequestFails(t *testing.T) {
 	download, _, err := bufferMode.Fetch(context.Background(), "http://test.example/hello.txt")
 	// No error here, because the first chunk was fetched successfully
 	require.NoError(t, err)
-	// the read might or might not return an error
-	_, _ = io.ReadAll(download)
-	err = bufferMode.Wait()
+	// the read should return any error we expect
+	_, err = io.ReadAll(download)
 	assert.ErrorIs(t, err, expectedErr)
 }

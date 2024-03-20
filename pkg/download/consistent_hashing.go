@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/consistent"
@@ -24,10 +22,7 @@ type ConsistentHashingMode struct {
 	// TODO: allow this to be configured and not just "BufferMode"
 	FallbackStrategy Strategy
 
-	// we use this errgroup as a semaphore (via sem.SetLimit())
-	sem   *errgroup.Group
-	queue *workQueue
-	pool  *bufferPool
+	queue *priorityWorkQueue
 }
 
 type CacheKey struct {
@@ -40,27 +35,20 @@ func GetConsistentHashingMode(opts Options) (*ConsistentHashingMode, error) {
 		return nil, fmt.Errorf("must specify slice size in consistent hashing mode")
 	}
 	client := client.NewHTTPClient(opts.Client)
-	sem := new(errgroup.Group)
-	sem.SetLimit(opts.maxConcurrency())
-	queue := newWorkQueue(opts.maxConcurrency())
-	queue.start()
 
 	fallbackStrategy := &BufferMode{
 		Client:  client,
 		Options: opts,
-		sem:     sem,
-		queue:   queue,
 	}
 
 	m := &ConsistentHashingMode{
 		Client:           client,
 		Options:          opts,
 		FallbackStrategy: fallbackStrategy,
-		sem:              sem,
-		queue:            queue,
 	}
-	m.pool = newBufferPool(m.chunkSize())
-	fallbackStrategy.pool = m.pool
+	m.queue = newWorkQueue(opts.maxConcurrency(), m.chunkSize())
+	m.queue.start()
+	fallbackStrategy.queue = m.queue
 	return m, nil
 }
 
@@ -108,37 +96,27 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		return m.FallbackStrategy.Fetch(ctx, urlString)
 	}
 
-	br := newBufferedReader(m.pool)
+	firstChunk := newReaderPromise()
 	firstReqResultCh := make(chan firstReqResult)
-	m.queue.submit(func() {
-		m.sem.Go(func() error {
-			defer close(firstReqResultCh)
-			defer br.Done()
-			firstChunkResp, err := m.DoRequest(ctx, 0, m.chunkSize()-1, urlString)
-			if err != nil {
-				firstReqResultCh <- firstReqResult{err: err}
-				// The error will be handled by the firstReqResultCh consumer,
-				// and may be recoverable; so we return nil to the errGroup
-				return nil
-			}
-			defer firstChunkResp.Body.Close()
+	m.queue.submitLow(func(buf []byte) {
+		defer close(firstReqResultCh)
+		firstChunkResp, err := m.DoRequest(ctx, 0, m.chunkSize()-1, urlString)
+		if err != nil {
+			firstReqResultCh <- firstReqResult{err: err}
+			return
+		}
+		defer firstChunkResp.Body.Close()
 
-			fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
-			if err != nil {
-				firstReqResultCh <- firstReqResult{err: err}
-				return err
-			}
-			firstReqResultCh <- firstReqResult{fileSize: fileSize}
+		fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
+		if err != nil {
+			firstReqResultCh <- firstReqResult{err: err}
+			return
+		}
+		firstReqResultCh <- firstReqResult{fileSize: fileSize}
 
-			contentLength := firstChunkResp.ContentLength
-			n, err := br.ReadFrom(firstChunkResp.Body)
-			if err != nil {
-				return err
-			} else if n != contentLength {
-				return ErrContentLengthMismatch{downloadedBytes: n, contentLength: contentLength}
-			}
-			return nil
-		})
+		contentLength := firstChunkResp.ContentLength
+		n, err := io.ReadFull(firstChunkResp.Body, buf[0:contentLength])
+		firstChunk.Deliver(buf[0:n], err)
 	})
 	firstReqResult, ok := <-firstReqResultCh
 	if !ok {
@@ -163,7 +141,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 
 	if fileSize <= m.chunkSize() {
 		// we only need a single chunk: just download it and finish
-		return br, fileSize, nil
+		return firstChunk, fileSize, nil
 	}
 
 	totalSlices := fileSize / m.SliceSize
@@ -171,83 +149,81 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 		totalSlices++
 	}
 
-	readersCh := make(chan io.Reader, m.maxConcurrency()+1)
-	readersCh <- br
-
+	readers := make([]io.Reader, 0)
+	slices := make([][]*readerPromise, totalSlices)
 	logger.Debug().Str("url", urlString).
 		Int64("size", fileSize).
 		Int("concurrency", m.maxConcurrency()).
 		Msg("Downloading")
 
-	m.queue.submit(func() {
-		defer close(readersCh)
-		for slice := 0; slice < int(totalSlices); slice++ {
-			sliceStart := m.SliceSize * int64(slice)
-			sliceSize := m.SliceSize
-			sliceEnd := m.SliceSize*int64(slice+1) - 1
-			if slice == int(totalSlices)-1 {
-				sliceSize = (fileSize-1)%m.SliceSize + 1
+	for slice := 0; slice < int(totalSlices); slice++ {
+		sliceSize := m.SliceSize
+		if slice == int(totalSlices)-1 {
+			sliceSize = (fileSize-1)%m.SliceSize + 1
+		}
+		// integer divide rounding up
+		numChunks := int(((sliceSize - 1) / m.chunkSize()) + 1)
+		chunks := make([]*readerPromise, numChunks)
+		for i := 0; i < numChunks; i++ {
+			var chunk *readerPromise
+			if slice == 0 && i == 0 {
+				chunk = firstChunk
+			} else {
+				chunk = newReaderPromise()
 			}
-			if slice == 0 {
-				if m.chunkSize() == m.SliceSize {
-					// we've downloaded the whole slice already
-					continue
-				}
-				sliceStart = m.chunkSize()
-				sliceSize = sliceSize - m.chunkSize()
+			chunks[i] = chunk
+			readers = append(readers, chunk)
+		}
+		slices[slice] = chunks
+	}
+	go m.downloadRemainingChunks(ctx, urlString, slices)
+	return io.MultiReader(readers...), fileSize, nil
+}
+
+func (m *ConsistentHashingMode) downloadRemainingChunks(ctx context.Context, urlString string, slices [][]*readerPromise) {
+	logger := logging.GetLogger()
+	for slice, sliceChunks := range slices {
+		sliceStart := m.SliceSize * int64(slice)
+		sliceEnd := m.SliceSize*int64(slice+1) - 1
+		for i, chunk := range sliceChunks {
+			if slice == 0 && i == 0 {
+				// this is the first chunk, already handled above
+				continue
 			}
-			// integer divide rounding up
-			numChunks := int(((sliceSize - 1) / m.chunkSize()) + 1)
-			for chunk := 0; chunk < numChunks; chunk++ {
-				chunkStart := sliceStart + int64(chunk)*m.chunkSize()
+			m.queue.submitHigh(func(buf []byte) {
+				chunkStart := sliceStart + int64(i)*m.chunkSize()
 				chunkEnd := chunkStart + m.chunkSize() - 1
 				if chunkEnd > sliceEnd {
 					chunkEnd = sliceEnd
 				}
 
-				br := newBufferedReader(m.pool)
-				readersCh <- br
-				m.sem.Go(func() error {
-					defer br.Done()
-					logger.Debug().Int64("start", chunkStart).Int64("end", chunkEnd).Msg("starting request")
-					resp, err := m.DoRequest(ctx, chunkStart, chunkEnd, urlString)
-					if err != nil {
-						// in the case that an error indicating an issue with the cache server, networking, etc is returned,
-						// this will use the fallback strategy. This is a case where the whole file will perform the fall-back
-						// for the specified chunk instead of the whole file.
-						if errors.Is(err, client.ErrStrategyFallback) {
-							// TODO(morgan): we should indicate the fallback strategy we're using in the logs
-							logger.Info().
-								Str("url", urlString).
-								Str("type", "chunk").
-								Err(err).
-								Msg("consistent hash fallback")
-							resp, err = m.FallbackStrategy.DoRequest(ctx, chunkStart, chunkEnd, urlString)
-						}
-						if err != nil {
-							return err
-						}
+				logger.Debug().Int64("start", chunkStart).Int64("end", chunkEnd).Msg("starting request")
+				resp, err := m.DoRequest(ctx, chunkStart, chunkEnd, urlString)
+				if err != nil {
+					// in the case that an error indicating an issue with the cache server, networking, etc is returned,
+					// this will use the fallback strategy. This is a case where the whole file will perform the fall-back
+					// for the specified chunk instead of the whole file.
+					if errors.Is(err, client.ErrStrategyFallback) {
+						// TODO(morgan): we should indicate the fallback strategy we're using in the logs
+						logger.Info().
+							Str("url", urlString).
+							Str("type", "chunk").
+							Err(err).
+							Msg("consistent hash fallback")
+						resp, err = m.FallbackStrategy.DoRequest(ctx, chunkStart, chunkEnd, urlString)
 					}
-					defer resp.Body.Close()
-					contentLength := resp.ContentLength
-					n, err := br.ReadFrom(resp.Body)
 					if err != nil {
-						return err
-					} else if n != contentLength {
-						return ErrContentLengthMismatch{downloadedBytes: n, contentLength: contentLength}
+						chunk.Deliver(nil, err)
+						return
 					}
-					return nil
-				})
-
-			}
+				}
+				defer resp.Body.Close()
+				contentLength := resp.ContentLength
+				n, err := io.ReadFull(resp.Body, buf[0:contentLength])
+				chunk.Deliver(buf[0:n], err)
+			})
 		}
-	})
-
-	return newChanMultiReader(readersCh), fileSize, nil
-}
-
-func (m *ConsistentHashingMode) Wait() error {
-	return m.sem.Wait()
+	}
 }
 
 func (m *ConsistentHashingMode) DoRequest(ctx context.Context, start, end int64, urlString string) (*http.Response, error) {

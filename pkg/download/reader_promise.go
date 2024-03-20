@@ -46,6 +46,7 @@ func (b *readerPromise) Read(buf []byte) (int, error) {
 		// unblock the producer
 		close(b.finished)
 		b.buf = nil
+		b.err = io.EOF
 	}
 	return n, err
 }

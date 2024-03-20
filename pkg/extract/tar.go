@@ -22,10 +22,23 @@ type link struct {
 	newName  string
 }
 
-func TarFile(reader io.Reader, destDir string, overwrite bool) error {
+func TarFile(r io.Reader, destDir string, overwrite bool) error {
 	var links []*link
 
 	startTime := time.Now()
+	peekReader := &peekReader{reader: r}
+	peekData, err := peekReader.peek(peekSize)
+	if err != nil {
+		return fmt.Errorf("error reading peek data: %w", err)
+	}
+	decompressor := detectFormat(peekData)
+	if err != nil {
+		return fmt.Errorf("error detecting format: %w", err)
+	}
+	reader, err := decompressor.decompress(peekReader)
+	if err != nil {
+		return fmt.Errorf("error creating decompressed stream: %w", err)
+	}
 	tarReader := tar.NewReader(reader)
 	logger := logging.GetLogger()
 

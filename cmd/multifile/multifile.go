@@ -97,6 +97,8 @@ func maxConcurrentFiles() int {
 }
 
 func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
+	logger := logging.GetLogger()
+
 	chunkSize, err := humanize.ParseBytes(viper.GetString(config.OptChunkSize))
 	if err != nil {
 		return err
@@ -131,6 +133,13 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 		return fmt.Errorf("error getting consumer: %w", err)
 	}
 
+	// Special case, if we're writing to stdout, we only want to download one file at a time, since we can only stream
+	// a single bytestream to STDOUT
+	if viper.GetString(config.OptOutputConsumer) == config.ConsumerSTDOUT {
+		logger.Info().Msg("Using single file mode for STDOUT consumer")
+		pgetOpts.MaxConcurrentFiles = 1
+	}
+
 	getter := &pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
 		Consumer:   consumer,
@@ -158,7 +167,6 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 	}
 
 	throughput := float64(totalFileSize) / elapsedTime.Seconds()
-	logger := logging.GetLogger()
 	logger.Info().
 		Int("file_count", len(manifest)).
 		Str("total_bytes_downloaded", humanize.Bytes(uint64(totalFileSize))).

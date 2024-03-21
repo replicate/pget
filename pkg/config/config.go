@@ -20,6 +20,7 @@ const (
 	ConsumerFile         = "file"
 	ConsumerTarExtractor = "tar-extractor"
 	ConsumerNull         = "null"
+	ConsumerSTDOUT       = "stdout"
 )
 
 var (
@@ -153,6 +154,8 @@ func GetConsumer() (consumer.Consumer, error) {
 		return &consumer.TarExtractor{Overwrite: enableOverwrite}, nil
 	case ConsumerNull:
 		return &consumer.NullWriter{}, nil
+	case ConsumerSTDOUT:
+		return &consumer.StdoutConsumer{}, nil
 	default:
 		return nil, fmt.Errorf("invalid consumer specified: %s", consumerName)
 	}

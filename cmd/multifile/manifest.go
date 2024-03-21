@@ -90,7 +90,7 @@ func parseManifest(file io.Reader) (pget.Manifest, error) {
 		// and make the consumer responsible for knowing if this
 		// is allowed/not allowed/etc
 		consumer := viper.GetString(config.OptOutputConsumer)
-		if consumer != config.ConsumerNull {
+		if consumer != config.ConsumerNull && consumer != config.ConsumerSTDOUT {
 			err = checkSeenDestinations(seenDestinations, dest, url)
 			if err != nil {
 				if errors.Is(err, errDupeURLDestCombo) {

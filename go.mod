@@ -9,10 +9,12 @@ require (
 	github.com/hashicorp/go-retryablehttp v0.7.5
 	github.com/jarcoal/httpmock v1.3.1
 	github.com/mitchellh/hashstructure/v2 v2.0.2
+	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/rs/zerolog v1.32.0
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	github.com/stretchr/testify v1.9.0
+	github.com/ulikunitz/xz v0.5.11
 	golang.org/x/sync v0.7.0
 	golang.org/x/tools v0.20.0
 	gotest.tools/gotestsum v1.11.0

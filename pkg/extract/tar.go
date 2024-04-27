@@ -64,6 +64,11 @@ func TarFile(r io.Reader, destDir string, overwrite bool) error {
 		}
 
 		switch header.Typeflag {
+		case tar.TypeXGlobalHeader:
+			// This is a global pax header, which we can skip as it's mostly handled by the underlying implementation
+			// NOTE: the global header is not persisted across subsequent calls to Next() and therefore could indicate
+			// that we are processing a tar file in an unintended manner. This is a limitation of archive/tar.
+			continue
 		case tar.TypeDir:
 			logger.Debug().
 				Str("target", target).

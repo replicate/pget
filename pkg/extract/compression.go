@@ -1,10 +1,10 @@
 package extract
 
 import (
+	"bytes"
 	"compress/bzip2"
 	"compress/gzip"
 	"compress/lzw"
-	"encoding/binary"
 	"io"
 
 	"github.com/pierrec/lz4"
@@ -15,12 +15,14 @@ import (
 
 const (
 	peekSize = 8
+)
 
-	gzipMagic = 0x1F8B
-	bzipMagic = 0x425A
-	xzMagic   = 0xFD377A585A00
-	lzwMagic  = 0x1F9D
-	lz4Magic  = 0x184D2204
+var (
+	gzipMagic = []byte{0x1F, 0x8B}
+	bzipMagic = []byte{0x42, 0x5A}
+	xzMagic   = []byte{0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00}
+	lzwMagic  = []byte{0x1F, 0x9D}
+	lz4Magic  = []byte{0x18, 0x4D, 0x22, 0x04}
 )
 
 var _ decompressor = gzipDecompressor{}
@@ -48,25 +50,25 @@ func detectFormat(input []byte) decompressor {
 		input = append(input, make([]byte, peekSize-inputSize)...)
 	}
 
-	magic16 := binary.BigEndian.Uint16(input)
-	magic32 := binary.BigEndian.Uint32(input)
-	// We need to pre-pend the padding since we're reading into something bigendian and exceeding the
-	// 48bits size of the magic number bytes. The 16 and 32 bit magic numbers are complete bytes and
-	// therefore do not need any padding.
-	magic48 := binary.BigEndian.Uint64(append(make([]byte, 2), input[0:6]...))
+	//  magic16 := binary.BigEndian.Uint16(input)
+	//  magic32 := binary.BigEndian.Uint32(input)
+	//  // We need to pre-pend the padding since we're reading into something bigendian and exceeding the
+	//  // 48bits size of the magic number bytes. The 16 and 32 bit magic numbers are complete bytes and
+	//  // therefore do not need any padding.
+	//  magic48 := binary.BigEndian.Uint64(append(make([]byte, 2), input[0:6]...))
 
 	switch true {
-	case magic16 == gzipMagic:
+	case bytes.HasPrefix(input, gzipMagic):
 		log.Debug().
 			Str("type", "gzip").
 			Msg("Compression Format")
 		return gzipDecompressor{}
-	case magic16 == bzipMagic:
+	case bytes.HasPrefix(input, bzipMagic):
 		log.Debug().
 			Str("type", "bzip2").
 			Msg("Compression Format")
 		return bzip2Decompressor{}
-	case magic16 == lzwMagic:
+	case bytes.HasPrefix(input, lzwMagic):
 		compressionByte := input[2]
 		// litWidth is guaranteed to be at least 9 per specification, the high order 3 bits of byte[2] are the litWidth
 		// the low order 5 bits are only used by non-unix implementations, we are going to ignore them.
@@ -79,12 +81,12 @@ func detectFormat(input []byte) decompressor {
 			order:    lzw.MSB,
 			litWidth: litWidth,
 		}
-	case magic32 == lz4Magic:
+	case bytes.HasPrefix(input, lz4Magic):
 		log.Debug().
 			Str("type", "lz4").
 			Msg("Compression Format")
 		return lz4Decompressor{}
-	case magic48 == xzMagic:
+	case bytes.HasPrefix(input, xzMagic):
 		log.Debug().
 			Str("type", "xz").
 			Msg("Compression Format")

@@ -1,2 +1,27 @@
-pget
-dist
+# Allowlisting gitignore prevents us
+# from adding various unwanted local files, such as generated
+# files, developer configurations or IDE-specific files etc.
+
+
+# Ignore everything
+*
+
+# Track these files
+!/.gitignore
+
+!*.go
+!go.sum
+!go.mod
+
+!README.md
+!LICENSE
+!Makefile
+!CONTRIBUTING.md
+!script/
+
+!.envrc
+!.goreleaser.yaml
+!.tool-versions
+
+# persist the track directives for files in subdirectories
+!*/

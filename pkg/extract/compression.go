@@ -30,7 +30,6 @@ var _ decompressor = bzip2Decompressor{}
 var _ decompressor = xzDecompressor{}
 var _ decompressor = lzwDecompressor{}
 var _ decompressor = lz4Decompressor{}
-var _ decompressor = noOpDecompressor{}
 
 // decompressor represents different compression formats.
 type decompressor interface {
@@ -43,19 +42,12 @@ func detectFormat(input []byte) decompressor {
 	inputSize := len(input)
 
 	if inputSize < 2 {
-		return noOpDecompressor{}
+		return nil
 	}
 	// pad to 8 bytes
 	if inputSize < 8 {
 		input = append(input, make([]byte, peekSize-inputSize)...)
 	}
-
-	//  magic16 := binary.BigEndian.Uint16(input)
-	//  magic32 := binary.BigEndian.Uint32(input)
-	//  // We need to pre-pend the padding since we're reading into something bigendian and exceeding the
-	//  // 48bits size of the magic number bytes. The 16 and 32 bit magic numbers are complete bytes and
-	//  // therefore do not need any padding.
-	//  magic48 := binary.BigEndian.Uint64(append(make([]byte, 2), input[0:6]...))
 
 	switch true {
 	case bytes.HasPrefix(input, gzipMagic):
@@ -95,8 +87,9 @@ func detectFormat(input []byte) decompressor {
 		log.Debug().
 			Str("type", "none").
 			Msg("Compression Format")
-		return noOpDecompressor{}
+		return nil
 	}
+
 }
 
 type gzipDecompressor struct{}
@@ -133,7 +126,3 @@ func (d lz4Decompressor) decompress(r io.Reader) (io.Reader, error) {
 }
 
 type noOpDecompressor struct{}
-
-func (d noOpDecompressor) decompress(r io.Reader) (io.Reader, error) {
-	return r, nil
-}

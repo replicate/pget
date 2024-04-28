@@ -27,6 +27,8 @@ func TarFile(r *bufio.Reader, destDir string, overwrite bool) error {
 	var links []*link
 	var reader io.Reader = r
 
+	log := logging.GetLogger()
+
 	startTime := time.Now()
 	peekData, err := r.Peek(peekSize)
 	if err != nil {
@@ -37,6 +39,9 @@ func TarFile(r *bufio.Reader, destDir string, overwrite bool) error {
 		if err != nil {
 			return fmt.Errorf("error creating decompressed stream: %w", err)
 		}
+		log.Info().
+			Str("decompressor", fmt.Sprintf("%T", decompressor)).
+			Msg("Tar Compression Detected: Compression can significantly slowdown pget (e.g. for model weights)")
 	}
 	tarReader := tar.NewReader(reader)
 	logger := logging.GetLogger()

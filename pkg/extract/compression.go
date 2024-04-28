@@ -124,5 +124,3 @@ type lz4Decompressor struct{}
 func (d lz4Decompressor) decompress(r io.Reader) (io.Reader, error) {
 	return lz4.NewReader(r), nil
 }
-
-type noOpDecompressor struct{}

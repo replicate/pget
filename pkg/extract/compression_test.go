@@ -31,12 +31,12 @@ func TestDetectFormat(t *testing.T) {
 		{
 			name:       "Less than 2 bytes",
 			input:      []byte{0x1f},
-			expectType: "extract.noOpDecompressor",
+			expectType: "",
 		},
 		{
 			name:       "UNKNOWN",
 			input:      []byte{0xde, 0xad},
-			expectType: "extract.noOpDecompressor",
+			expectType: "",
 		},
 	}
 

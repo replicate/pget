@@ -17,7 +17,7 @@ import (
 )
 
 type ConsistentHashingMode struct {
-	Client *client.HTTPClient
+	Client client.HTTPClient
 	Options
 	// TODO: allow this to be configured and not just "BufferMode"
 	FallbackStrategy Strategy
@@ -116,6 +116,9 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 
 		contentLength := firstChunkResp.ContentLength
 		n, err := io.ReadFull(firstChunkResp.Body, buf[0:contentLength])
+		if err == io.ErrUnexpectedEOF {
+			_, err = resumeDownload(firstChunkResp.Request, buf[n:], m.Client, int64(n))
+		}
 		firstChunk.Deliver(buf[0:n], err)
 	})
 	firstReqResult, ok := <-firstReqResultCh
@@ -205,11 +208,6 @@ func (m *ConsistentHashingMode) downloadRemainingChunks(ctx context.Context, url
 					// for the specified chunk instead of the whole file.
 					if errors.Is(err, client.ErrStrategyFallback) {
 						// TODO(morgan): we should indicate the fallback strategy we're using in the logs
-						logger.Info().
-							Str("url", urlString).
-							Str("type", "chunk").
-							Err(err).
-							Msg("consistent hash fallback")
 						resp, err = m.FallbackStrategy.DoRequest(ctx, chunkStart, chunkEnd, urlString)
 					}
 					if err != nil {
@@ -220,6 +218,9 @@ func (m *ConsistentHashingMode) downloadRemainingChunks(ctx context.Context, url
 				defer resp.Body.Close()
 				contentLength := resp.ContentLength
 				n, err := io.ReadFull(resp.Body, buf[0:contentLength])
+				if err == io.ErrUnexpectedEOF {
+					_, err = resumeDownload(resp.Request, buf[n:], m.Client, int64(n))
+				}
 				chunk.Deliver(buf[0:n], err)
 			})
 		}

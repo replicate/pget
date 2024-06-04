@@ -25,13 +25,17 @@ const (
 
 var ErrStrategyFallback = errors.New("fallback to next strategy")
 
-// HTTPClient is a wrapper around http.Client that allows for limiting the number of concurrent connections per host
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// PGetHTTPClient is a wrapper around http.Client that allows for limiting the number of concurrent connections per host
 // utilizing a client pool. If the OptMaxConnPerHost option is not set, the client pool will not be used.
-type HTTPClient struct {
+type PGetHTTPClient struct {
 	*http.Client
 }
 
-func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
+func (c *PGetHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	req.Header.Set("User-Agent", fmt.Sprintf("pget/%s", version.GetVersion()))
 	return c.Client.Do(req)
 }
@@ -51,7 +55,7 @@ type TransportOptions struct {
 
 // NewHTTPClient factory function returns a new http.Client with the appropriate settings and can limit number of clients
 // per host if the OptMaxConnPerHost option is set.
-func NewHTTPClient(opts Options) *HTTPClient {
+func NewHTTPClient(opts Options) HTTPClient {
 
 	transport := opts.Transport
 
@@ -94,7 +98,7 @@ func NewHTTPClient(opts Options) *HTTPClient {
 	}
 
 	client := retryClient.StandardClient()
-	return &HTTPClient{Client: client}
+	return &PGetHTTPClient{Client: client}
 }
 
 // RetryPolicy wraps retryablehttp.DefaultRetryPolicy and included additional logic:

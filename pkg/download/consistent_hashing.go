@@ -120,7 +120,7 @@ func (m *ConsistentHashingMode) Fetch(ctx context.Context, urlString string) (io
 			logger.Warn().
 				Int("connection_interrupted_at_byte", n).
 				Msg("Resuming Chunk Download")
-			_, err = resumeDownload(firstChunkResp.Request, buf[n:contentLength], m.Client, int64(n))
+			n, err = resumeDownload(firstChunkResp.Request, buf[n:contentLength], m.Client, int64(n))
 		}
 		firstChunk.Deliver(buf[0:n], err)
 	})
@@ -230,7 +230,7 @@ func (m *ConsistentHashingMode) downloadRemainingChunks(ctx context.Context, url
 					logger.Warn().
 						Int("connection_interrupted_at_byte", n).
 						Msg("Resuming Chunk Download")
-					_, err = resumeDownload(resp.Request, buf[n:contentLength], m.Client, int64(n))
+					n, err = resumeDownload(resp.Request, buf[n:contentLength], m.Client, int64(n))
 				}
 				chunk.Deliver(buf[0:n], err)
 			})

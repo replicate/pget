@@ -112,12 +112,13 @@ func TestResumeDownload(t *testing.T) {
 				},
 			}
 
-			_, err = resumeDownload(req, buffer[tt.bytesReceived:], mockClient, tt.bytesReceived)
+			totalBytesReceived, err := resumeDownload(req, buffer[tt.bytesReceived:], mockClient, tt.bytesReceived)
 			if tt.expectedError != nil {
 				assert.Error(t, err)
 				assert.Equal(t, tt.expectedError.Error(), err.Error())
 			} else {
 				assert.NoError(t, err)
+				assert.Equal(t, len(tt.expectedOutput), totalBytesReceived)
 				assert.Equal(t, tt.expectedOutput, buffer[:len(tt.expectedOutput)])
 			}
 			assert.Equal(t, tt.expectedCalls, mockClient.callCount.Load(), "Unexpected number of HTTP client calls")

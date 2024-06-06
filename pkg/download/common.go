@@ -25,28 +25,30 @@ var (
 	errInvalidContentRange  = errors.New("invalid content range")
 )
 
-func resumeDownload(req *http.Request, buffer []byte, client client.HTTPClient, bytesReceived int64) (*http.Response, error) {
+func resumeDownload(req *http.Request, buffer []byte, client client.HTTPClient, bytesReceived int64) (int, error) {
 	var startByte int
 	logger := logging.GetLogger()
 
 	var resumeCount = 1
 	var initialBytesReceived = bytesReceived
+	var totalBytesReceived = bytesReceived
 
 	for {
 		var n int
 		if err := updateRangeRequestHeader(req, bytesReceived); err != nil {
-			return nil, err
+			return int(totalBytesReceived), err
 		}
 
 		resp, err := client.Do(req)
 		if err != nil {
-			return nil, err
+			return int(totalBytesReceived), err
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusPartialContent {
-			return nil, fmt.Errorf("expected status code %d, got %d", http.StatusPartialContent, resp.StatusCode)
+			return int(totalBytesReceived), fmt.Errorf("expected status code %d, got %d", http.StatusPartialContent, resp.StatusCode)
 		}
 		n, err = io.ReadFull(resp.Body, buffer[startByte:])
+		totalBytesReceived += int64(n)
 		if err == io.ErrUnexpectedEOF {
 			bytesReceived = int64(n)
 			startByte += n
@@ -58,7 +60,7 @@ func resumeDownload(req *http.Request, buffer []byte, client client.HTTPClient, 
 				Msg("Resuming Chunk Download")
 			continue
 		}
-		return nil, err
+		return int(totalBytesReceived), err
 
 	}
 }

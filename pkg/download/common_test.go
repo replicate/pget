@@ -6,12 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 )
 
 type mockHTTPClient struct {
@@ -94,7 +94,7 @@ func TestResumeDownload(t *testing.T) {
 					}
 					if tt.name == "multi-pass download" {
 						switch req.Header.Get("Range") {
-						case "bytes=16-19":
+						case "bytes=15-19":
 							return &http.Response{
 								StatusCode: http.StatusPartialContent,
 								Body:       io.NopCloser(bytes.NewReader([]byte("56789"))),

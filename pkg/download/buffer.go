@@ -82,7 +82,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		contentLength := firstChunkResp.ContentLength
 		n, err := io.ReadFull(firstChunkResp.Body, buf[0:contentLength])
 		if err == io.ErrUnexpectedEOF {
-			_, err = resumeDownload(firstChunkResp.Request, buf[n:], m.Client, int64(n))
+			_, err = resumeDownload(firstChunkResp.Request, buf[n-1:], m.Client, int64(n))
 		}
 		firstChunk.Deliver(buf[0:n], err)
 	})
@@ -148,7 +148,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 				contentLength := resp.ContentLength
 				n, err := io.ReadFull(resp.Body, buf[0:contentLength])
 				if err == io.ErrUnexpectedEOF {
-					_, err = resumeDownload(resp.Request, buf[n:], m.Client, int64(n))
+					_, err = resumeDownload(resp.Request, buf[n-1:], m.Client, int64(n))
 				}
 				chunk.Deliver(buf[0:n], err)
 			})

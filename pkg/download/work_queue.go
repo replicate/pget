@@ -33,7 +33,7 @@ func (q *priorityWorkQueue) submitHigh(w work) {
 
 func (q *priorityWorkQueue) start() {
 	for i := 0; i < q.concurrency; i++ {
-		go q.run(make([]byte, 0, q.bufSize))
+		go q.run(make([]byte, q.bufSize))
 	}
 }
 

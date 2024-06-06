@@ -12,6 +12,7 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/replicate/pget/pkg/client"
+	"github.com/replicate/pget/pkg/logging"
 )
 
 const defaultChunkSize = 125 * humanize.MiByte
@@ -26,11 +27,17 @@ var (
 
 func resumeDownload(req *http.Request, buffer []byte, client client.HTTPClient, bytesReceived int64) (*http.Response, error) {
 	var startByte int
+	logger := logging.GetLogger()
+
+	var resumeCount = 1
+	var initialBytesReceived = bytesReceived
+
 	for {
 		var n int
 		if err := updateRangeRequestHeader(req, bytesReceived); err != nil {
 			return nil, err
 		}
+
 		resp, err := client.Do(req)
 		if err != nil {
 			return nil, err
@@ -41,7 +48,14 @@ func resumeDownload(req *http.Request, buffer []byte, client client.HTTPClient, 
 		}
 		n, err = io.ReadFull(resp.Body, buffer[startByte:])
 		if err == io.ErrUnexpectedEOF {
-			startByte = n
+			bytesReceived = int64(n)
+			startByte += n
+			resumeCount++
+			logger.Warn().
+				Int("connection_interrupted_at_byte", n).
+				Int("resume_count", resumeCount).
+				Int64("total_bytes_received", initialBytesReceived+int64(startByte)).
+				Msg("Resuming Chunk Download")
 			continue
 		}
 		return nil, err
@@ -77,11 +91,12 @@ func updateRangeRequestHeader(req *http.Request, receivedBytes int64) error {
 	}
 
 	start = start + receivedBytes
+	newRangeHeader := fmt.Sprintf("bytes=%d-%d", start, end)
+
 	if start > end {
-		return fmt.Errorf("%w: %s", errInvalidContentRange, rangeHeader)
+		return fmt.Errorf("%w: %s", errInvalidContentRange, newRangeHeader)
 	}
 
-	newRangeHeader := fmt.Sprintf("bytes=%d-%d", start, end)
 	req.Header.Set("Range", newRangeHeader)
 
 	return nil

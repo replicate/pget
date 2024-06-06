@@ -216,7 +216,6 @@ func (m *ConsistentHashingMode) downloadRemainingChunks(ctx context.Context, url
 							Str("type", "chunk").
 							Err(err).
 							Msg("consistent hash fallback")
-
 						resp, err = m.FallbackStrategy.DoRequest(ctx, chunkStart, chunkEnd, urlString)
 					}
 					if err != nil {

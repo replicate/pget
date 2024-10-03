@@ -26,7 +26,7 @@ archives:
 checksum:
   name_template: "checksums.txt"
 snapshot:
-  name_template: "{{ incminor .Version }}-devbuild"
+  version_template: "{{ incminor .Version }}-devbuild"
 universal_binaries:
   - replace: false
 changelog:

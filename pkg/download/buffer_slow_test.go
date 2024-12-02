@@ -17,5 +17,5 @@ func BenchmarkDownload10GH2(b *testing.B) {
 }
 
 func BenchmarkDownloadDollyTensors(b *testing.B) {
-	benchmarkDownloadURL(defaultOpts, "https://storage.googleapis.com/replicate-weights/dolly-v2-12b-fp16.tensors", b)
+	benchmarkDownloadURL(defaultOpts, "https://weights.replicate.delivery/default/dolly-v2-12b-fp16.tensors", b)
 }

@@ -62,7 +62,7 @@ tidy:
 
 .PHONY: install-goreleaser
 install-goreleaser:
-	$(GO) install github.com/goreleaser/goreleaser@latest
+	$(GO) install github.com/goreleaser/goreleaser/v2@latest
 
 
 .PHONY: build

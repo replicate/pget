@@ -31,14 +31,14 @@ func benchmarkDownloadURL(opts download.Options, url string, b *testing.B) {
 }
 
 func BenchmarkDownloadBertH1(b *testing.B) {
-	benchmarkDownloadURL(defaultOpts, "https://storage.googleapis.com/replicate-weights/bert-base-uncased-hf-cache.tar", b)
+	benchmarkDownloadURL(defaultOpts, "https://weights.replicate.delivery/default/bert-base-uncased-hf-cache.tar", b)
 }
 func BenchmarkDownloadBertH2(b *testing.B) {
-	benchmarkDownloadURL(http2Opts, "https://storage.googleapis.com/replicate-weights/bert-base-uncased-hf-cache.tar", b)
+	benchmarkDownloadURL(http2Opts, "https://weights.replicate.delivery/default/bert-base-uncased-hf-cache.tar", b)
 }
 func BenchmarkDownloadLlama7bChatH1(b *testing.B) {
-	benchmarkDownloadURL(defaultOpts, "https://storage.googleapis.com/replicate-weights/Llama-2-7b-Chat-GPTQ/gptq_model-4bit-32g.safetensors", b)
+	benchmarkDownloadURL(defaultOpts, "https://weights.replicate.delivery/default/Llama-2-7b-Chat-GPTQ/gptq_model-4bit-32g.safetensors", b)
 }
 func BenchmarkDownloadLlama7bChatH2(b *testing.B) {
-	benchmarkDownloadURL(http2Opts, "https://storage.googleapis.com/replicate-weights/Llama-2-7b-Chat-GPTQ/gptq_model-4bit-32g.safetensors", b)
+	benchmarkDownloadURL(http2Opts, "https://weights.replicate.delivery/default/Llama-2-7b-Chat-GPTQ/gptq_model-4bit-32g.safetensors", b)
 }

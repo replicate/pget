@@ -13,7 +13,7 @@ type FileWriter struct {
 
 var _ Consumer = &FileWriter{}
 
-func (f *FileWriter) Consume(reader io.Reader, destPath string) error {
+func (f *FileWriter) Consume(reader io.Reader, destPath string, expectedBytes int64) error {
 	openFlags := os.O_WRONLY | os.O_CREATE
 	targetDir := filepath.Dir(destPath)
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
@@ -28,9 +28,13 @@ func (f *FileWriter) Consume(reader io.Reader, destPath string) error {
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, reader)
+	written, err := io.Copy(out, reader)
 	if err != nil {
 		return fmt.Errorf("error writing file: %w", err)
+	}
+
+	if written != expectedBytes {
+		return fmt.Errorf("expected %d bytes, wrote %d", expectedBytes, written)
 	}
 	return nil
 }

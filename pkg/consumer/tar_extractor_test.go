@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/replicate/pget/pkg/consumer"
 )
@@ -104,25 +104,23 @@ func createTarFileBytesBuffer() ([]byte, error) {
 }
 
 func TestTarExtractor_Consume(t *testing.T) {
+	r := require.New(t)
+
 	tarFileBytes, err := createTarFileBytesBuffer()
-	if err != nil {
-		t.Fatal(err)
-	}
+	r.NoError(err)
 
 	// Create a reader from the tar file bytes
 	reader := bytes.NewReader(tarFileBytes)
 
 	// Create a temporary directory to extract the tar file
 	tmpDir, err := os.MkdirTemp("", "tarExtractorTest-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
+	r.NoError(err)
+
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
 
 	tarConsumer := consumer.TarExtractor{}
 	targetDir := path.Join(tmpDir, "extract")
-	err = tarConsumer.Consume(reader, targetDir, int64(len(tarFileBytes)))
-	assert.NoError(t, err)
+	r.NoError(tarConsumer.Consume(reader, targetDir, int64(len(tarFileBytes))))
 
 	// Check if the extraction was successful
 	checkTarExtraction(t, targetDir)
@@ -130,36 +128,37 @@ func TestTarExtractor_Consume(t *testing.T) {
 	// Test with incorrect expectedBytes
 	_, _ = reader.Seek(0, 0)
 	targetDir = path.Join(tmpDir, "extract-fail")
-	err = tarConsumer.Consume(reader, targetDir, int64(len(tarFileBytes)-1))
-	assert.Error(t, err)
+	r.Error(tarConsumer.Consume(reader, targetDir, int64(len(tarFileBytes)-1)))
 }
 
 func checkTarExtraction(t *testing.T, targetDir string) {
+	r := require.New(t)
+
 	// Verify that file1.txt is correctly extracted
 	fqFile1Path := path.Join(targetDir, file1Path)
 	content, err := os.ReadFile(fqFile1Path)
-	assert.NoError(t, err)
-	assert.Equal(t, file1Content, string(content))
+	r.NoError(err)
+	r.Equal(file1Content, string(content))
 
 	// Verify that file2.txt is correctly extracted
 	fqFile2Path := path.Join(targetDir, file2Path)
 	content, err = os.ReadFile(fqFile2Path)
-	assert.NoError(t, err)
-	assert.Equal(t, file2Content, string(content))
+	r.NoError(err)
+	r.Equal(file2Content, string(content))
 
 	// Verify that link_to_file1.txt is a symlink pointing to file1.txt
 	linkToFile1Path := path.Join(targetDir, fileSymLinkPath)
 	linkTarget, err := os.Readlink(linkToFile1Path)
-	assert.NoError(t, err)
-	assert.Equal(t, file1Path, linkTarget)
-	assert.Equal(t, os.ModeSymlink, os.ModeSymlink&os.ModeType)
+	r.NoError(err)
+	r.Equal(file1Path, linkTarget)
+	r.Equal(os.ModeSymlink, os.ModeSymlink&os.ModeType)
 
 	// Verify that subdir/hard_link_to_file2.txt is a hard link to file2.txt
 	hardLinkToFile2Path := path.Join(targetDir, fileHardLinkPath)
 	hardLinkStat, err := os.Stat(hardLinkToFile2Path)
-	assert.NoError(t, err)
+	r.NoError(err)
 	file2Stat, err := os.Stat(fqFile2Path)
-	assert.NoError(t, err)
+	r.NoError(err)
 
 	if !os.SameFile(hardLinkStat, file2Stat) {
 		t.Errorf("hard link does not match file2.txt")

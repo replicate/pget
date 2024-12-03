@@ -4,6 +4,10 @@ import (
 	"math/rand"
 )
 
+const (
+	kB int64 = 1024
+)
+
 // generateTestContent generates a byte slice of a random size > 1KiB
 func generateTestContent(size int64) []byte {
 	content := make([]byte, size)

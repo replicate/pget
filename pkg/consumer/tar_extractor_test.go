@@ -3,6 +3,7 @@ package consumer_test
 import (
 	"archive/tar"
 	"bytes"
+	"io"
 	"os"
 	"path"
 	"testing"
@@ -110,7 +111,7 @@ func TestTarExtractor_Consume(t *testing.T) {
 	r.NoError(err)
 
 	// Create a reader from the tar file bytes
-	reader := bytes.NewReader(tarFileBytes)
+	reader := io.MultiReader(bytes.NewReader(tarFileBytes), bytes.NewReader(make([]byte, 1024)))
 
 	// Create a temporary directory to extract the tar file
 	tmpDir, err := os.MkdirTemp("", "tarExtractorTest-")
@@ -120,15 +121,15 @@ func TestTarExtractor_Consume(t *testing.T) {
 
 	tarConsumer := consumer.TarExtractor{}
 	targetDir := path.Join(tmpDir, "extract")
-	r.NoError(tarConsumer.Consume(reader, targetDir, int64(len(tarFileBytes))))
+	r.NoError(tarConsumer.Consume(reader, targetDir, int64(len(tarFileBytes)+1024)))
 
 	// Check if the extraction was successful
 	checkTarExtraction(t, targetDir)
 
 	// Test with incorrect expectedBytes
-	_, _ = reader.Seek(0, 0)
+	reader = io.MultiReader(bytes.NewReader(tarFileBytes), bytes.NewReader(make([]byte, 1024)))
 	targetDir = path.Join(tmpDir, "extract-fail")
-	r.Error(tarConsumer.Consume(reader, targetDir, int64(len(tarFileBytes)-1)))
+	r.Error(tarConsumer.Consume(reader, targetDir, int64(len(tarFileBytes)+1024-1)))
 }
 
 func checkTarExtraction(t *testing.T, targetDir string) {

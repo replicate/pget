@@ -119,6 +119,18 @@ func TarFile(r *bufio.Reader, destDir string, overwrite bool) error {
 		return fmt.Errorf("error creating links: %w", err)
 	}
 
+	// Read the rest of the bytes from the archive and verify they are all null bytes
+	// This is for validation that the byte count is correct
+	padding, err := io.ReadAll(r)
+	if err != nil {
+		return fmt.Errorf("error reading padding bytes: %w", err)
+	}
+	for _, b := range padding {
+		if b != 0x00 {
+			return fmt.Errorf("unexpected non-null byte in padding: %x", b)
+		}
+	}
+
 	elapsed := time.Since(startTime).Seconds()
 	logger.Debug().
 		Str("extractor", "tar").

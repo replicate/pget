@@ -8,6 +8,7 @@ const (
 	OptCacheURIPrefixes            = "cache-uri-prefixes"
 	OptCacheUsePathProxy           = "cache-use-path-proxy"
 	OptHostIP                      = "host-ip"
+	OptMetricsEndpoint             = "metrics-endpoint"
 
 	// Normal options with CLI arguments
 	OptConcurrency        = "concurrency"

@@ -124,6 +124,7 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 	}
 	pgetOpts := pget.Options{
 		MaxConcurrentFiles: maxConcurrentFiles(),
+		MetricsEndpoint:    viper.GetString(config.OptMetricsEndpoint),
 	}
 
 	consumer, err := config.GetConsumer()

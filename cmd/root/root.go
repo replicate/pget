@@ -268,9 +268,14 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		return err
 	}
 
+	pgetOpts := pget.Options{
+		MetricsEndpoint: viper.GetString(config.OptMetricsEndpoint),
+	}
+
 	getter := pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
 		Consumer:   consumer,
+		Options:    pgetOpts,
 	}
 
 	// TODO DRY this

@@ -18,7 +18,7 @@ builds:
     ldflags:
       - "-s -w -X github.com/replicate/pget/pkg/version.Version={{.Version}} -X github.com/replicate/pget/pkg/version.CommitHash={{.ShortCommit}} -X github.com/replicate/pget/pkg/version.BuildTime={{.Date}} -X github.com/replicate/pget/pkg/version.Prerelease={{.Prerelease}} -X github.com/replicate/pget/pkg/version.OS={{.Os}} -X github.com/replicate/pget/pkg/version.Arch={{if eq .Arch \"amd64\"}}x86_64{{else if eq .Arch \"386\"}}i386{{else}}{{.Arch}}{{end}} -X github.com/replicate/pget/pkg/version.Snapshot={{.IsSnapshot}} -X github.com/replicate/pget/pkg/version.Branch={{.Branch}}"
 archives:
-  - format: binary
+  - formats: [ 'binary' ]
     name_template: >-
       {{ .ProjectName }}_{{ title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64

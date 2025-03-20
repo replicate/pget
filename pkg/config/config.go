@@ -207,3 +207,23 @@ func CacheableURIPrefixes() map[string][]*url.URL {
 	}
 	return result
 }
+
+func CacheServiceHostname() string {
+	logger := logging.GetLogger()
+	target := viper.GetString(OptCacheServiceHostname)
+	parsed, err := url.Parse(target)
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Str("target", target).
+			Bool("enabled", false).
+			Msg("Cache Service")
+		return ""
+	}
+	logger.Info().
+		Str("target", parsed.Host).
+		Str("scheme", parsed.Scheme).
+		Bool("enabled", true).
+		Msg("Cache Service")
+	return target
+}

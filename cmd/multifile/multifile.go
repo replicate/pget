@@ -143,14 +143,17 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 		downloadOpts.SliceSize = 500 * humanize.MiByte
 		downloadOpts.CacheableURIPrefixes = config.CacheableURIPrefixes()
 		downloadOpts.CacheUsePathProxy = viper.GetBool(config.OptCacheUsePathProxy)
-		downloadOpts.CacheHosts, err = cli.LookupCacheHosts(srvName)
-		if err != nil {
+		if downloadOpts.CacheHosts, err = cli.LookupCacheHosts(srvName); err != nil {
 			return err
 		}
 		getter.Downloader, err = download.GetConsistentHashingMode(downloadOpts)
 		if err != nil {
 			return err
 		}
+	} else if cacheHostname := config.CacheServiceHostname(); cacheHostname != "" {
+		downloadOpts.CacheHosts = []string{cacheHostname}
+		downloadOpts.CacheableURIPrefixes = config.CacheableURIPrefixes()
+		downloadOpts.CacheUsePathProxy = viper.GetBool(config.OptCacheUsePathProxy)
 	}
 
 	totalFileSize, elapsedTime, err := getter.DownloadFiles(ctx, manifest)

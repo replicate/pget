@@ -12,6 +12,7 @@ import (
 	"github.com/replicate/pget/pkg/consumer"
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/logging"
+	"github.com/replicate/pget/pkg/overrides"
 )
 
 type Getter struct {
@@ -22,6 +23,7 @@ type Getter struct {
 
 type Options struct {
 	MaxConcurrentFiles int
+	RoutingTable       overrides.RoutingTable
 }
 
 type ManifestEntry struct {
@@ -42,6 +44,9 @@ func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int
 	}
 	logger := logging.GetLogger()
 	downloadStartTime := time.Now()
+	if override, ok := g.Options.RoutingTable[url]; ok {
+		url = override
+	}
 	buffer, fileSize, err := g.Downloader.Fetch(ctx, url)
 	if err != nil {
 		return fileSize, 0, err

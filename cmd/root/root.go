@@ -19,6 +19,7 @@ import (
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/download"
 	"github.com/replicate/pget/pkg/logging"
+	"github.com/replicate/pget/pkg/overrides"
 )
 
 const rootLongDesc = `
@@ -44,6 +45,7 @@ efficient file extractor, providing a streamlined solution for fetching and unpa
 var concurrency int
 var pidFile *cli.PIDFile
 var chunkSize string
+var overridesFile string
 
 const chunkSizeDefault = "125M"
 
@@ -170,6 +172,7 @@ func persistentFlags(cmd *cobra.Command) error {
 	cmd.PersistentFlags().Duration(config.OptConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
 	cmd.PersistentFlags().StringVarP(&chunkSize, config.OptChunkSize, "m", chunkSizeDefault, "Chunk size (in bytes) to use when downloading a file (e.g. 10M)")
 	cmd.PersistentFlags().StringVar(&chunkSize, config.OptMinimumChunkSize, chunkSizeDefault, "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
+	cmd.PersistentFlags().StringVar(&overridesFile, config.OptOverridesFile, "", "Override file for routing")
 	cmd.PersistentFlags().BoolP(config.OptForce, "f", false, "OptForce download, overwriting existing file")
 	cmd.PersistentFlags().StringSlice(config.OptResolve, []string{}, "OptResolve hostnames to specific IPs")
 	cmd.PersistentFlags().IntP(config.OptRetries, "r", 5, "Number of retries when attempting to retrieve a file")
@@ -271,6 +274,17 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 	getter := pget.Getter{
 		Downloader: download.GetBufferMode(downloadOpts),
 		Consumer:   consumer,
+	}
+
+	if overridesFile != "" {
+		table, err := overrides.ParseRoutingTable(overridesFile)
+		if err != nil {
+			return err
+		}
+		options := pget.Options{
+			RoutingTable: table,
+		}
+		getter.Options = options
 	}
 
 	// TODO DRY this

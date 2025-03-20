@@ -22,6 +22,7 @@ const (
 	OptMaxConcurrentFiles = "max-concurrent-files"
 	OptMinimumChunkSize   = "minimum-chunk-size"
 	OptOutputConsumer     = "output"
+	OptOverridesFile      = "overrides-file"
 	OptPIDFile            = "pid-file"
 	OptResolve            = "resolve"
 	OptRetries            = "retries"

@@ -1,10 +1,18 @@
 package pget
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"sync/atomic"
 	"time"
+
+	"github.com/spf13/viper"
+
+	"github.com/replicate/pget/pkg/config"
+	"github.com/replicate/pget/pkg/version"
 
 	"github.com/dustin/go-humanize"
 	"golang.org/x/sync/errgroup"
@@ -14,6 +22,12 @@ import (
 	"github.com/replicate/pget/pkg/logging"
 )
 
+type MetricsPayload struct {
+	Source string         `json:"source,omitempty"`
+	Type   string         `json:"type,omitempty"`
+	Data   map[string]any `json:"data,omitempty"`
+}
+
 type Getter struct {
 	Downloader download.Strategy
 	Consumer   consumer.Consumer
@@ -22,6 +36,7 @@ type Getter struct {
 
 type Options struct {
 	MaxConcurrentFiles int
+	MetricsEndpoint    string
 }
 
 type ManifestEntry struct {
@@ -48,6 +63,11 @@ func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int
 	}
 	// downloadElapsed := time.Since(downloadStartTime)
 	// writeStartTime := time.Now()
+
+	// Fire and forget metrics
+	go func() {
+		g.sendMetrics(url, fileSize)
+	}()
 
 	err = g.Consumer.Consume(buffer, dest, fileSize)
 	if err != nil {
@@ -122,4 +142,32 @@ func (g *Getter) downloadAndMeasure(ctx context.Context, url, dest string, total
 	}
 	totalSize.Add(fileSize)
 	return nil
+}
+
+func (g *Getter) sendMetrics(url string, size int64) {
+	logger := logging.GetLogger()
+	endpoint := viper.GetString(config.OptMetricsEndpoint)
+	if endpoint == "" {
+		return
+	}
+
+	payload := MetricsPayload{
+		Source: "pget",
+		Type:   "download",
+		Data:   map[string]any{"url": url, "size": size, "version": version.GetVersion()},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		logger.Debug().Err(err).Any("payload", payload).Msg("Error marshalling metrics")
+		return
+	}
+	// Ignore error and response
+	resp, err := http.DefaultClient.Post(endpoint, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		logger.Debug().Err(err).Str("endpoint", endpoint).Msg("Error sending metrics")
+		return
+	}
+	if resp.StatusCode != http.StatusOK {
+		logger.Debug().Int("status_code", resp.StatusCode).Str("endpoint", endpoint).Msg("Error sending metrics")
+	}
 }

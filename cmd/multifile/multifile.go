@@ -132,10 +132,9 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 		return fmt.Errorf("error getting consumer: %w", err)
 	}
 
-	getter := &pget.Getter{
-		Downloader: download.GetBufferMode(downloadOpts),
-		Consumer:   consumer,
-		Options:    pgetOpts,
+	getter := pget.Getter{
+		Consumer: consumer,
+		Options:  pgetOpts,
 	}
 
 	// TODO DRY this
@@ -154,6 +153,10 @@ func multifileExecute(ctx context.Context, manifest pget.Manifest) error {
 		downloadOpts.CacheHosts = []string{cacheHostname}
 		downloadOpts.CacheableURIPrefixes = config.CacheableURIPrefixes()
 		downloadOpts.CacheUsePathProxy = viper.GetBool(config.OptCacheUsePathProxy)
+	}
+
+	if getter.Downloader == nil {
+		getter.Downloader = download.GetBufferMode(downloadOpts)
 	}
 
 	totalFileSize, elapsedTime, err := getter.DownloadFiles(ctx, manifest)

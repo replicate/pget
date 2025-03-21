@@ -37,8 +37,13 @@ func GetConsistentHashingMode(opts Options) (*ConsistentHashingMode, error) {
 	client := client.NewHTTPClient(opts.Client)
 
 	fallbackStrategy := &BufferMode{
-		Client:  client,
-		Options: opts,
+		Client: client,
+		// Do not pass cache-related options to the fallback strategy
+		Options: Options{
+			Client:         opts.Client,
+			ChunkSize:      opts.ChunkSize,
+			MaxConcurrency: opts.MaxConcurrency,
+		},
 	}
 
 	m := &ConsistentHashingMode{

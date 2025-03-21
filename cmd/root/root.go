@@ -273,9 +273,8 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 	}
 
 	getter := pget.Getter{
-		Downloader: download.GetBufferMode(downloadOpts),
-		Consumer:   consumer,
-		Options:    pgetOpts,
+		Consumer: consumer,
+		Options:  pgetOpts,
 	}
 
 	// TODO DRY this
@@ -294,6 +293,10 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		downloadOpts.CacheHosts = []string{cacheHostname}
 		downloadOpts.CacheableURIPrefixes = config.CacheableURIPrefixes()
 		downloadOpts.CacheUsePathProxy = viper.GetBool(config.OptCacheUsePathProxy)
+	}
+
+	if getter.Downloader == nil {
+		getter.Downloader = download.GetBufferMode(downloadOpts)
 	}
 
 	_, _, err = getter.DownloadFile(ctx, urlString, dest)

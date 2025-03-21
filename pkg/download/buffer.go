@@ -62,7 +62,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 	m.queue.submitLow(func(buf []byte) {
 		defer close(firstReqResultCh)
 
-		if m.CacheUsePathProxy && m.CacheHosts != nil {
+		if m.CacheHosts != nil {
 			url = m.rewriteUrlForCache(url)
 		}
 
@@ -196,7 +196,7 @@ func (m *BufferMode) rewriteUrlForCache(urlString string) string {
 			Str("url", urlString).
 			Bool("enabled", false).
 			Str("disabled_reason", fmt.Sprintf("expected exactly 1 cache host, received %d", len(m.CacheHosts))).
-			Msg("cache service")
+			Msg("Cache URL Rewrite")
 		return urlString
 	}
 	if err != nil {
@@ -205,7 +205,7 @@ func (m *BufferMode) rewriteUrlForCache(urlString string) string {
 			Str("url", urlString).
 			Bool("enabled", false).
 			Str("disabled_reason", "failed to parse URL").
-			Msg("cache service")
+			Msg("Cache URL Rewrite")
 		return urlString
 	}
 	if prefixes, ok := m.CacheableURIPrefixes[parsed.Host]; ok {
@@ -213,10 +213,16 @@ func (m *BufferMode) rewriteUrlForCache(urlString string) string {
 			if pfx.Path == "/" || strings.HasPrefix(parsed.Path, pfx.Path) {
 				newUrl := m.CacheHosts[0]
 				if m.CacheUsePathProxy {
-					newUrl, err = url.JoinPath(newUrl, pfx.Path)
+					newUrl, err = url.JoinPath(newUrl, pfx.Host)
 					if err != nil {
 						break
 					}
+					logger.Debug().
+						Bool("path_based_proxy", true).
+						Str("host_prefix", pfx.Host).
+						Str("intermediate_target_url", newUrl).
+						Str("url", urlString).
+						Msg("Cache URL Rewrite")
 				}
 				newUrl, err = url.JoinPath(newUrl, parsed.Path)
 				if err != nil {
@@ -226,7 +232,7 @@ func (m *BufferMode) rewriteUrlForCache(urlString string) string {
 					Str("url", urlString).
 					Str("target_url", newUrl).
 					Bool("enabled", true).
-					Msg("cache service")
+					Msg("Cache URL Rewrite")
 				return newUrl
 			}
 		}
@@ -237,7 +243,13 @@ func (m *BufferMode) rewriteUrlForCache(urlString string) string {
 			Str("url", urlString).
 			Bool("enabled", false).
 			Str("disabled_reason", "failed to generate target url").
-			Msg("cache service")
+			Msg("Cache URL Rewrite")
+	} else {
+		logger.Debug().
+			Str("url", urlString).
+			Bool("enabled", false).
+			Str("disabled_reason", "no matching prefix").
+			Msg("Cache URL Rewrite")
 	}
 	return urlString
 }

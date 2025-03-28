@@ -162,3 +162,35 @@ func TestReaderReturnsErrorWhenRequestFails(t *testing.T) {
 	_, err = io.ReadAll(download)
 	assert.ErrorIs(t, err, expectedErr)
 }
+
+func TestReaderHandlesFullFile(t *testing.T) {
+	mockTransport := httpmock.NewMockTransport()
+	opts := Options{
+		Client:    client.Options{Transport: mockTransport},
+		ChunkSize: 6,
+	}
+	mockTransport.RegisterResponder("GET", "http://test.example/hello.txt",
+		func(req *http.Request) (*http.Response, error) {
+			rangeHeader := req.Header.Get("Range")
+			var body string
+			switch rangeHeader {
+			case "bytes=0-5":
+				body = "hello "
+			default:
+				return nil, fmt.Errorf("should't see this error")
+			}
+			resp := httpmock.NewStringResponse(http.StatusOK, body)
+			resp.Request = req
+			resp.ContentLength = 6
+			resp.Header.Add("Content-Length", "6")
+			return resp, nil
+		})
+	bufferMode := GetBufferMode(opts)
+	download, _, err := bufferMode.Fetch(context.Background(), "http://test.example/hello.txt")
+	// No error here, because the first chunk was fetched successfully
+	require.NoError(t, err)
+	// the read should return any error we expect
+	out, err := io.ReadAll(download)
+	assert.Equal(t, "hello ", string(out))
+	assert.NoError(t, err)
+}

@@ -452,6 +452,37 @@ func TestConsistentHashingHasFallback(t *testing.T) {
 	assert.Equal(t, "0000000000000000", string(bytes))
 }
 
+func TestConsistentHashingHandlesFullFile(t *testing.T) {
+	mockTransport := httpmock.NewMockTransport()
+	mockTransport.RegisterResponder("GET", "http://fake.replicate.delivery/hello.txt", func(req *http.Request) (*http.Response, error) {
+		resp := httpmock.NewStringResponse(http.StatusOK, "000000")
+		resp.Request = req
+		resp.ContentLength = int64(6)
+		resp.Header.Add("Content-Length", fmt.Sprint(resp.ContentLength))
+		return resp, nil
+	})
+
+	opts := download.Options{
+		Client:         client.Options{Transport: mockTransport},
+		MaxConcurrency: 8,
+		ChunkSize:      6,
+		SliceSize:      6,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	strategy, err := download.GetConsistentHashingMode(opts)
+	require.NoError(t, err)
+
+	reader, _, err := strategy.Fetch(ctx, "http://fake.replicate.delivery/hello.txt")
+	require.NoError(t, err)
+	bytes, err := io.ReadAll(reader)
+	require.NoError(t, err)
+
+	assert.Equal(t, "000000", string(bytes))
+}
+
 type fallbackFailingHandler struct {
 	responseStatus int
 	responseFunc   func(w http.ResponseWriter, r *http.Request)
@@ -557,7 +588,7 @@ func TestConsistentHashingChunkFallback(t *testing.T) {
 			w.WriteHeader(http.StatusBadGateway)
 		} else {
 			w.Header().Set("Content-Range", "bytes 0-2/4")
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusPartialContent)
 			_, _ = w.Write([]byte("000"))
 		}
 	}

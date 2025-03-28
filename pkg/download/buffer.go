@@ -39,6 +39,28 @@ func (m *BufferMode) chunkSize() int64 {
 	return minChunkSize
 }
 
+func (m *BufferMode) getFileSizeFromResponse(resp *http.Response) (int64, error) {
+	// If the response is a 200 OK, we need to parse the file size assuming the whole
+	// file was returned. If it isn't, we will assume this was a 206 Partial Content
+	// and parse the file size from the content range header. We wouldn't be in this
+	// function if the response was not between 200 and 300, so this feels like a
+	// reasonable assumption
+	if resp.StatusCode == http.StatusOK {
+		return m.getFileSizeFromContentLength(resp.Header.Get("Content-Length"))
+	}
+	return m.getFileSizeFromContentRange(resp.Header.Get("Content-Range"))
+}
+
+func (m *BufferMode) getFileSizeFromContentLength(contentLength string) (int64, error) {
+	size, err := strconv.ParseInt(contentLength, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	// Because content-length is a length, it will be 1-indexed. However, we expect a 0
+	// indexed value here, so we subtract 1 from the content length
+	return size - 1, nil
+}
+
 func (m *BufferMode) getFileSizeFromContentRange(contentRange string) (int64, error) {
 	groups := contentRangeRegexp.FindStringSubmatch(contentRange)
 	if groups == nil {
@@ -79,7 +101,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 			logger.Info().Str("url", url).Str("redirect_url", trueURL).Msg("Redirect")
 		}
 
-		fileSize, err := m.getFileSizeFromContentRange(firstChunkResp.Header.Get("Content-Range"))
+		fileSize, err := m.getFileSizeFromResponse(firstChunkResp)
 		if err != nil {
 			firstReqResultCh <- firstReqResult{err: err}
 			return

@@ -136,7 +136,8 @@ func testDownloadSingleFile(opts download.Options, size int64, t *testing.T) {
 func TestDownloadSmallFileWith200(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("{\"message\": \"Tweet! Tweet!\"}"))
+		_, err := w.Write([]byte("{\"message\": \"Tweet! Tweet!\"}"))
+		assert.NoError(t, err)
 	}))
 	defer ts.Close()
 

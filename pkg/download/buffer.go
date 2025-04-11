@@ -56,6 +56,7 @@ func (m *BufferMode) getFileSizeFromContentLength(contentLength string) (int64, 
 	if err != nil {
 		return 0, err
 	}
+
 	return size, nil
 }
 

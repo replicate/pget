@@ -85,9 +85,8 @@ func (m *ConsistentHashingMode) getFileSizeFromContentLength(contentLength strin
 	if err != nil {
 		return 0, err
 	}
-	// Because content-length is a length, it will be 1-indexed. However, we expect a 0
-	// indexed value here, so we subtract 1 from the content length
-	return size - 1, nil
+
+	return size, nil
 }
 
 func (m *ConsistentHashingMode) getFileSizeFromContentRange(contentRange string) (int64, error) {

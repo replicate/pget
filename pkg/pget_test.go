@@ -133,6 +133,25 @@ func testDownloadSingleFile(opts download.Options, size int64, t *testing.T) {
 	assert.NoError(t, err, "source file and dest file should be identical")
 }
 
+func TestDownloadSmallFileWith200(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte("{\"message\": \"Tweet! Tweet!\"}"))
+		assert.NoError(t, err)
+	}))
+	defer ts.Close()
+
+	dest := tempFilename()
+	defer os.Remove(dest)
+
+	getter := makeGetter(defaultOpts)
+
+	_, _, err := getter.DownloadFile(context.Background(), ts.URL+"/hello.txt", dest)
+	assert.NoError(t, err)
+
+	assertFileHasContent(t, []byte("{\"message\": \"Tweet! Tweet!\"}"), dest)
+}
+
 func TestDownload10MH1(t *testing.T)  { testDownloadSingleFile(defaultOpts, 10*humanize.MiByte, t) }
 func TestDownload100MH1(t *testing.T) { testDownloadSingleFile(defaultOpts, 100*humanize.MiByte, t) }
 func TestDownload10MH2(t *testing.T)  { testDownloadSingleFile(http2Opts, 10*humanize.MiByte, t) }

@@ -58,7 +58,7 @@ func GetCommand() *cobra.Command {
 		Args:               validateArgs,
 		Example:            `  pget https://example.com/file.tar ./target-dir`,
 	}
-	cmd.Flags().BoolP(config.OptExtract, "x", false, "OptExtract archive after download")
+	cmd.Flags().BoolP(config.OptExtract, "x", false, "Extract archive after download")
 	cmd.SetUsageTemplate(cli.UsageTemplate)
 	config.ViperInit()
 	if err := persistentFlags(cmd); err != nil {
@@ -170,12 +170,12 @@ func persistentFlags(cmd *cobra.Command) error {
 	cmd.PersistentFlags().Duration(config.OptConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")
 	cmd.PersistentFlags().StringVarP(&chunkSize, config.OptChunkSize, "m", chunkSizeDefault, "Chunk size (in bytes) to use when downloading a file (e.g. 10M)")
 	cmd.PersistentFlags().StringVar(&chunkSize, config.OptMinimumChunkSize, chunkSizeDefault, "Minimum chunk size (in bytes) to use when downloading a file (e.g. 10M)")
-	cmd.PersistentFlags().BoolP(config.OptForce, "f", false, "OptForce download, overwriting existing file")
-	cmd.PersistentFlags().StringSlice(config.OptResolve, []string{}, "OptResolve hostnames to specific IPs")
+	cmd.PersistentFlags().BoolP(config.OptForce, "f", false, "Force download, overwriting existing file")
+	cmd.PersistentFlags().StringSlice(config.OptResolve, []string{}, "Resolve hostnames to specific IPs")
 	cmd.PersistentFlags().IntP(config.OptRetries, "r", 5, "Number of retries when attempting to retrieve a file")
-	cmd.PersistentFlags().BoolP(config.OptVerbose, "v", false, "OptVerbose mode (equivalent to --log-level debug)")
+	cmd.PersistentFlags().BoolP(config.OptVerbose, "v", false, "Verbose mode (equivalent to --log-level debug)")
 	cmd.PersistentFlags().String(config.OptLoggingLevel, "info", "Log level (debug, info, warn, error)")
-	cmd.PersistentFlags().Bool(config.OptForceHTTP2, false, "OptForce HTTP/2")
+	cmd.PersistentFlags().Bool(config.OptForceHTTP2, false, "Force HTTP/2")
 	cmd.PersistentFlags().Int(config.OptMaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host")
 	cmd.PersistentFlags().StringP(config.OptOutputConsumer, "o", "file", "Output Consumer (file, tar, null)")
 	cmd.PersistentFlags().String(config.OptPIDFile, defaultPidFilePath(), "PID file path")

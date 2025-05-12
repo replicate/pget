@@ -35,13 +35,13 @@ type HTTPClient interface {
 // utilizing a client pool. If the OptMaxConnPerHost option is not set, the client pool will not be used.
 type PGetHTTPClient struct {
 	*http.Client
-	authToken string
+	authHeader string
 }
 
 func (c *PGetHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	req.Header.Set("User-Agent", fmt.Sprintf("pget/%s", version.GetVersion()))
-	if c.authToken != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.authToken))
+	if c.authHeader != "" {
+		req.Header.Set("Authorization", c.authHeader)
 	}
 	return c.Client.Do(req)
 }
@@ -104,7 +104,7 @@ func NewHTTPClient(opts Options) HTTPClient {
 	}
 
 	client := retryClient.StandardClient()
-	return &PGetHTTPClient{Client: client, authToken: viper.GetString(config.OptAuthToken)}
+	return &PGetHTTPClient{Client: client, authHeader: viper.GetString(config.OptAuthHeader)}
 }
 
 // RetryPolicy wraps retryablehttp.DefaultRetryPolicy and included additional logic:

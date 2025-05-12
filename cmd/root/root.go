@@ -165,7 +165,6 @@ func rootPersistentPostRunEFunc(cmd *cobra.Command, args []string) error {
 
 func persistentFlags(cmd *cobra.Command) error {
 	// Persistent Flags (applies to all commands/subcommands)
-	cmd.PersistentFlags().String(config.OptAuthToken, "", "Auth token")
 	cmd.PersistentFlags().IntVarP(&concurrency, config.OptConcurrency, "c", runtime.GOMAXPROCS(0)*4, "Maximum number of concurrent downloads/maximum number of chunks for a given file")
 	cmd.PersistentFlags().IntVar(&concurrency, config.OptMaxChunks, runtime.GOMAXPROCS(0)*4, "Maximum number of chunks for a given file")
 	cmd.PersistentFlags().Duration(config.OptConnTimeout, 5*time.Second, "Timeout for establishing a connection, format is <number><unit>, e.g. 10s")

@@ -12,7 +12,6 @@ const (
 	OptMetricsEndpoint             = "metrics-endpoint"
 
 	// Normal options with CLI arguments
-	OptAuthHeader         = "auth-header"
 	OptConcurrency        = "concurrency"
 	OptConnTimeout        = "connect-timeout"
 	OptChunkSize          = "chunk-size"

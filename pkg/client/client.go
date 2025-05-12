@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/spf13/viper"
-
 	"github.com/hashicorp/go-retryablehttp"
 
 	"github.com/replicate/pget/pkg/config"
@@ -35,14 +33,10 @@ type HTTPClient interface {
 // utilizing a client pool. If the OptMaxConnPerHost option is not set, the client pool will not be used.
 type PGetHTTPClient struct {
 	*http.Client
-	authHeader string
 }
 
 func (c *PGetHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	req.Header.Set("User-Agent", fmt.Sprintf("pget/%s", version.GetVersion()))
-	if c.authHeader != "" {
-		req.Header.Set("Authorization", c.authHeader)
-	}
 	return c.Client.Do(req)
 }
 
@@ -104,7 +98,7 @@ func NewHTTPClient(opts Options) HTTPClient {
 	}
 
 	client := retryClient.StandardClient()
-	return &PGetHTTPClient{Client: client, authHeader: viper.GetString(config.OptAuthHeader)}
+	return &PGetHTTPClient{Client: client}
 }
 
 // RetryPolicy wraps retryablehttp.DefaultRetryPolicy and included additional logic:

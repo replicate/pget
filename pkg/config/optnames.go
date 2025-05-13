@@ -10,6 +10,7 @@ const (
 	OptCacheUsePathProxy           = "cache-use-path-proxy"
 	OptHostIP                      = "host-ip"
 	OptMetricsEndpoint             = "metrics-endpoint"
+	OptHeaders                     = "headers"
 
 	// Normal options with CLI arguments
 	OptConcurrency        = "concurrency"

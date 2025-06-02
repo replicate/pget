@@ -64,18 +64,22 @@ func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int
 	// downloadElapsed := time.Since(downloadStartTime)
 	// writeStartTime := time.Now()
 
-	// Fire and forget metrics
-	go func() {
-		g.sendMetrics(url, fileSize)
-	}()
-
 	err = g.Consumer.Consume(buffer, dest, fileSize)
 	if err != nil {
+		// Fire and forget metrics
+		go func() {
+			g.sendMetrics(url, fileSize, 0, err)
+		}()
 		return fileSize, 0, fmt.Errorf("error writing file: %w", err)
 	}
 
 	// writeElapsed := time.Since(writeStartTime)
 	totalElapsed := time.Since(downloadStartTime)
+
+	// Fire and forget metrics
+	go func() {
+		g.sendMetrics(url, fileSize, (float64(fileSize) / totalElapsed.Seconds()), nil)
+	}()
 
 	size := humanize.Bytes(uint64(fileSize))
 	// downloadThroughput := humanize.Bytes(uint64(float64(fileSize) / downloadElapsed.Seconds()))
@@ -144,17 +148,24 @@ func (g *Getter) downloadAndMeasure(ctx context.Context, url, dest string, total
 	return nil
 }
 
-func (g *Getter) sendMetrics(url string, size int64) {
+func (g *Getter) sendMetrics(url string, size int64, throughput float64, err error) {
 	logger := logging.GetLogger()
 	endpoint := viper.GetString(config.OptMetricsEndpoint)
 	if endpoint == "" {
 		return
 	}
 
+	data := map[string]any{"url": url, "size": size, "version": version.GetVersion()}
+	if err != nil {
+		data["error"] = err.Error()
+	} else {
+		data["bytes_per_second"] = throughput
+	}
+
 	payload := MetricsPayload{
 		Source: "pget",
 		Type:   "download",
-		Data:   map[string]any{"url": url, "size": size, "version": version.GetVersion()},
+		Data:   data,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

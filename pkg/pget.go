@@ -55,10 +55,12 @@ func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int
 	if g.Consumer == nil {
 		g.Consumer = &consumer.FileWriter{}
 	}
+
 	logger := logging.GetLogger()
 	downloadStartTime := time.Now()
 	buffer, fileSize, err := g.Downloader.Fetch(ctx, url)
 	if err != nil {
+		g.sendMetrics(url, fileSize, 0, err)
 		return fileSize, 0, err
 	}
 	// downloadElapsed := time.Since(downloadStartTime)
@@ -66,20 +68,14 @@ func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int
 
 	err = g.Consumer.Consume(buffer, dest, fileSize)
 	if err != nil {
-		// Fire and forget metrics
-		go func() {
-			g.sendMetrics(url, fileSize, 0, err)
-		}()
+		g.sendMetrics(url, fileSize, 0, err)
 		return fileSize, 0, fmt.Errorf("error writing file: %w", err)
 	}
 
 	// writeElapsed := time.Since(writeStartTime)
 	totalElapsed := time.Since(downloadStartTime)
 
-	// Fire and forget metrics
-	go func() {
-		g.sendMetrics(url, fileSize, (float64(fileSize) / totalElapsed.Seconds()), nil)
-	}()
+	g.sendMetrics(url, fileSize, (float64(fileSize) / totalElapsed.Seconds()), nil)
 
 	size := humanize.Bytes(uint64(fileSize))
 	// downloadThroughput := humanize.Bytes(uint64(float64(fileSize) / downloadElapsed.Seconds()))
@@ -94,6 +90,7 @@ func (g *Getter) DownloadFile(ctx context.Context, url string, dest string) (int
 		// Str("write_elapsed", fmt.Sprintf("%.3fs", writeElapsed.Seconds())).
 		Str("total_elapsed", fmt.Sprintf("%.3fs", totalElapsed.Seconds())).
 		Msg("Complete")
+
 	return fileSize, totalElapsed, nil
 }
 

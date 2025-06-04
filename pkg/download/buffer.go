@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/logging"
@@ -229,48 +228,39 @@ func (m *BufferMode) rewriteUrlForCache(urlString string) string {
 			Msg("Cache URL Rewrite")
 		return urlString
 	}
-	if prefixes, ok := m.CacheableURIPrefixes[parsed.Host]; ok {
-		for _, pfx := range prefixes {
-			if pfx.Path == "/" || strings.HasPrefix(parsed.Path, pfx.Path) {
-				newUrl := m.CacheHosts[0]
-				if m.CacheUsePathProxy {
-					newUrl, err = url.JoinPath(newUrl, pfx.Host)
-					if err != nil {
-						break
-					}
-					logger.Debug().
-						Bool("path_based_proxy", true).
-						Str("host_prefix", pfx.Host).
-						Str("intermediate_target_url", newUrl).
-						Str("url", urlString).
-						Msg("Cache URL Rewrite")
-				}
-				newUrl, err = url.JoinPath(newUrl, parsed.Path)
-				if err != nil {
-					break
-				}
-				logger.Info().
-					Str("url", urlString).
-					Str("target_url", newUrl).
-					Bool("enabled", true).
-					Msg("Cache URL Rewrite")
-				return newUrl
-			}
+	newUrl := m.CacheHosts[0]
+	if m.CacheUsePathProxy {
+		newUrl, err = url.JoinPath(newUrl, parsed.Host)
+		if err != nil {
+			logger.Error().
+				Err(err).
+				Str("url", urlString).
+				Bool("enabled", false).
+				Str("disabled_reason", "failed to join cache URL to host").
+				Msg("Cache URL Rewrite")
+			return urlString
 		}
+		logger.Debug().
+			Bool("path_based_proxy", true).
+			Str("host_prefix", parsed.Host).
+			Str("intermediate_target_url", newUrl).
+			Str("url", urlString).
+			Msg("Cache URL Rewrite")
 	}
+	newUrl, err = url.JoinPath(newUrl, parsed.Path)
 	if err != nil {
 		logger.Error().
 			Err(err).
 			Str("url", urlString).
 			Bool("enabled", false).
-			Str("disabled_reason", "failed to generate target url").
+			Str("disabled_reason", "failed to join host URL to path").
 			Msg("Cache URL Rewrite")
-	} else {
-		logger.Debug().
-			Str("url", urlString).
-			Bool("enabled", false).
-			Str("disabled_reason", "no matching prefix").
-			Msg("Cache URL Rewrite")
+		return urlString
 	}
-	return urlString
+	logger.Info().
+		Str("url", urlString).
+		Str("target_url", newUrl).
+		Bool("enabled", true).
+		Msg("Cache URL Rewrite")
+	return newUrl
 }

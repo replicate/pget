@@ -282,6 +282,7 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		downloadOpts.SliceSize = 500 * humanize.MiByte
 		downloadOpts.CacheableURIPrefixes = config.CacheableURIPrefixes()
 		downloadOpts.CacheUsePathProxy = viper.GetBool(config.OptCacheUsePathProxy)
+		downloadOpts.ForceCachePrefixRewrite = viper.GetBool(config.OptForceCachePrefixRewrite)
 		if downloadOpts.CacheHosts, err = cli.LookupCacheHosts(srvName); err != nil {
 			return err
 		}
@@ -293,6 +294,7 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 		downloadOpts.CacheHosts = []string{cacheHostname}
 		downloadOpts.CacheableURIPrefixes = config.CacheableURIPrefixes()
 		downloadOpts.CacheUsePathProxy = viper.GetBool(config.OptCacheUsePathProxy)
+		downloadOpts.ForceCachePrefixRewrite = viper.GetBool(config.OptForceCachePrefixRewrite)
 	}
 
 	if getter.Downloader == nil {

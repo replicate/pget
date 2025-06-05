@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/logging"
+	"github.com/rs/zerolog"
 )
 
 type BufferMode struct {
@@ -228,7 +230,34 @@ func (m *BufferMode) rewriteUrlForCache(urlString string) string {
 			Msg("Cache URL Rewrite")
 		return urlString
 	}
-	newUrl := m.CacheHosts[0]
+	if m.ForceCachePrefixRewrite {
+		// Forcefully rewrite the URL prefix
+		return m.rewritePrefix(m.CacheHosts[0], urlString, parsed, logger)
+	} else {
+		if prefixes, ok := m.CacheableURIPrefixes[parsed.Host]; ok {
+			for _, pfx := range prefixes {
+				if pfx.Path == "/" || strings.HasPrefix(parsed.Path, pfx.Path) {
+					// Found a matching prefix, rewrite the URL prefix
+					return m.rewritePrefix(m.CacheHosts[0], urlString, parsed, logger)
+				}
+			}
+		}
+	}
+
+	// If we got here, we weren't forcefully rewriting the cache prefix and we didn't
+	// find any matching prefixes, so we just return the original URL
+	logger.Debug().
+		Str("url", urlString).
+		Bool("enabled", false).
+		Str("disabled_reason", "no matching prefix").
+		Str("disabled_reason", "failed to join host URL to path").
+		Msg("Cache URL Rewrite")
+	return urlString
+}
+
+func (m *BufferMode) rewritePrefix(cacheHost, urlString string, parsed *url.URL, logger zerolog.Logger) string {
+	newUrl := cacheHost
+	var err error
 	if m.CacheUsePathProxy {
 		newUrl, err = url.JoinPath(newUrl, parsed.Host)
 		if err != nil {

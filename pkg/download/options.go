@@ -36,6 +36,11 @@ type Options struct {
 	// hashing algorithm.  The slice may contain empty entries which
 	// correspond to a cache host which is currently unavailable.
 	CacheHosts []string
+
+	// ForceCachePrefixRewrite will forcefully rewrite the prefix for all
+	// pget requests to the first item in the CacheHosts list. This ignores
+	// anything in the CacheableURIPrefixes and rewrites all requests.
+	ForceCachePrefixRewrite bool
 }
 
 func (o *Options) maxConcurrency() int {

@@ -8,6 +8,7 @@ const (
 	OptCacheServiceHostname        = "cache-service-hostname"
 	OptCacheURIPrefixes            = "cache-uri-prefixes"
 	OptCacheUsePathProxy           = "cache-use-path-proxy"
+	OptForceCachePrefixRewrite     = "force-cache-prefix-rewrite"
 	OptHostIP                      = "host-ip"
 	OptMetricsEndpoint             = "metrics-endpoint"
 	OptHeaders                     = "headers"

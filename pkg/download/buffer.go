@@ -9,9 +9,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rs/zerolog"
+
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/logging"
-	"github.com/rs/zerolog"
 )
 
 type BufferMode struct {

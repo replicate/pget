@@ -287,6 +287,9 @@ func (m *BufferMode) rewritePrefix(cacheHost, urlString string, parsed *url.URL,
 			Msg("Cache URL Rewrite")
 		return urlString
 	}
+	if parsed.RawQuery != "" {
+		newUrl = fmt.Sprintf("%s?%s", newUrl, parsed.RawQuery)
+	}
 	logger.Info().
 		Str("url", urlString).
 		Str("target_url", newUrl).

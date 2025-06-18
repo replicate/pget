@@ -200,6 +200,9 @@ func (m *BufferMode) DoRequest(ctx context.Context, start, end int64, trueURL st
 		return nil, fmt.Errorf("failed to download %s: %w", trueURL, err)
 	}
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+	if m.HTTPAuthorizationHeader != "" {
+		req.Header.Set("Authorization", m.HTTPAuthorizationHeader)
+	}
 	resp, err := m.Client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error executing request for %s: %w", req.URL.String(), err)

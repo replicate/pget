@@ -30,4 +30,5 @@ const (
 	OptResolve            = "resolve"
 	OptRetries            = "retries"
 	OptVerbose            = "verbose"
+	OptHTTPAuthHeader     = "http-auth-header"
 )

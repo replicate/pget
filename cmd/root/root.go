@@ -179,6 +179,7 @@ func persistentFlags(cmd *cobra.Command) error {
 	cmd.PersistentFlags().Int(config.OptMaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host")
 	cmd.PersistentFlags().StringP(config.OptOutputConsumer, "o", "file", "Output Consumer (file, tar, null)")
 	cmd.PersistentFlags().String(config.OptPIDFile, defaultPidFilePath(), "PID file path")
+	cmd.PersistentFlags().String(config.OptHTTPAuthHeader, "", "HTTP Authorization header")
 
 	if err := hideAndDeprecateFlags(cmd); err != nil {
 		return err
@@ -258,9 +259,10 @@ func rootExecute(ctx context.Context, urlString, dest string) error {
 	}
 
 	downloadOpts := download.Options{
-		MaxConcurrency: viper.GetInt(config.OptConcurrency),
-		ChunkSize:      int64(chunkSize),
-		Client:         clientOpts,
+		MaxConcurrency:          viper.GetInt(config.OptConcurrency),
+		ChunkSize:               int64(chunkSize),
+		Client:                  clientOpts,
+		HTTPAuthorizationHeader: viper.GetString(config.OptHTTPAuthHeader),
 	}
 
 	consumer, err := config.GetConsumer()

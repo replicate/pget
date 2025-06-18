@@ -41,6 +41,11 @@ type Options struct {
 	// pget requests to the first item in the CacheHosts list. This ignores
 	// anything in the CacheableURIPrefixes and rewrites all requests.
 	ForceCachePrefixRewrite bool
+
+	// HTTPAuthorizationHeader sets the HTTP Authoriation header in requests to
+	// the upstream. Notably, following the HTTP protocol, this header will not
+	// persist on redirects.
+	HTTPAuthorizationHeader string
 }
 
 func (o *Options) maxConcurrency() int {

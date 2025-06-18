@@ -225,6 +225,14 @@ func (m *BufferMode) rewriteUrlForCache(urlString string) string {
 			Msg("Cache URL Rewrite")
 		return urlString
 	}
+	if strings.HasPrefix(urlString, m.CacheHosts[0]) {
+		logger.Info().
+			Str("url", urlString).
+			Str("target_url", urlString).
+			Bool("enabled", true).
+			Msg("Cache URL already rewritten")
+		return urlString
+	}
 	if err != nil {
 		logger.Error().
 			Err(err).

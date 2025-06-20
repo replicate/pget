@@ -14,6 +14,7 @@ import (
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/consistent"
 	"github.com/replicate/pget/pkg/logging"
+	"github.com/spf13/viper"
 )
 
 type ConsistentHashingMode struct {
@@ -301,8 +302,9 @@ func (m *ConsistentHashingMode) doRequestToCacheHost(req *http.Request, urlStrin
 		return nil, cachePodIndex, err
 	}
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
-	if m.HTTPAuthorizationHeader != "" {
-		req.Header.Set("Authorization", m.HTTPAuthorizationHeader)
+	proxyAuthHeader := viper.GetString(config.OptProxyAuthHeader)
+	if proxyAuthHeader != "" {
+		req.Header.Set("Authorization", proxyAuthHeader)
 	}
 	logger.Debug().Str("url", urlString).Str("munged_url", req.URL.String()).Str("host", req.Host).Int64("start", start).Int64("end", end).Msg("request")
 

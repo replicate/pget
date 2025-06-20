@@ -10,8 +10,10 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	"github.com/spf13/viper"
 
 	"github.com/replicate/pget/pkg/client"
+	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/logging"
 )
 
@@ -200,8 +202,9 @@ func (m *BufferMode) DoRequest(ctx context.Context, start, end int64, trueURL st
 		return nil, fmt.Errorf("failed to download %s: %w", trueURL, err)
 	}
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
-	if m.HTTPAuthorizationHeader != "" {
-		req.Header.Set("Authorization", m.HTTPAuthorizationHeader)
+	proxyAuthHeader := viper.GetString(config.OptProxyAuthHeader)
+	if proxyAuthHeader != "" {
+		req.Header.Set("Authorization", proxyAuthHeader)
 	}
 	resp, err := m.Client.Do(req)
 	if err != nil {

@@ -10,11 +10,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spf13/viper"
+
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/consistent"
 	"github.com/replicate/pget/pkg/logging"
-	"github.com/spf13/viper"
 )
 
 type ConsistentHashingMode struct {

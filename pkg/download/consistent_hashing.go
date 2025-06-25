@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/viper"
-
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
 	"github.com/replicate/pget/pkg/consistent"
@@ -303,10 +301,7 @@ func (m *ConsistentHashingMode) doRequestToCacheHost(req *http.Request, urlStrin
 		return nil, cachePodIndex, err
 	}
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
-	proxyAuthHeader := viper.GetString(config.OptProxyAuthHeader)
-	if proxyAuthHeader != "" {
-		req.Header.Set("Authorization", proxyAuthHeader)
-	}
+
 	logger.Debug().Str("url", urlString).Str("munged_url", req.URL.String()).Str("host", req.Host).Int64("start", start).Int64("end", end).Msg("request")
 
 	resp, err := m.Client.Do(req)

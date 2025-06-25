@@ -12,6 +12,7 @@ const (
 	OptHostIP                      = "host-ip"
 	OptMetricsEndpoint             = "metrics-endpoint"
 	OptHeaders                     = "headers"
+	OptProxyAuthHeader             = "proxy-auth-header"
 
 	// Normal options with CLI arguments
 	OptConcurrency        = "concurrency"

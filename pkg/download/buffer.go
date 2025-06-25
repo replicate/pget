@@ -21,14 +21,16 @@ type BufferMode struct {
 	Client client.HTTPClient
 	Options
 
-	queue *priorityWorkQueue
+	queue      *priorityWorkQueue
+	redirected bool
 }
 
 func GetBufferMode(opts Options) *BufferMode {
 	client := client.NewHTTPClient(opts.Client)
 	m := &BufferMode{
-		Client:  client,
-		Options: opts,
+		Client:     client,
+		Options:    opts,
+		redirected: false,
 	}
 	m.queue = newWorkQueue(opts.maxConcurrency(), m.chunkSize())
 	m.queue.start()
@@ -102,6 +104,7 @@ func (m *BufferMode) Fetch(ctx context.Context, url string) (io.Reader, int64, e
 		trueURL := firstChunkResp.Request.URL.String()
 		if trueURL != url {
 			logger.Info().Str("url", url).Str("redirect_url", trueURL).Msg("Redirect")
+			m.redirected = true
 		}
 
 		fileSize, err := m.getFileSizeFromResponse(firstChunkResp)
@@ -203,7 +206,7 @@ func (m *BufferMode) DoRequest(ctx context.Context, start, end int64, trueURL st
 	}
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 	proxyAuthHeader := viper.GetString(config.OptProxyAuthHeader)
-	if proxyAuthHeader != "" {
+	if proxyAuthHeader != "" && !m.redirected {
 		req.Header.Set("Authorization", proxyAuthHeader)
 	}
 	resp, err := m.Client.Do(req)

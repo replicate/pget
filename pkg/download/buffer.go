@@ -50,8 +50,9 @@ func (m *BufferMode) getFileSizeFromResponse(resp *http.Response) (int64, error)
 	// file was returned. If it isn't, we will assume this was a 206 Partial Content
 	// and parse the file size from the content range header. We wouldn't be in this
 	// function if the response was not between 200 and 300, so this feels like a
-	// reasonable assumption
-	if resp.StatusCode == http.StatusOK {
+	// reasonable assumption. If we get a content range header though, we should
+	// always use that
+	if resp.StatusCode == http.StatusOK && resp.Header.Get("Content-Range") == "" {
 		return m.getFileSizeFromContentLength(resp.Header.Get("Content-Length"))
 	}
 	return m.getFileSizeFromContentRange(resp.Header.Get("Content-Range"))

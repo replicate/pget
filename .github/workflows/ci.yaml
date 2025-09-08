@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -38,7 +38,7 @@ jobs:
         name: "Checkout"
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         name: "Set up Go"
         with:
           go-version-file: go.mod
@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       - run: go mod download
@@ -68,7 +68,7 @@ jobs:
         name: "Checkout"
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         name: "Set up Go"
         with:
           go-version-file: go.mod
@@ -85,7 +85,7 @@ jobs:
        name: "Checkout"
        with:
          fetch-depth: 0
-     - uses: actions/setup-go@v5
+     - uses: actions/setup-go@v6
        name: "Set up Go"
        with:
          go-version-file: go.mod

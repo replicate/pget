@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/replicate/pget/pkg/client"
 	"github.com/replicate/pget/pkg/config"
@@ -159,4 +162,46 @@ func TestRetryPolicy(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPGetHTTPClient_Headers(t *testing.T) {
+	// Create a test server that echoes back the headers
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Write back the custom headers as response headers for verification
+		for key, values := range r.Header {
+			for _, value := range values {
+				w.Header().Add("Echo-"+key, value)
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Set up viper with custom headers
+	viper.Set(config.OptHeaders, map[string]string{
+		"Authorization":   "Bearer test-token",
+		"X-Custom-Header": "custom-value",
+	})
+	defer viper.Reset()
+
+	// Create client
+	httpClient := client.NewHTTPClient(client.Options{
+		MaxRetries: 0,
+	})
+
+	// Make a request
+	req, err := http.NewRequest("GET", server.URL, nil)
+	require.NoError(t, err)
+
+	resp, err := httpClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// Verify that our custom headers were sent
+	assert.Equal(t, "Bearer test-token", resp.Header.Get("Echo-Authorization"))
+	assert.Equal(t, "custom-value", resp.Header.Get("Echo-X-Custom-Header"))
+
+	// Verify that User-Agent is set and contains "pget"
+	userAgent := resp.Header.Get("Echo-User-Agent")
+	assert.Contains(t, userAgent, "pget/")
 }

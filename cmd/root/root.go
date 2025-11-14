@@ -153,6 +153,24 @@ func rootPersistentPreRunEFunc(cmd *cobra.Command, args []string) error {
 		viper.Set(config.OptOutputConsumer, config.ConsumerTarExtractor)
 	}
 
+	// Process headers from CLI flags
+	headerSlice := viper.GetStringSlice(config.OptHeader)
+	if len(headerSlice) > 0 {
+		headerMap, err := config.HeadersToMap(headerSlice)
+		if err != nil {
+			return fmt.Errorf("error parsing headers: %w", err)
+		}
+		// Merge with any existing headers from environment variable
+		existingHeaders := viper.GetStringMapString(config.OptHeaders)
+		if existingHeaders == nil {
+			existingHeaders = make(map[string]string)
+		}
+		for k, v := range headerMap {
+			existingHeaders[k] = v
+		}
+		viper.Set(config.OptHeaders, existingHeaders)
+	}
+
 	return nil
 }
 
@@ -179,6 +197,7 @@ func persistentFlags(cmd *cobra.Command) error {
 	cmd.PersistentFlags().Int(config.OptMaxConnPerHost, 40, "Maximum number of (global) concurrent connections per host")
 	cmd.PersistentFlags().StringP(config.OptOutputConsumer, "o", "file", "Output Consumer (file, tar, null)")
 	cmd.PersistentFlags().String(config.OptPIDFile, defaultPidFilePath(), "PID file path")
+	cmd.PersistentFlags().StringSliceP(config.OptHeader, "H", []string{}, "HTTP headers to include in requests (format: 'Key: Value')")
 
 	if err := hideAndDeprecateFlags(cmd); err != nil {
 		return err

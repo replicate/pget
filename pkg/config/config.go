@@ -140,6 +140,40 @@ func ResolveOverridesToMap(resolveOverrides []string) (map[string]string, error)
 	return resolveOverrideMap, nil
 }
 
+// HeadersToMap converts a slice of header strings in the format "Key: Value" to a map[string]string.
+// It merges with any existing headers from the PGET_HEADERS environment variable.
+func HeadersToMap(headerSlice []string) (map[string]string, error) {
+	logger := logging.GetLogger()
+	headerMap := make(map[string]string)
+
+	if len(headerSlice) == 0 {
+		return nil, nil
+	}
+
+	for _, header := range headerSlice {
+		// Split on the first colon to separate key and value
+		parts := strings.SplitN(header, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid header format, expected 'Key: Value', got: %s", header)
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		if key == "" {
+			return nil, fmt.Errorf("header key cannot be empty in: %s", header)
+		}
+
+		headerMap[key] = value
+	}
+
+	if logger.GetLevel() == zerolog.DebugLevel {
+		for key, value := range headerMap {
+			logger.Debug().Str("header", key).Str("value", value).Msg("Header")
+		}
+	}
+	return headerMap, nil
+}
+
 // GetConsumer returns the consumer specified by the user on the command line
 // or an error if the consumer is invalid. Note that this function explicitly
 // calls viper.GetString(OptExtract) internally.

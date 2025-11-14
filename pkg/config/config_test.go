@@ -185,3 +185,30 @@ func TestGetCacheSRV(t *testing.T) {
 		})
 	}
 }
+
+func TestHeadersToMap(t *testing.T) {
+	testCases := []struct {
+		name     string
+		headers  []string
+		expected map[string]string
+		err      bool
+	}{
+		{"empty", []string{}, nil, false},
+		{"single", []string{"Authorization: Bearer token123"}, map[string]string{"Authorization": "Bearer token123"}, false},
+		{"multiple", []string{"Authorization: Bearer token123", "X-Custom-Header: value"}, map[string]string{"Authorization": "Bearer token123", "X-Custom-Header": "value"}, false},
+		{"with spaces", []string{"Content-Type: application/json"}, map[string]string{"Content-Type": "application/json"}, false},
+		{"value with colon", []string{"Authorization: Bearer: token:123"}, map[string]string{"Authorization": "Bearer: token:123"}, false},
+		{"trim spaces", []string{"  Authorization  :  Bearer token123  "}, map[string]string{"Authorization": "Bearer token123"}, false},
+		{"invalid format no colon", []string{"InvalidHeader"}, nil, true},
+		{"invalid format empty key", []string{": value"}, nil, true},
+		{"empty value", []string{"X-Empty-Header:"}, map[string]string{"X-Empty-Header": ""}, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			headers, err := HeadersToMap(tc.headers)
+			assert.Equal(t, tc.err, err != nil)
+			assert.Equal(t, tc.expected, headers)
+		})
+	}
+}

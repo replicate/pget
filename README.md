@@ -55,11 +55,25 @@ This builds a static binary that can work inside containers.
   - Type: `bool`
   - Default: `false`
 
-#### Example
+#### Examples
+
+Download and extract an archive:
 
     pget https://storage.googleapis.com/replicant-misc/sd15.tar ./sd15 -x
 
 This command will download Stable Diffusion 1.5 weights to the path ./sd15 with high concurrency. After the file is downloaded, it will be automatically extracted.
+
+Download with authentication headers:
+
+    pget -H "Authorization: Bearer token123" https://api.example.com/file.tar ./file.tar
+
+Download with multiple custom headers:
+
+    pget -H "Authorization: Bearer token123" -H "X-Custom-Header: value" https://api.example.com/file.tar ./file.tar
+
+Use environment variable for headers:
+
+    PGET_HEADERS='{"Authorization":"Bearer token123"}' pget https://api.example.com/file.tar ./file.tar
 
 ### Multi-File Mode
     pget multifile <manifest-file>
@@ -112,6 +126,11 @@ https://example.com/music.mp3 /local/path/to/music.mp3
   - Force download, overwriting existing file
   - Type: `bool`
   - Default: `false`
+- `-H`, `--header`
+  - HTTP headers to include in requests (format: 'Key: Value'), can be specified multiple times
+  - Type: `string slice`
+  - Example: `-H "Authorization: Bearer token123" -H "X-Custom-Header: value"`
+  - Environment variable: `PGET_HEADERS` (JSON map format: `{"Key":"Value"}`)
 - `--log-level`
   - Log level (debug, info, warn, error)
   - Type: `string`

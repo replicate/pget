@@ -6,7 +6,7 @@ require (
 	github.com/dgryski/go-jump v0.0.0-20211018200510-ba001c3ffce0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/golangci/golangci-lint v1.64.8
-	github.com/hashicorp/go-retryablehttp v0.7.7
+	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/jarcoal/httpmock v1.4.1
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/pierrec/lz4 v2.6.1+incompatible

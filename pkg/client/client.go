@@ -39,10 +39,12 @@ type PGetHTTPClient struct {
 }
 
 func (c *PGetHTTPClient) Do(req *http.Request) (*http.Response, error) {
-	req.Header.Set("User-Agent", fmt.Sprintf("pget/%s", version.GetVersion()))
+	// Set custom headers first
 	for k, v := range c.headers {
 		req.Header.Set(k, v)
 	}
+	// Set User-Agent last to ensure it's always the pget user agent
+	req.Header.Set("User-Agent", fmt.Sprintf("pget/%s", version.GetVersion()))
 	return c.Client.Do(req)
 }
 
